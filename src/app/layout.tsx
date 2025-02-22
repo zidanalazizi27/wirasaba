@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Roboto } from "next/font/google";
+import { AppRouterCacheProvider } from "@mui/material-nextjs/v15-appRouter";
+import { ThemeProvider } from "@mui/material/styles";
+import theme from "../theme";
 import "./globals.css";
-
+import Navbar from "./components/navbar";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -10,6 +14,13 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const roboto = Roboto({
+  weight: ["300", "400", "500", "700"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-roboto",
 });
 
 export const metadata: Metadata = {
@@ -25,9 +36,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} antialiased`}
       >
-        {children}
+        <Navbar />
+        <AppRouterCacheProvider options={{ key: "css" }}>
+          <ThemeProvider theme={theme}>{children}</ThemeProvider>
+        </AppRouterCacheProvider>
       </body>
     </html>
   );
