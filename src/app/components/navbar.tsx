@@ -9,7 +9,7 @@ import { IoLogIn, IoLogOut } from "react-icons/io5";
 // Icon Components remain the same, just moved them to a separate file for cleaner organization
 // Import them from a separate file like: import { ChevronDown, Lock, Activity, etc } from "@/components/icons"
 
-const NavbarPage = () => {
+const Navbar = () => {
   const pathname = usePathname();
   const [activeMenu, setActiveMenu] = useState(pathname);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -34,7 +34,7 @@ const NavbarPage = () => {
   };
 
   return (
-    <nav className="absolute w-full bg-clightbrown">
+    <nav className="sticky top-0 w-full bg-clightbrown z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -161,4 +161,4 @@ const NavbarPage = () => {
   );
 };
 
-export default NavbarPage;
+export default Navbar;

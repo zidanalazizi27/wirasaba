@@ -40,4 +40,5 @@ export default {
     },
   },
   // plugins: [nextui()],
+  
 } satisfies Config;
