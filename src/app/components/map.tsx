@@ -1,60 +1,148 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import L from "leaflet";
+import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  LayersControl,
+  GeoJSON,
+} from "react-leaflet";
 
-// 🔹 Custom SVG Marker (Leaflet Icon)
-const customIcon = new L.Icon({
-  iconUrl:
-    "data:image/svg+xml;base64," +
-    btoa(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24">
-      <path fill="#1A120B" d="M4 22q-.825 0-1.412-.587T2 20v-8.7q0-.6.325-1.1t.9-.75L7.6 7.6q.5-.2.95.075T9 8.5V9l3.625-1.45q.5-.2.937.1t.438.825V10h8v10q0 .825-.587 1.413T20 22zm7-4h2v-4h-2zm-4 0h2v-4H7zm8 0h2v-4h-2zm6.8-9.5h-4.625l.725-5.625q.05-.375.338-.625T18.9 2h1.225q.375 0 .65.25t.325.625z"/>
-    </svg>
-  `),
-  iconSize: [20, 20],
-  iconAnchor: [10, 20],
-  popupAnchor: [0, -20],
+// Custom SVG Marker
+const markerIcon = new L.Icon({
+  iconUrl: "/image/iconMarker.svg",
+  iconSize: [30, 30],
+  iconAnchor: [10, 30],
+  popupAnchor: [0, -30],
 });
 
-// 🔹 Komponen untuk Menambahkan Marker
-const MapMarkers = () => {
-  const map = useMap(); // Gunakan useMap untuk mendapatkan instance peta
-
-  useEffect(() => {
-    if (!map) return;
-
-    L.marker([-7.4559741, 112.6608877], { icon: customIcon })
-      .addTo(map)
-      .bindPopup("Ini adalah marker custom");
-  }, [map]);
-
-  return null; // Tidak merender elemen apa pun secara langsung
+// Warna poligon berdasarkan kepadatan perusahaan
+const getColor = (density: number) => {
+  return density > 200
+    ? "#993404"
+    : density > 160
+      ? "#d95f0e"
+      : density > 120
+        ? "#fe9929"
+        : density > 80
+          ? "#fec44f"
+          : density > 40
+            ? "#fee391"
+            : density > 0
+              ? "#ffffd4"
+              : "#000000";
 };
 
-// 🔹 Gunakan dynamic import untuk menghindari SSR error
-const Map = dynamic(
-  () =>
-    Promise.resolve(() => (
-      <div className="relative z-0">
-        <MapContainer
-          className="w-full h-[calc(100vh-4rem)]"
-          center={[-7.4559741, 112.6608877]}
-          zoom={11}
-          scrollWheelZoom={true}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
-          <MapMarkers /> {/* Tambahkan komponen untuk marker */}
-        </MapContainer>
-      </div>
-    )),
-  { ssr: false }
-);
+// Styling GeoJSON Polygons
+const style = (feature: any) => ({
+  fillColor: getColor(feature.properties.n_perusahaan),
+  weight: 2,
+  opacity: 1,
+  color: "black",
+  dashArray: "3",
+  fillOpacity: 0.7,
+});
 
-export default Map;
+const MapComponent = () => {
+  const [geoJsonData, setGeoJsonData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/data/polygon_wilayah.geojson")
+      .then((response) => response.json())
+      .then((data) => setGeoJsonData(data)) // Perbaiki: ambil langsung `data`
+      .catch((error) => console.error("Error loading GeoJSON:", error));
+  }, []);
+
+  return (
+    <div className="relative z-0">
+      <MapContainer
+        className="w-full h-[calc(100vh-4rem)]"
+        center={[-7.4559741, 112.6608877]}
+        zoom={11}
+        scrollWheelZoom={true}
+      >
+        {/* 🔹 Layer Default */}
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        />
+
+        {/* 🔹 Tambahkan Layer GeoJSON */}
+        {geoJsonData && (
+          <GeoJSON
+            data={geoJsonData}
+            style={style}
+            onEachFeature={(feature, layer) => {
+              if (feature.properties) {
+                const { label, luas, desa, kelurahan, n_perusahaan } =
+                  feature.properties;
+
+                layer.bindPopup(`
+          <div style="font-size: 14px; line-height: 1.5;">
+            <b>${label}</b><br/>
+            <strong>Luas Wilayah:</strong> ${luas} KM²<br/>
+            <strong>Jumlah Desa:</strong> ${desa}<br/>
+            <strong>Jumlah Kelurahan:</strong> ${kelurahan}<br/>
+            <strong>Jumlah Perusahaan:</strong> ${n_perusahaan}
+          </div>
+        `);
+              }
+            }}
+          />
+        )}
+
+        {/* 🔹 Marker Lokasi Pabrik */}
+        {[
+          [-7.4613729, 112.7512429],
+          [-7.46723, 112.7511728],
+          [-7.4605657, 112.7490335],
+          [-7.4634277, 112.751578],
+        ].map((pos, idx) => (
+          <Marker
+            key={idx}
+            position={pos as L.LatLngExpression}
+            icon={markerIcon}
+          >
+            <Popup>Pabrik {String.fromCharCode(65 + idx)}</Popup>
+          </Marker>
+        ))}
+
+        {/* 🔹 Layer Control untuk Opsi Peta */}
+        <LayersControl position="bottomleft">
+          <LayersControl.BaseLayer name="OpenStreetMap">
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="ESRI Imagery">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='&copy; <a href="https://www.esri.com/">ESRI</a> contributors'
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Google Street">
+            <TileLayer
+              url="https://mt.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer checked name="Google Satellite">
+            <TileLayer
+              url="https://mt.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+              attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+      </MapContainer>
+    </div>
+  );
+};
+
+// Gunakan dynamic import untuk menghindari SSR error
+export default dynamic(() => Promise.resolve(MapComponent), { ssr: false });
