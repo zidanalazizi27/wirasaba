@@ -58,14 +58,17 @@ const getColor = (density: number) => {
 };
 
 // Styling GeoJSON Polygons
-const style = (feature: any) => ({
-  fillColor: getColor(feature.properties.n_perusahaan),
-  weight: 2,
-  opacity: 1,
-  color: "black",
-  dashArray: "3",
-  fillOpacity: 0.7,
-});
+// This will be a function that depends on selectedLayers
+const getStyle = (selectedLayers) => {
+  return (feature: any) => ({
+    fillColor: getColor(feature.properties.n_perusahaan),
+    weight: 2,
+    opacity: 1,
+    color: "black",
+    dashArray: "3",
+    fillOpacity: selectedLayers.choropleth ? 0.7 : 0,
+  });
+};
 
 const data_pie = [
   { name: "Besar", value: 27 },
@@ -90,6 +93,14 @@ const MapComponent = () => {
       [layer]: !prev[layer], // Toggle pilihan
     }));
   };
+  
+  // Create a key for GeoJSON to force re-render when selectedLayers changes
+  const [geoJsonKey, setGeoJsonKey] = useState(0);
+  
+  // Update GeoJsonKey when selectedLayers changes to force re-render
+  useEffect(() => {
+    setGeoJsonKey(prevKey => prevKey + 1);
+  }, [selectedLayers]);
 
   useEffect(() => {
     fetch("/data/polygon_wilayah.geojson")
@@ -138,8 +149,9 @@ const MapComponent = () => {
           {/* 🔹 Tambahkan Layer GeoJSON */}
           {geoJsonData && (
             <GeoJSON
+              key={geoJsonKey}
               data={geoJsonData}
-              style={style}
+              style={getStyle(selectedLayers)}
               onEachFeature={(feature, layer) => {
                 if (feature.properties) {
                   const { label, luas, desa, kelurahan, n_perusahaan } =
