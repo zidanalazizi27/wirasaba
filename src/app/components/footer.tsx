@@ -93,7 +93,7 @@ const Footer: React.FC = () => {
       id="footer"
       className="relative flex flex-col p-5 mt-10 overflow-hidden bg-clightbrown text-white md:h-40 md:flex-around md:flex-row md:items-center md:p-0"
     >
-      <div className="flex flex-col items-center justify-center mb-5 md:w-5/12 md:my-0">
+      <div className="flex flex-col items-center justify-center mb-5 md:w-4/12 md:my-0">
         <div className="flex items-center">
           <img alt="logo" src="/image/logo.png" width={120} height={120} />
           <div className="w-[6px] rounded-full h-24 bg-white mx-4"></div>
@@ -105,7 +105,7 @@ const Footer: React.FC = () => {
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-1 md:w-7/12">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-1 md:w-8/12">
         <div>
           <FooterList items={medSos} />
         </div>
