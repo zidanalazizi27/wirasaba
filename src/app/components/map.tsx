@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -11,6 +11,7 @@ import {
   Popup,
   LayersControl,
   GeoJSON,
+  useMap,
 } from "react-leaflet";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
@@ -23,6 +24,8 @@ import { Input } from "antd";
 import { Transition } from "@headlessui/react";
 import CountUp from "react-countup";
 import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+// Import diletakkan di sini untuk memastikan dimuat hanya di sisi klien
+// Leaflet.heat akan diimpor secara dinamis dalam komponen
 
 const { Search } = Input;
 
@@ -58,7 +61,6 @@ const getColor = (density: number) => {
 };
 
 // Styling GeoJSON Polygons
-// This will be a function that depends on selectedLayers
 const getStyle = (selectedLayers) => {
   return (feature: any) => ({
     fillColor: getColor(feature.properties.n_perusahaan),
@@ -70,11 +72,106 @@ const getStyle = (selectedLayers) => {
   });
 };
 
-const data_pie = [
-  { name: "Besar", value: 27 },
-  { name: "Sedang", value: 18 },
-];
-const COLORS = ["#74512D", "#AF8F6F"];
+// Fungsi untuk mengubah teks menjadi format Title Case
+const formatTitleCase = (text) => {
+  if (!text) return "-";
+
+  // Jika teks berupa huruf kapital semua
+  if (text === text.toUpperCase()) {
+    return text
+      .toLowerCase()
+      .split(" ")
+      .map((word) => {
+        // Jangan kapitalisasi kata-kata kecil seperti "dan", "dari", "di", dll
+        const smallWords = [
+          "dan",
+          "atau",
+          "di",
+          "ke",
+          "dari",
+          "pada",
+          "yang",
+          "untuk",
+        ];
+        if (smallWords.includes(word)) return word;
+
+        // Khusus untuk singkatan seperti PT, CV, dll
+        const abbreviations = ["pt", "cv", "tbk", "ud", "pma", "pmdn"];
+        if (abbreviations.includes(word)) return word.toUpperCase();
+
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
+  }
+
+  // Jika teks sudah dalam format yang benar, kembalikan apa adanya
+  return text;
+};
+
+// Komponen untuk menginisialisasi Leaflet.heat
+const HeatLayerInitializer = () => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const loadHeatPlugin = async () => {
+        try {
+          await import("leaflet.heat");
+          console.log("Leaflet.heat initialized successfully");
+        } catch (error) {
+          console.error("Failed to load Leaflet.heat:", error);
+        }
+      };
+
+      loadHeatPlugin();
+    }
+  }, [map]);
+
+  return null;
+};
+
+// Komponen HeatmapLayer untuk menampilkan heatmap
+const HeatmapLayer = ({ points, options, visible }) => {
+  const map = useMap();
+  const heatRef = useRef(null);
+
+  useEffect(() => {
+    if (!map || points.length === 0) return;
+
+    // Pastikan L.heatLayer tersedia
+    if (!L.heatLayer) {
+      console.error(
+        "L.heatLayer is not available. Make sure leaflet.heat is properly loaded."
+      );
+      return;
+    }
+
+    // Buat atau update heatmap layer
+    if (visible) {
+      if (!heatRef.current) {
+        // Buat layer baru jika belum ada
+        heatRef.current = L.heatLayer(points, options).addTo(map);
+      } else {
+        // Jika sudah ada, update data points
+        heatRef.current.setLatLngs(points);
+      }
+    } else if (heatRef.current) {
+      // Hapus layer jika tidak visible
+      map.removeLayer(heatRef.current);
+      heatRef.current = null;
+    }
+
+    // Cleanup ketika komponen unmount
+    return () => {
+      if (heatRef.current) {
+        map.removeLayer(heatRef.current);
+        heatRef.current = null;
+      }
+    };
+  }, [map, points, options, visible]);
+
+  return null;
+};
 
 const MapComponent = () => {
   const [geoJsonData, setGeoJsonData] = useState<any>(null);
@@ -84,7 +181,19 @@ const MapComponent = () => {
   const [selectedLayers, setSelectedLayers] = useState({
     choropleth: false,
     titik: false,
+    heatmap: false, // Tambahkan state untuk heatmap
   });
+  const [companies, setCompanies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    besar: 0,
+    sedang: 0,
+  });
+
+  // State untuk menyimpan data points heatmap
+  const [heatmapPoints, setHeatmapPoints] = useState([]);
 
   // Handle perubahan checkbox
   const handleLayerChange = (layer) => {
@@ -93,21 +202,118 @@ const MapComponent = () => {
       [layer]: !prev[layer], // Toggle pilihan
     }));
   };
-  
+
   // Create a key for GeoJSON to force re-render when selectedLayers changes
   const [geoJsonKey, setGeoJsonKey] = useState(0);
-  
+
   // Update GeoJsonKey when selectedLayers changes to force re-render
   useEffect(() => {
-    setGeoJsonKey(prevKey => prevKey + 1);
+    setGeoJsonKey((prevKey) => prevKey + 1);
   }, [selectedLayers]);
 
+  // Fetch GeoJSON data
   useEffect(() => {
     fetch("/data/polygon_wilayah.geojson")
       .then((response) => response.json())
-      .then((data) => setGeoJsonData(data)) // Perbaiki: ambil langsung `data`
+      .then((data) => setGeoJsonData(data))
       .catch((error) => console.error("Error loading GeoJSON:", error));
   }, []);
+
+  // Fetch data perusahaan dari API
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/perusahaan");
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          setCompanies(result.data);
+
+          // Hitung statistik
+          const total = result.count;
+          const besar = result.data.filter(
+            (company) => company.skala === "Besar"
+          ).length;
+          const sedang = result.data.filter(
+            (company) => company.skala === "Sedang"
+          ).length;
+
+          setStatistics({
+            total,
+            besar,
+            sedang,
+          });
+
+          // Persiapkan data untuk heatmap dengan intensitas yang lebih tinggi
+          const points = result.data
+            .filter((company) => company.lat && company.lon) // Filter data yang memiliki koordinat
+            .map((company) => {
+              // Tingkatkan intensitas untuk membuat heatmap lebih terlihat
+              const intensity = company.skala === "Besar" ? 1.0 : 0.7;
+              return [company.lat, company.lon, intensity];
+            });
+
+          setHeatmapPoints(points);
+        } else {
+          throw new Error(result.message || "Failed to fetch data");
+        }
+      } catch (err) {
+        console.error("Error fetching companies:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCompanies();
+  }, []);
+
+  // Data untuk pie chart
+  const data_pie = [
+    { name: "Besar", value: statistics.besar },
+    { name: "Sedang", value: statistics.sedang },
+  ];
+
+  const COLORS = ["#74512D", "#AF8F6F"];
+
+  // Function to get KBLI category name
+  const getKBLICategory = (kbliCode) => {
+    const category = kbliCode.substring(0, 2);
+    const categories = {
+      "10": "Industri makanan",
+      "11": "Industri minuman",
+      "12": "Industri pengolahan tembakau",
+      "13": "Industri tekstil",
+      "14": "Industri pakaian jadi",
+      "15": "Industri kulit, barang dari kulit dan alas kaki",
+      "16": "Industri kayu, barang dari kayu, gabus dan barang anyaman",
+      "17": "Industri kertas dan barang dari kertas",
+      "18": "Industri percetakan dan reproduksi media rekaman",
+      "19": "Industri produk dari batubara dan pengilangan minyak bumi",
+      "20": "Industri bahan kimia dan barang dari bahan kimia",
+      "21": "Industri farmasi, produk obat kimia dan obat tradisional",
+      "22": "Industri karet, barang dari karet dan plastik",
+      "23": "Industri barang galian bukan logam",
+      "24": "Industri logam dasar",
+      "25": "Industri barang logam, bukan mesin dan peralatannya",
+      "26": "Industri computer, barang elektronik dan optik",
+      "27": "Industri peralatan listrik",
+      "28": "Industri mesin dan perlengkapan ytdl",
+      "29": "Industri kendaraan bermotor, trailer dan semi trailer",
+      "30": "Industri alat angkut lainnya",
+      "31": "Industri furniture",
+      "32": "Industri pengolahan lainnya",
+      "33": "Jasa reparasi dan pemasangan mesin dan peralatan",
+    };
+
+    return categories[category] || "Kategori Lainnya";
+  };
 
   return (
     <div className="relative w-full h-[calc(100vh-4rem)] font-roboto">
@@ -146,6 +352,33 @@ const MapComponent = () => {
             </LayersControl.BaseLayer>
           </LayersControl>
 
+          {/* Inisialisasi plugin Leaflet.heat */}
+          <HeatLayerInitializer />
+
+          {/* Tambahkan HeatmapLayer dengan konfigurasi yang dioptimalkan */}
+          {heatmapPoints.length > 0 && (
+            <HeatmapLayer
+              points={heatmapPoints}
+              options={{
+                radius: 40, // Meningkatkan radius untuk cakupan area lebih luas
+                blur: 25, // Meningkatkan blur untuk transisi lebih halus
+                maxZoom: 15, // Menurunkan maxZoom agar heatmap tetap terlihat saat zoom in
+                max: 0.8, // Menurunkan nilai maksimum untuk mempertegas visualisasi
+                minOpacity: 0.4, // Tambahkan nilai minimum opacity agar tetap terlihat
+                gradient: {
+                  // Sesuaikan gradien untuk visibilitas lebih baik
+                  0.2: "#ffffd4", // Mulai dari nilai lebih rendah (0.2)
+                  0.4: "#fee391",
+                  0.5: "#fec44f",
+                  0.6: "#fe9929",
+                  0.7: "#d95f0e",
+                  1.0: "#993404",
+                },
+              }}
+              visible={selectedLayers.heatmap}
+            />
+          )}
+
           {/* 🔹 Tambahkan Layer GeoJSON */}
           {geoJsonData && (
             <GeoJSON
@@ -171,22 +404,140 @@ const MapComponent = () => {
             />
           )}
 
-          {/* 🔹 Marker Lokasi Pabrik */}
-          {selectedLayers.titik && // Hanya render jika layer titik aktif
-            [
-              [-7.4613729, 112.7512429],
-              [-7.46723, 112.7511728],
-              [-7.4605657, 112.7490335],
-              [-7.4634277, 112.751578],
-            ].map((pos, idx) => (
-              <Marker
-                key={idx}
-                position={pos as L.LatLngExpression}
-                icon={markerIcon}
-              >
-                <Popup>Pabrik {String.fromCharCode(65 + idx)}</Popup>
-              </Marker>
-            ))}
+          {/* 🔹 Marker Lokasi Pabrik dari Database */}
+          {selectedLayers.titik &&
+            !loading &&
+            companies.length > 0 &&
+            companies.map((company) => {
+              // Fungsi untuk memformat URL
+              const formatUrl = (url) => {
+                if (!url || url.trim() === "") return null;
+
+                // Tambahkan http:// jika belum ada
+                if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                  return "http://" + url;
+                }
+                return url;
+              };
+
+              // Format URL website
+              const websiteUrl = formatUrl(company.web_perusahaan);
+
+              return (
+                <Marker
+                  key={company.id_perusahaan}
+                  position={[company.lat, company.lon] as L.LatLngExpression}
+                  icon={markerIcon}
+                >
+                  <Popup>
+                    <div className="max-w-[260px] font-roboto p-0.5">
+                      <h3 className="font-bold text-xs mb-2.5 text-center border-b border-gray-200 pb-0.5">
+                        Informasi Perusahaan
+                      </h3>
+
+                      <table className="w-full text-xs">
+                        <tbody>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Nama Usaha</td>
+                            <td className="pr-1 pb-0.5">
+                              :{" "}
+                              {formatTitleCase(company.nama_perusahaan) || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Alamat</td>
+                            <td className="pr-1 pb-0.5">
+                              : {formatTitleCase(company.alamat) || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Kecamatan</td>
+                            <td className="pr-1 pb-0.5">
+                              : {formatTitleCase(company.kec) || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Desa</td>
+                            <td className="pr-1 pb-0.5">
+                              : {formatTitleCase(company.des) || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Badan Usaha</td>
+                            <td className="pr-1 pb-0.5">
+                              : {formatTitleCase(company.badan_usaha) || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Skala</td>
+                            <td className="pr-1 pb-0.5">
+                              : {formatTitleCase(company.skala) || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Kode KBLI</td>
+                            <td className="pr-1 pb-0.5">
+                              : {company.KBLI || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Produk</td>
+                            <td className="pr-1 pb-0.5">
+                              : {formatTitleCase(company.produk) || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Telepon</td>
+                            <td className="pr-1 pb-0.5">
+                              : {company.telp_perusahaan || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Email</td>
+                            <td className="pr-1 pb-0.5">
+                              : {company.email_perusahaan || "-"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="pr-1 pb-0.5">Website</td>
+                            <td className="pr-1 pb-0.5">
+                              :{" "}
+                              {websiteUrl ? (
+                                <a
+                                  href={websiteUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-700 underline"
+                                  onClick={(e) => {
+                                    // Mencegah popup tertutup saat link diklik
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  {company.web_perusahaan}
+                                </a>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      <div className="text-center mt-2.5">
+                        <button
+                          className="bg-gray-800 text-white px-5 py-1 border-none rounded cursor-pointer text-sm"
+                          onClick={() =>
+                            console.log(`Detail untuk ${company.id_perusahaan}`)
+                          }
+                        >
+                          Detail
+                        </button>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
         </MapContainer>
       </div>
 
@@ -219,7 +570,7 @@ const MapComponent = () => {
               <span className="text-sm font-semibold">Kabupaten Sidoarjo</span>
             </div>
             <div className="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-4xl rounded-md flex items-center text-4xl font-bold justify-center">
-              <CountUp start={0} end={45} duration={3} />
+              <CountUp start={0} end={statistics.total} duration={3} />
               <p className="ml-2 text-xs font-medium">Perusahaan</p>
             </div>
             <label className="block mt-4 text-sm font-medium text-cdark text-center">
@@ -234,15 +585,19 @@ const MapComponent = () => {
                   cy="50%"
                   innerRadius={40}
                   outerRadius={50}
-                  // fill="#ffffff"
-                  // dataKey="value"
-                  // label
+                  dataKey="value"
+                  labelLine={false}
+                  label={({ name, percent }) =>
+                    `${name} ${(percent * 100).toFixed(0)}%`
+                  }
                 >
                   {data_pie.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  formatter={(value) => [`${value} perusahaan`, "Jumlah"]}
+                />
                 <Legend />
               </PieChart>
             </div>
@@ -479,6 +834,18 @@ const MapComponent = () => {
               <div className="space-y-2">
                 <label
                   className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
+                  onClick={() => handleLayerChange("heatmap")}
+                >
+                  <span>Peta Heatmap</span>
+                  {selectedLayers.heatmap ? (
+                    <VisibilityIcon className="text-cdark text-sm" />
+                  ) : (
+                    <VisibilityOffIcon className="text-gray-400 text-sm" />
+                  )}
+                </label>
+
+                <label
+                  className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
                   onClick={() => handleLayerChange("choropleth")}
                 >
                   <span>Peta Choropleth</span>
@@ -505,6 +872,20 @@ const MapComponent = () => {
           </Transition>
         </div>
       </div>
+
+      {/* Loading Indicator */}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50">
+          Error: {error}
+        </div>
+      )}
     </div>
   );
 };
