@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import dynamic from "next/dynamic";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -35,27 +41,26 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-// Import diletakkan di sini untuk memastikan dimuat hanya di sisi klien
-// Leaflet.heat akan diimpor secara dinamis dalam komponen
 
 const { Search } = Input;
 
-const HeaderButtons = () => {
-  const onSearch = (value) => {
-    console.log("Search:", value);
-  };
-};
-
-// Custom SVG Marker
-const markerIcon = new L.Icon({
+// Custom SVG Markers
+const defaultMarkerIcon = new L.Icon({
   iconUrl: "/image/iconMarker.svg",
   iconSize: [30, 30],
   iconAnchor: [10, 30],
   popupAnchor: [0, -30],
 });
 
+const activeMarkerIcon = new L.Icon({
+  iconUrl: "/image/iconMarkerActive.svg",
+  iconSize: [30, 30],
+  iconAnchor: [10, 30],
+  popupAnchor: [0, -30],
+});
+
 // Warna poligon berdasarkan kepadatan perusahaan
-const getColor = (density: number) => {
+const getColor = (density) => {
   return density > 200
     ? "#993404"
     : density > 160
@@ -71,12 +76,14 @@ const getColor = (density: number) => {
               : "#cccccc"; // Default color for zero
 };
 
-// Fungsi untuk normalisasi kode kecamatan (untuk number/integer)
-const normalizeKecamatanCode = (code) => {
-  if (code === null || code === undefined) return null;
-
-  // Pastikan code adalah number
-  return parseInt(code, 10);
+// Default style untuk GeoJSON
+const defaultStyle = {
+  fillColor: "#cccccc",
+  weight: 2,
+  opacity: 1,
+  color: "black",
+  dashArray: "3",
+  fillOpacity: 0,
 };
 
 // Komponen untuk menginisialisasi Leaflet.heat
@@ -145,7 +152,7 @@ const HeatmapLayer = ({ points, options, visible }) => {
 };
 
 const MapComponent = () => {
-  const [geoJsonData, setGeoJsonData] = useState<any>(null);
+  const [geoJsonData, setGeoJsonData] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isStatisticsOpen, setIsStatisticsOpen] = useState(false);
   const [isVisibilityOpen, setIsVisibilityOpen] = useState(false);
@@ -163,17 +170,23 @@ const MapComponent = () => {
     sedang: 0,
   });
 
-  // Tambahkan state untuk menyimpan jumlah perusahaan per kecamatan berdasarkan filter
+  // State untuk melacak marker yang aktif
+  const [activeMarkerId, setActiveMarkerId] = useState(null);
+
+  // State untuk data perusahaan yang telah difilter
+  const [filteredCompanies, setFilteredCompanies] = useState([]);
+
+  // State untuk menyimpan jumlah perusahaan per kecamatan
   const [kecamatanCompanyCounts, setKecamatanCompanyCounts] = useState({});
 
   // Reference untuk layer GeoJSON
   const geoJsonLayerRef = useRef(null);
 
-  // Tambahkan state untuk mengontrol tooltip
+  // State untuk mengontrol tooltip
   const [pieActiveIndex, setPieActiveIndex] = useState(null);
   const [barActiveIndex, setBarActiveIndex] = useState(null);
 
-  // Tambahkan state untuk filter
+  // State untuk filter
   const [filters, setFilters] = useState({
     year: "2024", // Default tahun
     district: "0", // 0 berarti semua kecamatan
@@ -182,16 +195,15 @@ const MapComponent = () => {
     location: "0", // 0 berarti semua lokasi
   });
 
-  // Tambahkan state untuk menyimpan tahun unik
+  // State untuk menyimpan tahun unik
   const [uniqueYears, setUniqueYears] = useState([]);
 
   // State untuk data direktori dan kecamatan
   const [directories, setDirectories] = useState([]);
   const [districts, setDistricts] = useState([]);
 
-  // Tambahkan state untuk pencarian
+  // State untuk pencarian
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredCompanies, setFilteredCompanies] = useState([]);
 
   // State untuk menyimpan data points heatmap
   const [heatmapPoints, setHeatmapPoints] = useState([]);
@@ -199,11 +211,162 @@ const MapComponent = () => {
   // Create a key for GeoJSON to force re-render when selectedLayers changes
   const [geoJsonKey, setGeoJsonKey] = useState(0);
 
-  // Fungsi untuk menghitung jumlah perusahaan per kecamatan berdasarkan filter
+  // Fungsi normalisasi kode kecamatan yang konsisten - dengan debugging yang ditingkatkan
+  const normalizeKecamatanCode = (code) => {
+    if (code === null || code === undefined) {
+      console.log("normalizeKecamatanCode: received null/undefined value");
+      return null;
+    }
+
+    // Convert to string first, then parse to integer
+    const stringCode = String(code).trim();
+    const parsedCode = parseInt(stringCode, 10);
+
+    // Log untuk debugging
+    console.log(
+      `Normalizing code: ${code} (${typeof code}) -> ${parsedCode} (${typeof parsedCode})`
+    );
+
+    return isNaN(parsedCode) ? null : parsedCode;
+  };
+
+  // Fungsi khusus untuk memperbaiki kode_kec di GeoJSON berdasarkan data districts dari API
+  const fixGeoJsonKecamatanCodes = useCallback(() => {
+    if (!districts.length || !geoJsonData || !geoJsonData.features) {
+      console.log("Missing required data for fixing GeoJSON codes");
+      return;
+    }
+
+    // Cek apakah kode kecamatan sudah diperbaiki sebelumnya
+    // Ini penting untuk menghindari loop tak terbatas
+    let needsFixing = false;
+
+    // Periksa apakah ada kode_kec yang perlu diperbaiki
+    for (const feature of geoJsonData.features) {
+      if (
+        feature.properties &&
+        (feature.properties.kode_kec === undefined ||
+          feature.properties.kode_kec === null ||
+          typeof feature.properties.kode_kec !== "number")
+      ) {
+        needsFixing = true;
+        break;
+      }
+    }
+
+    // Jika tidak perlu perbaikan, keluar dari fungsi
+    if (!needsFixing) {
+      console.log("GeoJSON kecamatan codes already fixed, skipping");
+      return;
+    }
+
+    console.log("Fixing GeoJSON kecamatan codes...");
+
+    // Buat daftar pemetaan nama kecamatan ke kode
+    const kecamatanNameToCode = {};
+    districts.forEach((district) => {
+      // Membuat normalisasi nama kecamatan untuk menangani perbedaan format
+      const normalizedName = district.nama_kec.toLowerCase().trim();
+      kecamatanNameToCode[normalizedName] = parseInt(district.kode_kec, 10);
+      console.log(`Mapped ${normalizedName} -> ${district.kode_kec}`);
+    });
+
+    // Duplicate GeoJSON to avoid mutating state directly
+    const updatedFeatures = [...geoJsonData.features].map((feature) => {
+      // Deep clone untuk menghindari mutasi referensi objek
+      const updatedFeature = JSON.parse(JSON.stringify(feature));
+
+      if (updatedFeature.properties) {
+        // Coba dapatkan kode dari nama kecamatan, jika ada
+        if (updatedFeature.properties.kec) {
+          const kecName = updatedFeature.properties.kec.toLowerCase().trim();
+          if (kecamatanNameToCode[kecName]) {
+            updatedFeature.properties.kode_kec = kecamatanNameToCode[kecName];
+          }
+        }
+
+        // Coba ekstrak dari label jika masih null
+        if (
+          !updatedFeature.properties.kode_kec &&
+          updatedFeature.properties.label
+        ) {
+          const labelMatch =
+            updatedFeature.properties.label.match(/Kecamatan\s+(.+)/i);
+          if (labelMatch && labelMatch[1]) {
+            const kecName = labelMatch[1].toLowerCase().trim();
+            if (kecamatanNameToCode[kecName]) {
+              updatedFeature.properties.kode_kec = kecamatanNameToCode[kecName];
+            }
+          }
+        }
+
+        // Direct mapping sebagai fallback
+        if (!updatedFeature.properties.kode_kec) {
+          // Tabel pemetaan langsung nama ke kode berdasarkan database Anda
+          const directMapping = {
+            tarik: 10,
+            prambon: 20,
+            krembung: 30,
+            porong: 40,
+            jabon: 50,
+            tanggulangin: 60,
+            candi: 70,
+            tulangan: 80,
+            wonoayu: 90,
+            sukodono: 100,
+            sidoarjo: 110,
+            buduran: 120,
+            sedati: 130,
+            waru: 140,
+            gedangan: 150,
+            taman: 160,
+            krian: 170,
+            "balong bendo": 180,
+            balongbendo: 180,
+          };
+
+          // Coba ambil dari label atau properti lain
+          if (updatedFeature.properties.label) {
+            const labelText = updatedFeature.properties.label.toLowerCase();
+
+            // Cek apakah label mengandung nama kecamatan
+            for (const [name, code] of Object.entries(directMapping)) {
+              if (labelText.includes(name)) {
+                updatedFeature.properties.kode_kec = code;
+                break;
+              }
+            }
+          }
+        }
+
+        // Log hasil perbaikan
+        console.log(
+          `Fixed ${updatedFeature.properties.label}: kode_kec = ${updatedFeature.properties.kode_kec}`
+        );
+      }
+
+      return updatedFeature;
+    });
+
+    // Update state dengan data yang telah diperbaiki
+    const fixedGeoJSON = {
+      ...geoJsonData,
+      features: updatedFeatures,
+    };
+
+    setGeoJsonData(fixedGeoJSON);
+
+    // Force rerender GeoJSON
+    setGeoJsonKey((prev) => prev + 1);
+
+    console.log("GeoJSON kecamatan codes fixed successfully");
+  }, [districts]); // PENTING: Hapus geoJsonData dari dependensi untuk menghindari loop
+
+  // Fungsi untuk menghitung jumlah perusahaan per kecamatan (dioptimalkan)
   const countCompaniesByKecamatan = useCallback(
     (filteredComps) => {
       console.log(
-        "Starting countCompaniesByKecamatan with",
+        "Counting companies by kecamatan for",
         filteredComps.length,
         "companies"
       );
@@ -211,78 +374,65 @@ const MapComponent = () => {
       // Inisialisasi objek untuk menyimpan jumlah per kecamatan
       const counts = {};
 
-      // Log untuk debugging
-      if (filteredComps.length > 0) {
-        console.log("Sample companies:");
-        filteredComps.slice(0, 3).forEach((company) => {
-          console.log(
-            `Company ${company.nama_perusahaan || company.id_perusahaan}, kec=${company.kec}, type=${typeof company.kec}`
-          );
-        });
-      }
-
-      // Hitung jumlah perusahaan per kecamatan
-      filteredComps.forEach((company) => {
-        if (company.kec !== null && company.kec !== undefined) {
-          // Pastikan kec adalah number
-          const kecCode =
-            typeof company.kec === "number"
-              ? company.kec
-              : parseInt(company.kec, 10);
-
-          if (!isNaN(kecCode)) {
-            // Tambahkan ke objek counts - pastikan nilai sebelumnya ada
-            counts[kecCode] = (counts[kecCode] || 0) + 1;
-          }
-        }
-      });
-
       // Pastikan semua kecamatan memiliki entri, meskipun kosong
-      // Ambil data kecamatan dari database jika tersedia
       if (geoJsonData && geoJsonData.features) {
         geoJsonData.features.forEach((feature) => {
           if (feature.properties && feature.properties.kode_kec !== undefined) {
-            const kecCode = parseInt(feature.properties.kode_kec, 10);
-            if (!isNaN(kecCode) && counts[kecCode] === undefined) {
+            const kecCode = normalizeKecamatanCode(feature.properties.kode_kec);
+            if (kecCode !== null) {
               counts[kecCode] = 0;
             }
           }
         });
       }
 
+      // Hitung jumlah perusahaan per kecamatan
+      filteredComps.forEach((company) => {
+        if (company.kec !== null && company.kec !== undefined) {
+          const kecCode = normalizeKecamatanCode(company.kec);
+
+          if (kecCode !== null) {
+            counts[kecCode] = (counts[kecCode] || 0) + 1;
+            // Log untuk debugging
+            if (counts[kecCode] === 1) {
+              console.log(
+                `First company in ${kecCode}:`,
+                company.nama_perusahaan
+              );
+            }
+          }
+        }
+      });
+
+      // Log hasil akhir untuk debugging
       console.log("Final kecamatan counts:", counts);
       return counts;
     },
     [geoJsonData]
   );
 
-  // Styling GeoJSON Polygons with dynamic colors based on filtered data
+  // Styling GeoJSON Polygons dengan warna dinamis (versi yang diperbaiki)
   const getStyle = useCallback(
     (feature) => {
       // Defensive check
       if (!feature || !feature.properties) {
         console.error("Invalid feature or missing properties", feature);
         return {
-          fillColor: "#cccccc",
-          weight: 2,
-          opacity: 1,
-          color: "black",
-          dashArray: "3",
+          ...defaultStyle,
           fillOpacity: selectedLayers.choropleth ? 0.7 : 0,
         };
       }
 
       // Pastikan kode_kec konsisten (integer)
-      const kecamatanCode = parseInt(feature.properties.kode_kec, 10);
+      const kecamatanCode = normalizeKecamatanCode(feature.properties.kode_kec);
 
       // Safer lookup, dengan fallback ke 0
-      const count = !isNaN(kecamatanCode)
-        ? kecamatanCompanyCounts[kecamatanCode] || 0
-        : 0;
+      const count =
+        kecamatanCode !== null ? kecamatanCompanyCounts[kecamatanCode] || 0 : 0;
 
-      // Log untuk debugging
+      // Log styling untuk debugging yang lebih detail
       console.log(
-        `Styling ${feature.properties.label}, kode_kec=${kecamatanCode} (${typeof kecamatanCode}), count=${count}`
+        `Styling ${feature.properties.label}, raw code=${feature.properties.kode_kec}, normalized=${kecamatanCode}, count=${count}`
       );
 
       return {
@@ -297,7 +447,61 @@ const MapComponent = () => {
     [kecamatanCompanyCounts, selectedLayers.choropleth]
   );
 
-  // Handle perubahan checkbox
+  // Function to update the GeoJSON popups with dynamic data (improved)
+  const updateGeoJsonPopups = useCallback(() => {
+    if (!geoJsonLayerRef.current) {
+      console.log("No GeoJSON layer ref available for updating popups");
+      return;
+    }
+
+    // Log untuk debugging
+    console.log(
+      "Updating popups with kecamatanCompanyCounts:",
+      kecamatanCompanyCounts
+    );
+
+    // Update setiap popup pada layer GeoJSON
+    geoJsonLayerRef.current.eachLayer((layer) => {
+      const properties = layer.feature.properties;
+      // Pastikan format kode kecamatan konsisten
+      const kecamatanCode = normalizeKecamatanCode(properties.kode_kec);
+
+      // Log untuk debugging
+      console.log(
+        `Updating popup - Kecamatan: ${properties.label}, kode: ${kecamatanCode}, count: ${kecamatanCompanyCounts[kecamatanCode] || 0}`
+      );
+
+      const filteredCount =
+        kecamatanCode !== null ? kecamatanCompanyCounts[kecamatanCode] || 0 : 0;
+
+      // Update popup content dengan jumlah perusahaan terbaru
+      layer.bindPopup(`
+        <div style="font-size: 14px; line-height: 1.5;">
+          <b>${properties.label}</b><br/>
+          <strong>Luas Wilayah:</strong> ${properties.luas} KM²<br/>
+          <strong>Jumlah Desa:</strong> ${properties.desa}<br/>
+          <strong>Jumlah Kelurahan:</strong> ${properties.kelurahan}<br/>
+          <strong>Jumlah Perusahaan:</strong> ${filteredCount}
+        </div>
+      `);
+    });
+  }, [kecamatanCompanyCounts]);
+
+  // Function to handle when GeoJSON is added to the map (improved)
+  const onGeoJsonLoad = useCallback(
+    (layer) => {
+      console.log("GeoJSON layer loaded and added to map");
+      geoJsonLayerRef.current = layer;
+
+      // Setelah layer di-load, update popups
+      if (Object.keys(kecamatanCompanyCounts).length > 0) {
+        updateGeoJsonPopups();
+      }
+    },
+    [updateGeoJsonPopups, kecamatanCompanyCounts]
+  );
+
+  // Handle perubahan checkbox layer
   const handleLayerChange = (layer) => {
     setSelectedLayers((prev) => {
       const newState = { ...prev };
@@ -313,12 +517,6 @@ const MapComponent = () => {
             newState.choropleth = false; // Matikan choropleth jika heatmap diaktifkan
           } else if (layer === "choropleth") {
             newState.heatmap = false; // Matikan heatmap jika choropleth diaktifkan
-
-            // Jika choropleth diaktifkan, rekalkulasi data kecamatan
-            if (companies.length > 0) {
-              const counts = countCompaniesByKecamatan(filteredCompanies);
-              setKecamatanCompanyCounts(counts);
-            }
           }
         }
       } else {
@@ -330,57 +528,114 @@ const MapComponent = () => {
     });
   };
 
+  // Fungsi untuk menerapkan filter pencarian
+  const applySearchFilter = useCallback((companies, searchTerm) => {
+    if (!searchTerm.trim()) return companies;
+
+    return companies.filter((company) => {
+      const nameMatch = company.nama_perusahaan
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      const productMatch = company.produk
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      return nameMatch || productMatch;
+    });
+  }, []);
+
+  // Fungsi untuk menerapkan semua filter
+  const applyAllFilters = useCallback(
+    (companiesData, currentFilters, search) => {
+      if (!companiesData.length) return [];
+
+      let filtered = [...companiesData];
+
+      // 1. Filter berdasarkan tahun direktori
+      if (currentFilters.year !== "all") {
+        const companiesInYear = directories
+          .filter((dir) => dir.thn_direktori.toString() === currentFilters.year)
+          .map((dir) => dir.id_perusahaan);
+
+        filtered = filtered.filter((company) =>
+          companiesInYear.includes(company.id_perusahaan)
+        );
+      }
+
+      // 2. Filter berdasarkan kecamatan
+      if (currentFilters.district !== "0") {
+        filtered = filtered.filter(
+          (company) =>
+            company.kec && company.kec.toString() === currentFilters.district
+        );
+      }
+
+      // 3. Filter berdasarkan kategori KBLI
+      if (currentFilters.kbliCategory !== "kbli_all") {
+        const kbliPrefix = currentFilters.kbliCategory.replace("kbli_", "");
+        filtered = filtered.filter((company) => {
+          const kbli = company.KBLI ? company.KBLI.toString() : "";
+          const kbliCategory = kbli.substring(0, 2);
+          return kbliCategory === kbliPrefix;
+        });
+      }
+
+      // 4. Filter berdasarkan badan usaha
+      if (currentFilters.businessType !== "0") {
+        filtered = filtered.filter(
+          (company) =>
+            company.badan_usaha &&
+            company.badan_usaha.toString() === currentFilters.businessType
+        );
+      }
+
+      // 5. Filter berdasarkan lokasi perusahaan
+      if (currentFilters.location !== "0") {
+        filtered = filtered.filter(
+          (company) =>
+            company.lok_perusahaan &&
+            company.lok_perusahaan.toString() === currentFilters.location
+        );
+      }
+
+      // 6. Terapkan filter pencarian
+      if (search.trim()) {
+        filtered = applySearchFilter(filtered, search);
+      }
+
+      return filtered;
+    },
+    [directories, applySearchFilter]
+  );
+
   // Update GeoJsonKey when selectedLayers changes to force re-render
   useEffect(() => {
     setGeoJsonKey((prevKey) => prevKey + 1);
   }, [selectedLayers]);
 
-  // Modifikasi useEffect untuk mengambil GeoJSON
+  // Fetch GeoJSON data
   useEffect(() => {
     fetch("/data/polygon_wilayah.geojson")
       .then((response) => response.json())
       .then((result) => {
         console.log("Raw GeoJSON response:", result);
-
-        // Deteksi apakah data dalam format yang benar
+        // Deteksi format data GeoJSON
         if (result.data && Array.isArray(result.data)) {
-          console.log(
-            "Processing GeoJSON data array with length:",
-            result.data.length
-          );
-
-          // Flatten semua features dari berbagai FeatureCollection
+          // Flatten features dari berbagai FeatureCollection
           const allFeatures = [];
-          result.data.forEach((featureCollection, index) => {
-            console.log(
-              `Processing FeatureCollection ${index} (${featureCollection.name || "unnamed"}):`
-            );
-
+          result.data.forEach((featureCollection) => {
             if (
               featureCollection.features &&
               Array.isArray(featureCollection.features)
             ) {
               featureCollection.features.forEach((feature) => {
-                // Log untuk debugging
-                if (feature.properties) {
-                  console.log(
-                    `Found feature: ${feature.properties.label}, kode_kec=${feature.properties.kode_kec}`
-                  );
-                  // Pastikan kode_kec ada dan dalam format yang konsisten
-                  if (feature.properties.kode_kec !== undefined) {
-                    // Simpan feature dengan properti yang sudah diverifikasi
-                    allFeatures.push(feature);
-                  } else {
-                    console.error("Feature missing kode_kec:", feature);
-                  }
-                } else {
-                  console.error("Feature missing properties:", feature);
+                // Verifikasi properties dan kode_kec
+                if (
+                  feature.properties &&
+                  feature.properties.kode_kec !== undefined
+                ) {
+                  allFeatures.push(feature);
                 }
               });
-            } else {
-              console.warn(
-                `FeatureCollection ${index} has no valid features array`
-              );
             }
           });
 
@@ -390,10 +645,13 @@ const MapComponent = () => {
             features: allFeatures,
           };
 
-          console.log("Combined GeoJSON features count:", allFeatures.length);
+          console.log(
+            "Combined GeoJSON with feature count:",
+            allFeatures.length
+          );
           setGeoJsonData(combinedGeoJSON);
         } else {
-          console.log("GeoJSON already in correct format");
+          console.log("Using GeoJSON in standard format");
           setGeoJsonData(result);
         }
       })
@@ -403,31 +661,32 @@ const MapComponent = () => {
       });
   }, []);
 
-  // Fetch data perusahaan dari API
+  // Fetch data dari API
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
 
-        // Fetch perusahaan data
-        const companiesResponse = await fetch("/api/perusahaan");
-        if (!companiesResponse.ok) {
-          throw new Error(`HTTP error! Status: ${companiesResponse.status}`);
+        // Paralel fetching untuk meningkatkan performa
+        const [companiesResponse, directoriesResponse, districtsResponse] =
+          await Promise.all([
+            fetch("/api/perusahaan"),
+            fetch("/api/direktori"),
+            fetch("/api/kecamatan"),
+          ]);
+
+        // Validasi semua responses
+        if (
+          !companiesResponse.ok ||
+          !directoriesResponse.ok ||
+          !districtsResponse.ok
+        ) {
+          throw new Error(`HTTP error! Check status codes.`);
         }
+
+        // Parse data
         const companiesResult = await companiesResponse.json();
-
-        // Fetch data direktori
-        const directoriesResponse = await fetch("/api/direktori");
-        if (!directoriesResponse.ok) {
-          throw new Error(`HTTP error! Status: ${directoriesResponse.status}`);
-        }
         const directoriesResult = await directoriesResponse.json();
-
-        // Fetch data kecamatan
-        const districtsResponse = await fetch("/api/kecamatan");
-        if (!districtsResponse.ok) {
-          throw new Error(`HTTP error! Status: ${districtsResponse.status}`);
-        }
         const districtsResult = await districtsResponse.json();
 
         if (
@@ -435,27 +694,30 @@ const MapComponent = () => {
           directoriesResult.success &&
           districtsResult.success
         ) {
+          // Set data ke state
           setCompanies(companiesResult.data);
           setDirectories(directoriesResult.data);
           setDistricts(districtsResult.data);
-          setFilteredCompanies(companiesResult.data); // Set initially all companies
+          setFilteredCompanies(companiesResult.data);
+
+          console.log("Loaded companies:", companiesResult.data.length);
+          console.log("Sample company:", companiesResult.data[0]);
 
           // Ekstrak tahun-tahun unik dari data direktori
           const years = directoriesResult.data
             .map((dir) => dir.thn_direktori.toString())
-            .filter((year, index, self) => self.indexOf(year) === index) // Filter untuk mendapatkan nilai unik
-            .sort((a, b) => b - a); // Urutkan secara descending (terbaru dulu)
+            .filter((year, index, self) => self.indexOf(year) === index)
+            .sort((a, b) => b - a);
 
           setUniqueYears(years);
 
           // Hitung statistik
-          const total = companiesResult.count;
+          const total = companiesResult.data.length;
           const besar = companiesResult.data.filter(
-            (company) => company.skala === "Besar" || company.skala === "besar"
+            (company) => company.skala?.toLowerCase() === "besar"
           ).length;
           const sedang = companiesResult.data.filter(
-            (company) =>
-              company.skala === "Sedang" || company.skala === "sedang"
+            (company) => company.skala?.toLowerCase() === "sedang"
           ).length;
 
           setStatistics({
@@ -464,15 +726,12 @@ const MapComponent = () => {
             sedang,
           });
 
-          // Persiapkan data untuk heatmap dengan intensitas yang lebih tinggi
+          // Persiapkan data untuk heatmap
           const points = companiesResult.data
-            .filter((company) => company.lat && company.lon) // Filter data yang memiliki koordinat
+            .filter((company) => company.lat && company.lon)
             .map((company) => {
-              // Tingkatkan intensitas untuk membuat heatmap lebih terlihat
               const intensity =
-                company.skala === "Besar" || company.skala === "besar"
-                  ? 1.0
-                  : 0.7;
+                company.skala?.toLowerCase() === "besar" ? 1.0 : 0.7;
               return [company.lat, company.lon, intensity];
             });
 
@@ -491,230 +750,100 @@ const MapComponent = () => {
     fetchData();
   }, []);
 
-  // Tambahkan useEffect untuk melakukan filtering
+  // Panggil fungsi fixGeoJsonKecamatanCodes setelah districts dan geoJsonData tersedia
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      // Jika tidak ada pencarian, gunakan semua perusahaan
-      setFilteredCompanies(companies);
-      return;
+    if (districts.length > 0 && geoJsonData && geoJsonData.features) {
+      console.log("Running fixGeoJsonKecamatanCodes effect");
+
+      // Gunakan setTimeout untuk menghindari pembaruan berulang dalam rendering yang sama
+      const timer = setTimeout(() => {
+        fixGeoJsonKecamatanCodes();
+      }, 0);
+
+      return () => clearTimeout(timer);
     }
+  }, [districts, fixGeoJsonKecamatanCodes]);
 
-    // Lakukan pencarian (tidak case-sensitive dan partial match)
-    const filtered = companies.filter((company) => {
-      const nameMatch =
-        company.nama_perusahaan &&
-        company.nama_perusahaan
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase());
+  // Effect untuk menerapkan filter saat filter atau searchTerm berubah
+  useEffect(() => {
+    if (companies.length > 0) {
+      // Terapkan semua filter
+      const filtered = applyAllFilters(companies, filters, searchTerm);
+      console.log(
+        "Applied filters, resulting in",
+        filtered.length,
+        "companies"
+      );
+      setFilteredCompanies(filtered);
 
-      const productMatch =
-        company.produk &&
-        company.produk.toLowerCase().includes(searchTerm.toLowerCase());
+      // Hitung jumlah perusahaan per kecamatan berdasarkan filter yang diterapkan
+      const counts = countCompaniesByKecamatan(filtered);
+      setKecamatanCompanyCounts(counts);
 
-      return nameMatch || productMatch;
-    });
+      // Update heatmap points
+      const points = filtered
+        .filter((company) => company.lat && company.lon)
+        .map((company) => {
+          const intensity =
+            company.skala?.toLowerCase() === "besar" ? 1.0 : 0.7;
+          return [company.lat, company.lon, intensity];
+        });
 
-    setFilteredCompanies(filtered);
-  }, [searchTerm, companies]);
+      setHeatmapPoints(points);
+    }
+  }, [
+    companies,
+    filters,
+    searchTerm,
+    applyAllFilters,
+    countCompaniesByKecamatan,
+  ]);
 
-  // Pastikan jumlah perusahaan dihitung ketika data perusahaan dan GeoJSON tersedia
+  // Hitung kecamatanCompanyCounts saat data perusahaan dan GeoJSON tersedia
   useEffect(() => {
     if (companies.length > 0 && geoJsonData) {
-      console.log(
-        "Initializing kecamatanCompanyCounts with all companies and GeoJSON"
-      );
+      console.log("Both companies and GeoJSON available, initializing counts");
       const initialCounts = countCompaniesByKecamatan(companies);
       setKecamatanCompanyCounts(initialCounts);
+
+      // Force refresh GeoJSON layer to ensure correct styling
+      setGeoJsonKey((prev) => prev + 1);
     }
   }, [companies, geoJsonData, countCompaniesByKecamatan]);
 
-  // Pastikan peta direfresh ketika kecamatanCompanyCounts berubah
+  // Update popups when kecamatanCompanyCounts changes
   useEffect(() => {
-    if (Object.keys(kecamatanCompanyCounts).length > 0) {
-      console.log("kecamatanCompanyCounts updated, incrementing geoJsonKey");
-      setGeoJsonKey((prevKey) => prevKey + 1);
+    if (
+      Object.keys(kecamatanCompanyCounts).length > 0 &&
+      geoJsonLayerRef.current
+    ) {
+      console.log("kecamatanCompanyCounts updated, updating popups");
+      updateGeoJsonPopups();
     }
-  }, [kecamatanCompanyCounts]);
+  }, [kecamatanCompanyCounts, updateGeoJsonPopups]);
 
-  // Gunakan useEffect untuk memonitor nilai kecamatanCompanyCounts
-  useEffect(() => {
-    console.log("kecamatanCompanyCounts updated:", kecamatanCompanyCounts);
-  }, [kecamatanCompanyCounts]);
-
-  // Fungsi pencarian
+  // Handler untuk search
   const handleSearch = (value) => {
     setSearchTerm(value);
   };
 
-  // Function to update the GeoJSON popups with dynamic data
-  const updateGeoJsonPopups = useCallback(() => {
-    if (!geoJsonLayerRef.current) return;
+  // Mempersiapkan data untuk pie chart
+  const pieChartData = useMemo(() => {
+    const filteredBesar = filteredCompanies.filter(
+      (company) => company.skala?.toLowerCase() === "besar"
+    ).length;
 
-    // Get the GeoJSON layer
-    const geoJsonLayer = geoJsonLayerRef.current;
+    const filteredSedang = filteredCompanies.filter(
+      (company) => company.skala?.toLowerCase() === "sedang"
+    ).length;
 
-    // For each layer in the GeoJSON (each kecamatan polygon)
-    geoJsonLayer.eachLayer((layer) => {
-      const properties = layer.feature.properties;
-
-      // Pastikan kode_kec dikonversi ke integer
-      const kecamatanCode = parseInt(properties.kode_kec, 10);
-
-      // Gunakan integer sebagai kunci
-      const filteredCount = isNaN(kecamatanCode)
-        ? 0
-        : kecamatanCompanyCounts[kecamatanCode] || 0;
-
-      // Update the popup content
-      layer.bindPopup(`
-        <div style="font-size: 14px; line-height: 1.5;">
-          <b>${properties.label}</b><br/>
-          <strong>Luas Wilayah:</strong> ${properties.luas} KM²<br/>
-          <strong>Jumlah Desa:</strong> ${properties.desa}<br/>
-          <strong>Jumlah Kelurahan:</strong> ${properties.kelurahan}<br/>
-          <strong>Jumlah Perusahaan:</strong> ${filteredCount}
-        </div>
-      `);
-    });
-  }, [kecamatanCompanyCounts]);
-
-  // Update GeoJSON popups when kecamatanCompanyCounts changes
-  useEffect(() => {
-    updateGeoJsonPopups();
-  }, [kecamatanCompanyCounts, updateGeoJsonPopups]);
-
-  // Fungsi untuk menerapkan semua filter
-  const applyFilters = useCallback(() => {
-    if (!companies.length) return;
-
-    // Filter perusahaan berdasarkan kriteria
-    let filtered = [...companies];
-
-    // 1. Filter berdasarkan tahun direktori
-    if (filters.year !== "all") {
-      const companiesInYear = directories
-        .filter((dir) => dir.thn_direktori.toString() === filters.year)
-        .map((dir) => dir.id_perusahaan);
-
-      filtered = filtered.filter((company) =>
-        companiesInYear.includes(company.id_perusahaan)
-      );
-    }
-
-    // 2. Filter berdasarkan kecamatan
-    if (filters.district !== "0") {
-      filtered = filtered.filter(
-        (company) => company.kec.toString() === filters.district
-      );
-    }
-
-    // 3. Filter berdasarkan kategori KBLI (2 digit awal)
-    if (filters.kbliCategory !== "kbli_all") {
-      const kbliPrefix = filters.kbliCategory.replace("kbli_", "");
-      filtered = filtered.filter((company) => {
-        // Pastikan KBLI ada dan konversi ke string
-        const kbli = company.KBLI ? company.KBLI.toString() : "";
-        // Ambil 2 digit awal
-        const kbliCategory = kbli.substring(0, 2);
-        return kbliCategory === kbliPrefix;
-      });
-    }
-
-    // 4. Filter berdasarkan badan usaha
-    if (filters.businessType !== "0") {
-      filtered = filtered.filter(
-        (company) => company.badan_usaha.toString() === filters.businessType
-      );
-    }
-
-    // 5. Filter berdasarkan lokasi perusahaan
-    if (filters.location !== "0") {
-      filtered = filtered.filter(
-        (company) => company.lok_perusahaan.toString() === filters.location
-      );
-    }
-
-    // 6. Terapkan juga filter pencarian jika ada
-    if (searchTerm.trim()) {
-      filtered = filtered.filter((company) => {
-        const nameMatch =
-          company.nama_perusahaan &&
-          company.nama_perusahaan
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase());
-
-        const productMatch =
-          company.produk &&
-          company.produk.toLowerCase().includes(searchTerm.toLowerCase());
-
-        return nameMatch || productMatch;
-      });
-    }
-
-    // Update filteredCompanies state
-    setFilteredCompanies(filtered);
-
-    // Hitung jumlah perusahaan per kecamatan berdasarkan filter yang diterapkan
-    const counts = countCompaniesByKecamatan(filtered);
-    setKecamatanCompanyCounts(counts);
-
-    // Update heatmap points
-    const points = filtered
-      .filter((company) => company.lat && company.lon)
-      .map((company) => {
-        const intensity =
-          company.skala === "Besar" || company.skala === "besar" ? 1.0 : 0.7;
-        return [company.lat, company.lon, intensity];
-      });
-
-    setHeatmapPoints(points);
-  }, [companies, directories, filters, searchTerm, countCompaniesByKecamatan]);
-
-  // Panggil applyFilters setiap kali filter berubah
-  useEffect(() => {
-    applyFilters();
-  }, [applyFilters]);
-
-  // Data untuk pie chart
-  const data_pie = [
-    { name: "Besar", value: statistics.besar },
-    { name: "Sedang", value: statistics.sedang },
-  ];
+    return [
+      { name: "Besar", value: filteredBesar },
+      { name: "Sedang", value: filteredSedang },
+    ];
+  }, [filteredCompanies]);
 
   const COLORS = ["#74512D", "#AF8F6F"];
-
-  // Function to get KBLI category name
-  const getKBLICategory = (kbliCode) => {
-    const category = kbliCode.substring(0, 2);
-    const categories = {
-      "10": "Industri makanan",
-      "11": "Industri minuman",
-      "12": "Industri pengolahan tembakau",
-      "13": "Industri tekstil",
-      "14": "Industri pakaian jadi",
-      "15": "Industri kulit, barang dari kulit dan alas kaki",
-      "16": "Industri kayu, barang dari kayu, gabus dan barang anyaman",
-      "17": "Industri kertas dan barang dari kertas",
-      "18": "Industri percetakan dan reproduksi media rekaman",
-      "19": "Industri produk dari batubara dan pengilangan minyak bumi",
-      "20": "Industri bahan kimia dan barang dari bahan kimia",
-      "21": "Industri farmasi, produk obat kimia dan obat tradisional",
-      "22": "Industri karet, barang dari karet dan plastik",
-      "23": "Industri barang galian bukan logam",
-      "24": "Industri logam dasar",
-      "25": "Industri barang logam, bukan mesin dan peralatannya",
-      "26": "Industri computer, barang elektronik dan optik",
-      "27": "Industri peralatan listrik",
-      "28": "Industri mesin dan perlengkapan ytdl",
-      "29": "Industri kendaraan bermotor, trailer dan semi trailer",
-      "30": "Industri alat angkut lainnya",
-      "31": "Industri furniture",
-      "32": "Industri pengolahan lainnya",
-      "33": "Jasa reparasi dan pemasangan mesin dan peralatan",
-    };
-
-    return categories[category] || "Kategori Lainnya";
-  };
 
   return (
     <div className="relative w-full h-[calc(100vh-4rem)] font-roboto">
@@ -756,16 +885,16 @@ const MapComponent = () => {
           {/* Inisialisasi plugin Leaflet.heat */}
           <HeatLayerInitializer />
 
-          {/* Tambahkan HeatmapLayer dengan konfigurasi yang dioptimalkan */}
+          {/* Heatmap Layer */}
           {heatmapPoints.length > 0 && (
             <HeatmapLayer
               points={heatmapPoints}
               options={{
-                radius: 25, // Meningkatkan radius untuk cakupan area lebih luas
-                blur: 10, // Meningkatkan blur untuk transisi lebih halus
-                maxZoom: 15, // Menurunkan maxZoom agar heatmap tetap terlihat saat zoom in
-                max: 0.8, // Menurunkan nilai maksimum untuk mempertegas visualisasi
-                minOpacity: 0.4, // Tambahkan nilai minimum opacity agar tetap terlihat
+                radius: 25,
+                blur: 10,
+                maxZoom: 15,
+                max: 0.8,
+                minOpacity: 0.4,
                 gradient: {
                   0.4: "blue",
                   0.6: "cyan",
@@ -778,10 +907,10 @@ const MapComponent = () => {
             />
           )}
 
-          {/* 🔹 Tambahkan Layer GeoJSON dengan reference */}
+          {/* GeoJSON Layer dengan pendekatan yang dioptimalkan */}
           {geoJsonData && (
             <GeoJSON
-              key={`geojson-${geoJsonKey}-${Object.keys(kecamatanCompanyCounts).length}`}
+              key={`geojson-${geoJsonKey}`}
               data={geoJsonData}
               style={getStyle}
               ref={geoJsonLayerRef}
@@ -789,11 +918,11 @@ const MapComponent = () => {
                 if (feature.properties) {
                   const { label, luas, desa, kelurahan, kode_kec } =
                     feature.properties;
-                  const kecCode = parseInt(kode_kec, 10);
-                  const count = !isNaN(kecCode)
-                    ? kecamatanCompanyCounts[kecCode] || 0
-                    : 0;
+                  const kecCode = normalizeKecamatanCode(kode_kec);
+                  const count =
+                    kecCode !== null ? kecamatanCompanyCounts[kecCode] || 0 : 0;
 
+                  // Initial popup binding
                   layer.bindPopup(`
                     <div style="font-size: 14px; line-height: 1.5;">
                       <b>${label}</b><br/>
@@ -805,33 +934,39 @@ const MapComponent = () => {
                   `);
                 }
               }}
+              onAdd={onGeoJsonLoad}
             />
           )}
 
-          {/* 🔹 Marker Lokasi Pabrik dari Database */}
+          {/* Markers untuk lokasi perusahaan */}
           {selectedLayers.titik &&
             !loading &&
             filteredCompanies.length > 0 &&
             filteredCompanies.map((company) => {
-              // Fungsi untuk memformat URL
+              // Format URL website
               const formatUrl = (url) => {
                 if (!url || url.trim() === "") return null;
-
-                // Tambahkan http:// jika belum ada
-                if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                  return "http://" + url;
-                }
-                return url;
+                return url.startsWith("http") ? url : `http://${url}`;
               };
 
-              // Format URL website
               const websiteUrl = formatUrl(company.web_perusahaan);
+
+              // Tentukan ikon yang akan digunakan
+              const isActive = activeMarkerId === company.id_perusahaan;
+              const currentIcon = isActive
+                ? activeMarkerIcon
+                : defaultMarkerIcon;
 
               return (
                 <Marker
                   key={company.id_perusahaan}
-                  position={[company.lat, company.lon] as L.LatLngExpression}
-                  icon={markerIcon}
+                  position={[company.lat, company.lon]}
+                  icon={currentIcon}
+                  eventHandlers={{
+                    click: () => {
+                      setActiveMarkerId(company.id_perusahaan);
+                    },
+                  }}
                 >
                   <Popup>
                     <div className="max-w-[260px] font-roboto p-0.5">
@@ -1032,91 +1167,69 @@ const MapComponent = () => {
                 Kategori Skala Industri
               </label>
 
-              {(() => {
-                const filteredBesar = filteredCompanies.filter(
-                  (company) =>
-                    company.skala === "Besar" || company.skala === "besar"
-                ).length;
-
-                const filteredSedang = filteredCompanies.filter(
-                  (company) =>
-                    company.skala === "Sedang" || company.skala === "sedang"
-                ).length;
-
-                const filteredData = [
-                  { name: "Besar", value: filteredBesar },
-                  { name: "Sedang", value: filteredSedang },
-                ];
-
-                return (
-                  <div className="flex flex-col items-center font-roboto font-medium text-xs">
-                    {filteredCompanies.length > 0 ? (
-                      <>
-                        <div className="relative mb-2">
-                          <PieChart width={200} height={120}>
-                            <Pie
-                              data={filteredData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={30}
-                              outerRadius={50}
-                              dataKey="value"
-                              labelLine={false}
-                              label={false} // Hilangkan label di chart
-                              activeIndex={pieActiveIndex}
-                              onMouseEnter={(data, index) =>
-                                setPieActiveIndex(index)
-                              }
-                              onMouseLeave={() => setPieActiveIndex(null)}
-                            >
-                              {filteredData.map((entry, index) => (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={COLORS[index]}
-                                />
-                              ))}
-                            </Pie>
-                          </PieChart>
-
-                          {/* Custom tooltip for pie chart */}
-                          {pieActiveIndex !== null && (
-                            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
-                              {filteredData[pieActiveIndex].value} perusahaan
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Labels di bawah pie chart */}
-                        <div className="flex justify-center gap-4">
-                          {filteredData.map((entry, index) => (
-                            <div
-                              key={`label-${index}`}
-                              className="flex items-center"
-                            >
-                              <div
-                                className="w-3 h-3 mr-1 rounded-sm"
-                                style={{ backgroundColor: COLORS[index] }}
-                              />
-                              <span>
-                                {entry.name}{" "}
-                                {(
-                                  (entry.value / filteredCompanies.length) *
-                                  100
-                                ).toFixed(2)}
-                                %
-                              </span>
-                            </div>
+              <div className="flex flex-col items-center font-roboto font-medium text-xs">
+                {filteredCompanies.length > 0 ? (
+                  <>
+                    <div className="relative mb-2">
+                      <PieChart width={200} height={120}>
+                        <Pie
+                          data={pieChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={30}
+                          outerRadius={50}
+                          dataKey="value"
+                          labelLine={false}
+                          label={false} // Hilangkan label di chart
+                          activeIndex={pieActiveIndex}
+                          onMouseEnter={(data, index) =>
+                            setPieActiveIndex(index)
+                          }
+                          onMouseLeave={() => setPieActiveIndex(null)}
+                        >
+                          {pieChartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index]} />
                           ))}
+                        </Pie>
+                      </PieChart>
+
+                      {/* Custom tooltip for pie chart */}
+                      {pieActiveIndex !== null && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
+                          {pieChartData[pieActiveIndex].value} perusahaan
                         </div>
-                      </>
-                    ) : (
-                      <div className="text-center py-4 text-gray-500">
-                        Tidak ada data untuk ditampilkan
-                      </div>
-                    )}
+                      )}
+                    </div>
+
+                    {/* Labels di bawah pie chart */}
+                    <div className="flex justify-center gap-4">
+                      {pieChartData.map((entry, index) => (
+                        <div
+                          key={`label-${index}`}
+                          className="flex items-center"
+                        >
+                          <div
+                            className="w-3 h-3 mr-1 rounded-sm"
+                            style={{ backgroundColor: COLORS[index] }}
+                          />
+                          <span>
+                            {entry.name}{" "}
+                            {(
+                              (entry.value / filteredCompanies.length) *
+                              100
+                            ).toFixed(2)}
+                            %
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    Tidak ada data untuk ditampilkan
                   </div>
-                );
-              })()}
+                )}
+              </div>
             </div>
 
             {/* 4. Bagian kategori KBLI dengan logika khusus */}
@@ -1407,7 +1520,7 @@ const MapComponent = () => {
                 21. Industri farmasi, produk obat kimia dan obat tradisional
               </option>
               <option value="kbli_22">
-                22. Industri karet , barang dari karet dan plastik
+                22. Industri karet, barang dari karet dan plastik
               </option>
               <option value="kbli_23">
                 23. Industri barang galian bukan logam
@@ -1488,10 +1601,7 @@ const MapComponent = () => {
                 Reset
               </button>
 
-              <button
-                onClick={applyFilters}
-                className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
-              >
+              <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm">
                 Terapkan
               </button>
             </div>
@@ -1639,5 +1749,8 @@ const MapComponent = () => {
   );
 };
 
-// Gunakan dynamic import untuk menghindari SSR error
+{
+}
+
+/* Gunakan dynamic import untuk menghindari SSR error */
 export default dynamic(() => Promise.resolve(MapComponent), { ssr: false });
