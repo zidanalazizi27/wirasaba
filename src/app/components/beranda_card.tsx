@@ -54,7 +54,7 @@ function BerandaCard() {
           />
           {showCard && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
-              <CountUp end={1203} duration={5} />
+              <CountUp end={1244} duration={5} />
             </h5>
           )}
           <p className="text-center text-lg text-cdark font-roboto font-semibold">
@@ -73,7 +73,7 @@ function BerandaCard() {
           />
           {showCard && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
-              <CountUp end={54} duration={2} />
+              <CountUp end={51} duration={2} />
             </h5>
           )}
           <p className="text-center text-lg text-cdark font-roboto font-semibold">
@@ -92,7 +92,7 @@ function BerandaCard() {
           />
           {showCard && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
-              <CountUp end={12} duration={1} />
+              <CountUp end={8} duration={1} />
             </h5>
           )}
           <p className="text-center text-lg text-cdark font-roboto font-semibold">

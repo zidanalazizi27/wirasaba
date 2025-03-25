@@ -77,7 +77,7 @@ export default function SDA() {
             akhir 2023, jumlah penduduk tercatat sebanyak 1.996.825 jiwa.
             Sebagai daerah penyangga Ibu Kota Provinsi Jawa Timur, Kabupaten
             Sidoarjo mengalami perkembangan yang pesat pada sektor industri.
-            Kabupaten Sidoarjo memiliki 1.103 industri besar dan sedang,
+            Kabupaten Sidoarjo memiliki 1.203 industri besar dan sedang,
             mencakup 18,59% dari total industri di Jawa Timur. Sektor industri
             pengolahan menjadi pilar utama perekonomian daerah dengan kontribusi
             sebesar 48,61%.

@@ -34,6 +34,7 @@
     "antd": "^5.24.3",
     "chart.js": "^4.4.8",
     "clsx": "2.1.1",
+    "file-saver": "^2.0.5",
     "framer-motion": "11.13.1",
     "intl-messageformat": "^10.5.0",
     "leaflet": "^1.9.4",
@@ -47,7 +48,8 @@
     "react-icons": "^5.5.0",
     "react-leaflet": "^5.0.0",
     "recharts": "^2.15.1",
-    "typed.js": "^2.1.0"
+    "typed.js": "^2.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

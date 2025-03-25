@@ -26,6 +26,7 @@ import MapIcon from "@mui/icons-material/Map";
 import RoomIcon from "@mui/icons-material/Room";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import SaveAltRoundedIcon from "@mui/icons-material/SaveAltRounded";
 import { Input } from "antd";
 import { Transition } from "@headlessui/react";
 import CountUp from "react-countup";
@@ -41,6 +42,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
+import * as XLSX from "xlsx";
 
 const { Search } = Input;
 
@@ -89,12 +91,25 @@ const defaultStyle = {
 // Komponen untuk menginisialisasi Leaflet.heat
 const HeatLayerInitializer = () => {
   const map = useMap();
+  const [heatPluginLoaded, setHeatPluginLoaded] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !heatPluginLoaded) {
       const loadHeatPlugin = async () => {
         try {
-          await import("leaflet.heat");
+          // Dinamis import plugin leaflet.heat
+          const leafletHeat = await import("leaflet.heat");
+          // Pastikan plugin terintegrasi dengan Leaflet
+          if (!L.heatLayer) {
+            // Jika perlu, daftarkan plugin secara manual
+            if (
+              leafletHeat.default &&
+              typeof leafletHeat.default === "function"
+            ) {
+              leafletHeat.default(L);
+            }
+          }
+          setHeatPluginLoaded(true);
           console.log("Leaflet.heat initialized successfully");
         } catch (error) {
           console.error("Failed to load Leaflet.heat:", error);
@@ -103,7 +118,7 @@ const HeatLayerInitializer = () => {
 
       loadHeatPlugin();
     }
-  }, [map]);
+  }, [map, heatPluginLoaded]);
 
   return null;
 };
@@ -114,29 +129,26 @@ const HeatmapLayer = ({ points, options, visible }) => {
   const heatRef = useRef(null);
 
   useEffect(() => {
-    if (!map || points.length === 0) return;
+    if (!map || points.length === 0 || !visible) return;
 
-    // Pastikan L.heatLayer tersedia
-    if (!L.heatLayer) {
+    // Lebih defensif dengan cek L.heatLayer
+    if (typeof L.heatLayer !== "function") {
       console.error(
         "L.heatLayer is not available. Make sure leaflet.heat is properly loaded."
       );
+      // Keluar dari effect tanpa crash
       return;
     }
 
-    // Buat atau update heatmap layer
-    if (visible) {
+    // Cek dan buat heatmap layer
+    try {
       if (!heatRef.current) {
-        // Buat layer baru jika belum ada
         heatRef.current = L.heatLayer(points, options).addTo(map);
       } else {
-        // Jika sudah ada, update data points
         heatRef.current.setLatLngs(points);
       }
-    } else if (heatRef.current) {
-      // Hapus layer jika tidak visible
-      map.removeLayer(heatRef.current);
-      heatRef.current = null;
+    } catch (e) {
+      console.error("Error creating heatmap layer:", e);
     }
 
     // Cleanup ketika komponen unmount
@@ -170,8 +182,38 @@ const MapComponent = () => {
     sedang: 0,
   });
 
+  // Tambahkan kode berikut di MapComponent untuk memastikan Leaflet.heat dimuat
+  useEffect(() => {
+    // Preload leaflet.heat plugin di awal
+    if (typeof window !== "undefined") {
+      import("leaflet.heat")
+        .then((module) => {
+          if (module.default && typeof module.default === "function") {
+            module.default(L);
+          }
+          console.log("Leaflet.heat preloaded");
+        })
+        .catch((err) => {
+          console.error("Failed to preload leaflet.heat:", err);
+        });
+    }
+  }, []);
+
   // State untuk melacak marker yang aktif
   const [activeMarkerId, setActiveMarkerId] = useState(null);
+
+  const markersRef = useRef({});
+
+  // Tambahkan fungsi handler untuk popup close event
+  const handlePopupOpen = (company) => {
+    setActiveMarkerId(company.id_perusahaan);
+  };
+
+  const handlePopupClose = (company) => {
+    if (activeMarkerId === company.id_perusahaan) {
+      setActiveMarkerId(null);
+    }
+  };
 
   // State untuk data perusahaan yang telah difilter
   const [filteredCompanies, setFilteredCompanies] = useState([]);
@@ -827,6 +869,71 @@ const MapComponent = () => {
     setSearchTerm(value);
   };
 
+  // Tambahkan fungsi untuk mengunduh data ke Excel
+  const downloadExcelData = () => {
+    // 1. Persiapkan data berdasarkan filter yang aktif
+    const dataToDownload = filteredCompanies.map((company) => ({
+      "Nama Perusahaan": company.nama_perusahaan || "-",
+      Alamat: company.alamat || "-",
+      Kecamatan: company.nama_kec || "-",
+      Desa: company.nama_des || "-",
+      "Badan Usaha": company.badan_usaha_nama || "-",
+      Skala: company.skala || "-",
+      "Kode KBLI": company.KBLI || "-",
+      Produk: company.produk || "-",
+      Telepon: company.telp_perusahaan || "-",
+      Email: company.email_perusahaan || "-",
+      Website: company.web_perusahaan || "-",
+    }));
+
+    // 2. Buat workbook dan worksheet
+    const ws = XLSX.utils.json_to_sheet(dataToDownload);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Perusahaan IBS");
+
+    // 3. Atur lebar kolom agar lebih readable
+    const colWidths = [
+      { wch: 30 }, // Nama Perusahaan
+      { wch: 40 }, // Alamat
+      { wch: 15 }, // Kecamatan
+      { wch: 15 }, // Desa
+      { wch: 20 }, // Badan Usaha
+      { wch: 10 }, // Skala
+      { wch: 10 }, // Kode KBLI
+      { wch: 30 }, // Produk
+      { wch: 15 }, // Telepon
+      { wch: 25 }, // Email
+      { wch: 25 }, // Website
+    ];
+    ws["!cols"] = colWidths;
+
+    // 4. Buat nama file dengan informasi filter yang aktif
+    let fileName = "Daftar_Perusahaan_IBS";
+
+    // Tambahkan tahun jika filter tahun aktif
+    if (filters.year !== "all") {
+      fileName += `_${filters.year}`;
+    }
+
+    // Tambahkan kecamatan jika filter kecamatan aktif
+    if (filters.district !== "0") {
+      const districtName = districts.find(
+        (d) => d.kode_kec.toString() === filters.district
+      )?.nama_kec;
+      if (districtName) {
+        fileName += `_${districtName}`;
+      }
+    }
+
+    // Tambahkan timestamp untuk keunikan
+    fileName += `_${new Date().toISOString().slice(0, 10)}`;
+
+    // 5. Unduh file
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
+
+    console.log(`Berhasil mengunduh ${dataToDownload.length} data perusahaan`);
+  };
+
   // Mempersiapkan data untuk pie chart
   const pieChartData = useMemo(() => {
     const filteredBesar = filteredCompanies.filter(
@@ -963,9 +1070,19 @@ const MapComponent = () => {
                   position={[company.lat, company.lon]}
                   icon={currentIcon}
                   eventHandlers={{
-                    click: () => {
-                      setActiveMarkerId(company.id_perusahaan);
-                    },
+                    click: () => handlePopupOpen(company),
+                    popupclose: () => handlePopupClose(company),
+                  }}
+                  ref={(ref) => {
+                    if (ref) {
+                      // Simpan referensi marker untuk akses di luar
+                      markersRef.current[company.id_perusahaan] = ref;
+
+                      // Tambahkan event listener untuk popup close
+                      ref.on("popupclose", () => {
+                        handlePopupClose(company);
+                      });
+                    }
                   }}
                 >
                   <Popup>
@@ -1100,7 +1217,7 @@ const MapComponent = () => {
           leave="transition ease-in duration-200"
           leaveFrom="opacity-100 transform scale-100"
           leaveTo="opacity-0 transform scale-95"
-          className="absolute top-full left-0 z-30 w-72 max-h-[77vh] p-3 bg-[#ffffff] rounded-md shadow-md text-cdark mt-2 overflow-y-auto"
+          className="absolute top-full left-0 z-30 w-68 max-h-[77vh] p-3 bg-[#ffffff] rounded-md shadow-md text-cdark mt-2 overflow-y-auto"
         >
           <div>
             {/* 1. Bagian lokasi dengan nilai yang berubah sesuai kecamatan */}
@@ -1611,21 +1728,37 @@ const MapComponent = () => {
 
       {/* Container untuk Elemen di Bawah */}
       <div className="mx-[5%] fixed bottom-4 left-0 right-0 flex justify-between items-center">
-        {/* Tombol Tanggal */}
-        <div className="absolute left-1/2 transform -translate-x-1/2 bottom-0 z-10">
-          <button
-            className="flex items-center justify-center bg-[#ffffff] text-cdark rounded-xl shadow-md font-semibold 
-     px-3 py-2 flex-shrink-0"
-          >
-            <DateRangeIcon className="hidden md:inline text-xl" />
-            <span className="text-2xs md:ml-1">
-              {filters.year === "all" ? "Semua Tahun" : filters.year}
-            </span>
-          </button>
+        {/* Tombol Unduh dan Tanggal dalam satu container */}
+        <div className="absolute left-1/2 transform -translate-x-1/2 bottom-0 z-20 flex items-center gap-3 pointer-events-none">
+          {/* Tombol Unduh */}
+          <div className="pointer-events-auto">
+            <button
+              className="flex items-center justify-center bg-[#ffffff] text-cdark rounded-xl shadow-md font-semibold 
+        px-2 py-2 flex-shrink-0 hover:bg-gray-100 active:bg-gray-200 transition-colors cursor-pointer"
+              onClick={downloadExcelData}
+              type="button"
+            >
+              <SaveAltRoundedIcon className="text-xl" />
+            </button>
+          </div>
+
+          {/* Tombol Tanggal */}
+          <div className="pointer-events-auto">
+            <button
+              className="flex items-center justify-center bg-[#ffffff] text-cdark rounded-xl shadow-md font-semibold 
+        px-2 py-2 flex-shrink-0"
+              type="button"
+            >
+              <DateRangeIcon className="hidden md:inline text-xl" />
+              <span className="text-2xs md:ml-1">
+                {filters.year === "all" ? "Semua Tahun" : filters.year}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Card Jumlah Perusahaan & Tombol Map */}
-        <div className="flex flex-row items-center gap-2 flex-nowrap w-full justify-end z-20 relative">
+        <div className="flex flex-row items-center gap-2 flex-nowrap w-full justify-end z-10 relative">
           {/* Card Jumlah Perusahaan/Intensitas - tampilkan hanya jika heatmap atau choropleth aktif */}
           {(selectedLayers.heatmap || selectedLayers.choropleth) && (
             <div
