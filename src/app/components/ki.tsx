@@ -47,15 +47,23 @@ export default function KI() {
   const controls = useAnimation();
 
   useEffect(() => {
+    // Buat variabel untuk menyimpan fungsi handleScroll
     const handleScroll = () => {
+      // controls.start() di dalam event listener di useEffect aman digunakan
       controls.start(
         window.scrollY > 100 ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }
       );
     };
 
+    // Panggil sekali untuk set nilai awal
+    handleScroll();
+
+    // Pasang event listener
     window.addEventListener("scroll", handleScroll);
+
+    // Cleanup event listener saat komponen unmount
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [controls]);
+  }, [controls]); // controls sebagai dependensi
 
   return (
     <motion.div
@@ -67,7 +75,7 @@ export default function KI() {
       <h1 className="text-2xl font-bold text-black text-center mt-10 mb-6">
         Klasifikasi Industri
       </h1>
-      
+
       <motion.div
         initial={{ opacity: 0, y: 50 }}
         animate={controls}
@@ -82,21 +90,40 @@ export default function KI() {
               whileHover={{ translateY: -5 }}
               transition={{ duration: 0.3 }}
             >
-              <div className={`${item.topBgColor} ${item.textColor} p-3 flex flex-col gap-1`}>
+              <div
+                className={`${item.topBgColor} ${item.textColor} p-3 flex flex-col gap-1`}
+              >
                 <div className="flex items-center gap-1 text-sm">
-                  <Image src="/image/ic_1.svg" alt="Tenaga Kerja" width={16} height={16} />
+                  <Image
+                    src="/image/ic_1.svg"
+                    alt="Tenaga Kerja"
+                    width={16}
+                    height={16}
+                  />
                   <span>Tenaga Kerja {item.workforce}</span>
                 </div>
                 <div className="flex items-center gap-1 text-sm">
-                  <Image src="/image/ic_2.svg" alt="Investasi" width={16} height={16} />
+                  <Image
+                    src="/image/ic_2.svg"
+                    alt="Investasi"
+                    width={16}
+                    height={16}
+                  />
                   <span>Investasi {item.investment}</span>
                 </div>
                 <div className="flex items-center gap-1 text-sm">
-                  <Image src="/image/ic_3.svg" alt="Omset" width={16} height={16} />
+                  <Image
+                    src="/image/ic_3.svg"
+                    alt="Omset"
+                    width={16}
+                    height={16}
+                  />
                   <span>Omset {item.revenue}</span>
                 </div>
               </div>
-              <div className={`${item.bottomBgColor} w-full text-center py-2 font-bold ${item.titleTextColor || 'text-white'}`}>
+              <div
+                className={`${item.bottomBgColor} w-full text-center py-2 font-bold ${item.titleTextColor || "text-white"}`}
+              >
                 {item.title}
               </div>
             </motion.div>
@@ -104,10 +131,22 @@ export default function KI() {
         </div>
 
         <p className="text-justify mt-4 indent-8 font-medium">
-          Industri skala sedang mencakup manufaktur dengan tenaga kerja ≤99 orang, investasi 5–10
-          miliar rupiah, atau omset 15–50 miliar rupiah. Industri skala besar memiliki >99 pekerja,
-          investasi >10 miliar rupiah, atau omset >50 miliar rupiah. Untuk industri penggilingan
-          padi, skala sedang berkapasitas 1,5–3 ton/jam, sementara skala besar melebihi 3 ton/jam.
+          Penentuan skala usaha industri besar dan sedang didasarkan pada
+          sejumlah kriteria. Industri skala sedang merupakan perusahaan
+          manufaktur yang memenuhi salah satu dari kriteria berikut: jumlah
+          tenaga kerja antara 20-99 orang, nilai investasi tetap sejak awal
+          pendirian hingga akhir tahun tersebut 5 miliar rupiah hingga 10 miliar
+          rupiah, atau omset pada tahun tersebut 15 miliar rupiah hingga 50
+          miliar rupiah. Sementara itu, industri skala besar merupakan
+          perusahaan manufaktur yang memiliki lebih dari 99 orang, nilai
+          investasi tetap sejak awal pendirian hingga akhir tahun tersebut
+          melebihi 10 miliar rupiah, atau omset pada tahun tersebut lebih dari
+          50 miliar rupiah. Sebagai tambahan perusahaan yang telah tercatat
+          dalam Direktori IBS namun memiliki jumlah tenaga kerja kurang dari 20
+          orang atau nilai akumulasi investasi/modal tetap sejak pendirian
+          pabrik hingga akhir tahun tersebut kurang dari 5 miliar rupiah atau
+          omset perusahaan tahun tersebut kurang dari 15 miliar rupiah
+          dikelompokkan menjadi perusahaan skala menengah (sedang).
         </p>
       </motion.div>
     </motion.div>

@@ -9,15 +9,23 @@ export default function KawasanIndustri() {
   const controls = useAnimation();
 
   useEffect(() => {
+    // Buat variabel untuk menyimpan fungsi handleScroll
     const handleScroll = () => {
+      // controls.start() di dalam event listener di useEffect aman digunakan
       controls.start(
         window.scrollY > 100 ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }
       );
     };
 
+    // Panggil sekali untuk set nilai awal
+    handleScroll();
+
+    // Pasang event listener
     window.addEventListener("scroll", handleScroll);
+
+    // Cleanup event listener saat komponen unmount
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [controls]);
+  }, [controls]); // controls sebagai dependensi
 
   // Data Kawasan Industri
   const kawasanList = [
@@ -26,35 +34,35 @@ export default function KawasanIndustri() {
       alt: "Central Industrial Park",
       title: "Central Industrial Park",
       size: "52,00 Ha",
-      link: "https://www.centralindustrial-park.com/",
+      link: "/peta_tematik?lat=-7.4443415&lng=112.7499363",
     },
     {
       src: "/image/kws_2.png",
       alt: "Kawasan Industri Safe N Lock",
       title: "Kawasan Safe N Lock",
       size: "147,25 Ha",
-      link: "https://safenlock.com/id/",
+      link: "/peta_tematik?lat=-7.4619433&lng=112.7471288",
     },
     {
       src: "/image/kws_3.png",
       alt: "Kawasan Industri Sidoarjo",
       title: "Kawasan Industri Sidoarjo",
       size: "88,64 Ha",
-      link: "https://www.maspion.com/detail-company/company/63",
+      link: "/peta_tematik?lat=-7.5453303&lng=112.7752512",
     },
     {
       src: "/image/kws_4.png",
       alt: "Kawasan Industri SIRIE",
       title: "Kawasan Industri SIRIE",
       size: "105,00 Ha",
-      link: "https://sirie.co.id/",
+      link: "/peta_tematik?lat=-7.4606707&lng=112.741371",
     },
     {
       src: "/image/kws_5.png",
       alt: "Sidoarjo Industrial Estate Berbek",
       title: "Kawasan SIER Berbek",
       size: "87,00 Ha",
-      link: "https://sier.id/",
+      link: "/peta_tematik?lat=-7.3391755&lng=112.7552335",
     },
   ];
 
@@ -99,11 +107,7 @@ export default function KawasanIndustri() {
               transition={{ duration: 0.3 }}
               className="relative w-[180px] h-[250px] shadow-lg rounded-xl overflow-hidden bg-[#74512D] text-sm"
             >
-              <Link
-                href={kawasan.link}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <Link href={kawasan.link}>
                 {/* Gambar dengan Overlay Gradasi */}
                 <div className="relative w-full h-[80%]">
                   <Image

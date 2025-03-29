@@ -43,6 +43,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import * as XLSX from "xlsx";
+import { useSearchParams } from "next/navigation";
 
 const { Search } = Input;
 
@@ -83,7 +84,7 @@ const defaultStyle = {
   fillColor: "#cccccc",
   weight: 2,
   opacity: 1,
-  color: "black",
+  color: "#ff9005",
   dashArray: "3",
   fillOpacity: 0,
 };
@@ -181,6 +182,32 @@ const MapComponent = () => {
     besar: 0,
     sedang: 0,
   });
+
+  const searchParams = useSearchParams();
+
+  // Referensi untuk map Leaflet
+  const mapRef = useRef(null);
+
+  // useEffect untuk memindahkan peta ke koordinat tertentu jika ada di URL
+  useEffect(() => {
+    const lat = searchParams.get("lat");
+    const lng = searchParams.get("lng");
+
+    // Jika kedua parameter ada dan mapRef sudah ready
+    if (lat && lng && mapRef.current) {
+      // Parse koordinat sebagai float untuk memastikan nilai numerik
+      const latitude = parseFloat(lat);
+      const longitude = parseFloat(lng);
+
+      // Validasi bahwa koordinat valid
+      if (!isNaN(latitude) && !isNaN(longitude)) {
+        console.log(`Focusing map to coordinates: ${latitude}, ${longitude}`);
+
+        // Set view ke koordinat yang ditentukan dengan zoom level 15
+        mapRef.current.setView([latitude, longitude], 15);
+      }
+    }
+  }, [searchParams, mapRef.current]); // Jalankan ketika searchParams atau mapRef berubah
 
   // Tambahkan kode berikut di MapComponent untuk memastikan Leaflet.heat dimuat
   useEffect(() => {
@@ -481,7 +508,7 @@ const MapComponent = () => {
         fillColor: getColor(count),
         weight: 2,
         opacity: 1,
-        color: "black",
+        color: "#ff9005",
         dashArray: "3",
         fillOpacity: selectedLayers.choropleth ? 0.7 : 0,
       };
@@ -960,8 +987,9 @@ const MapComponent = () => {
           center={[-7.4559741, 112.6608877]}
           zoom={11}
           scrollWheelZoom={true}
+          ref={mapRef} // Tambahkan referensi ke MapContainer
         >
-          {/* 🔹 Layer Control untuk Opsi Peta */}
+          {/* Layer Control untuk Opsi Peta */}
           <LayersControl position="bottomleft">
             <LayersControl.BaseLayer name="OpenStreetMap">
               <TileLayer
@@ -985,6 +1013,13 @@ const MapComponent = () => {
               <TileLayer
                 url="https://mt.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
                 attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Stadia Dark Gray">
+              <TileLayer
+                url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>'
+                maxZoom={20}
               />
             </LayersControl.BaseLayer>
           </LayersControl>
