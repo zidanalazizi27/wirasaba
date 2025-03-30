@@ -40,11 +40,11 @@ const Sidebar = ({ children }) => {
     <div className="relative">
       <aside
         className={`h-screen z-40 fixed top-0 left-0 p-4 ${
-          isSidebarOpen ? "w-64" : "w-24"
+          isSidebarOpen ? "w-60" : "w-24"
         } transition-all duration-300`}
       >
         <nav className="flex flex-col bg-clightbrown border-r rounded-2xl shadow-sm transition-all duration-300 h-full">
-          <div className="p-4 pb-6 flex justify-center">
+          <div className="p-4 flex justify-center">
             <Link href="/">
               <img
                 src="/image/logo_only.png"
@@ -56,19 +56,19 @@ const Sidebar = ({ children }) => {
             </Link>
             <button
               onClick={toggleSidebar}
-              className={`p-1.5 rounded-lg bg-clightbrown hover:bg-clightbrown ${
+              className={`p-1 pl-2 rounded-lg bg-clightbrown hover:bg-clightbrown ${
                 isScreenWide ? "md:hidden" : ""
               }`}
             >
               {isSidebarOpen ? (
-                <FaCircleChevronLeft className="text-cdark text-3xl" />
+                <FaCircleChevronLeft className="text-cdark text-2xl" />
               ) : (
-                <FaCircleChevronRight className="text-cdark text-3xl" />
+                <FaCircleChevronRight className="text-cdark text-2xl" />
               )}
             </button>
           </div>
 
-          <ul className="flex-1 px-3">
+          <ul className="flex-1 px-2">
             {React.Children.map(children, (child) =>
               React.cloneElement(child, {
                 isSidebarOpen,
