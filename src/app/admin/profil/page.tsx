@@ -177,7 +177,7 @@ export default function Profil() {
                   <div>
                     <label
                       htmlFor="name"
-                      className="block text-sm text-cdark mb-1"
+                      className="block text-base text-cdark mb-1"
                     >
                       Nama
                     </label>
@@ -187,7 +187,7 @@ export default function Profil() {
                       name="name"
                       value={profileForm.name}
                       onChange={handleProfileChange}
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
                   </div>
@@ -195,7 +195,7 @@ export default function Profil() {
                   <div>
                     <label
                       htmlFor="email"
-                      className="block text-sm text-cdark mb-1"
+                      className="block text-base text-cdark mb-1"
                     >
                       Email
                     </label>
@@ -205,7 +205,7 @@ export default function Profil() {
                       name="email"
                       value={profileForm.email}
                       onChange={handleProfileChange}
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
                   </div>
@@ -213,7 +213,7 @@ export default function Profil() {
                   <div>
                     <label
                       htmlFor="institution"
-                      className="block text-sm font-medium text-cdark mb-1"
+                      className="block text-base font-medium text-cdark mb-1"
                     >
                       Asal Instansi
                     </label>
@@ -223,7 +223,7 @@ export default function Profil() {
                       name="institution"
                       value={profileForm.institution}
                       onChange={handleProfileChange}
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
                   </div>
@@ -245,7 +245,7 @@ export default function Profil() {
                   <div>
                     <label
                       htmlFor="currentPassword"
-                      className="block text-sm text-cdark mb-1"
+                      className="block text-base text-cdark mb-1"
                     >
                       Password Lama
                     </label>
@@ -256,7 +256,7 @@ export default function Profil() {
                         name="currentPassword"
                         value={passwordForm.currentPassword}
                         onChange={handlePasswordChange}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
+                        className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
                         required
                       />
                       <button
@@ -276,7 +276,7 @@ export default function Profil() {
                   <div>
                     <label
                       htmlFor="newPassword"
-                      className="block text-sm text-cdark mb-1"
+                      className="block text-base text-cdark mb-1"
                     >
                       Password Baru
                     </label>
@@ -287,7 +287,7 @@ export default function Profil() {
                         name="newPassword"
                         value={passwordForm.newPassword}
                         onChange={handlePasswordChange}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
+                        className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
                         required
                       />
                       <button
@@ -307,7 +307,7 @@ export default function Profil() {
                   <div>
                     <label
                       htmlFor="confirmPassword"
-                      className="block text-sm text-cdark mb-1"
+                      className="block text-base text-cdark mb-1"
                     >
                       Konfirmasi Password Baru
                     </label>
@@ -318,7 +318,7 @@ export default function Profil() {
                         name="confirmPassword"
                         value={passwordForm.confirmPassword}
                         onChange={handlePasswordChange}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
+                        className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
                         required
                       />
                       <button

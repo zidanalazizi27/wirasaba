@@ -3,7 +3,7 @@
 import React from "react";
 import SidebarLayout from "@/app/components/admin/sidebar_layout";
 import Breadcrumb from "@/app/components/admin/breadcrumb";
-import TabelDirektori from "@/app/components/admin/tabel_direktori";
+import DetailDirektori from "@/app/components/admin/detail_direktori";
 
 export default function Direktori() {
   return (
@@ -12,11 +12,7 @@ export default function Direktori() {
         <Breadcrumb items={[{ label: "Direktori IBS" }]} />
 
         <div className="bg-white p-4 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">
-            Data Perusahaan Industri Besar dan Sedang
-          </h2>
-          {/* <DirektoriTable /> */}
-          <TabelDirektori />
+          <DetailDirektori />
         </div>
       </div>
     </SidebarLayout>
