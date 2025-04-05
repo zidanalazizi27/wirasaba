@@ -739,7 +739,7 @@ const MapComponent = () => {
         // Paralel fetching untuk meningkatkan performa
         const [companiesResponse, directoriesResponse, districtsResponse] =
           await Promise.all([
-            fetch("/api/perusahaan"),
+            fetch("/api/perusahaan/peta"),
             fetch("/api/direktori"),
             fetch("/api/kecamatan"),
           ]);

@@ -7,7 +7,8 @@ import { usePathname } from "next/navigation";
 
 type BreadcrumbItem = {
   label: string;
-  href?: string;
+  link?: string;  // Ubah href menjadi link untuk konsistensi dengan pemanggilan
+  href?: string;  // Pertahankan href untuk kompatibilitas
 };
 
 interface BreadcrumbProps {
@@ -23,10 +24,16 @@ export default function Breadcrumb({
 }: BreadcrumbProps) {
   const pathname = usePathname();
 
+  // Normalisasi items untuk mendukung baik link maupun href
+  const normalizedItems = items.map(item => ({
+    label: item.label,
+    href: item.link || item.href // Gunakan link jika ada, otherwise gunakan href
+  }));
+
   // Jika tidak ada item yang diberikan, buat breadcrumb otomatis dari pathname
   const breadcrumbItems =
-    items.length > 0
-      ? items
+    normalizedItems.length > 0
+      ? normalizedItems
       : pathname
           .split("/")
           .filter((path) => path !== "")

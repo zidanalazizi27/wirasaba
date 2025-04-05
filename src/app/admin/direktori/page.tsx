@@ -15,7 +15,6 @@ export default function Direktori() {
           <h2 className="text-xl font-semibold mb-4">
             Data Perusahaan Industri Besar dan Sedang
           </h2>
-          {/* <DirektoriTable /> */}
           <TabelDirektori />
         </div>
       </div>

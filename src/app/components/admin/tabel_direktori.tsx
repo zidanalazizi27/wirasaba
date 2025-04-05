@@ -8,6 +8,7 @@ import React, {
   useEffect,
 } from "react";
 import type { SVGProps } from "react";
+import { useRouter } from "next/navigation";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -353,213 +354,50 @@ const Tooltip = ({
 export const columns = [
   { name: "No", uid: "no", sortable: false },
   { name: "KIP", uid: "kip", sortable: true },
-  { name: "Nama Usaha", uid: "namaUsaha", sortable: true },
+  { name: "Nama Usaha", uid: "nama_perusahaan", sortable: true },
   { name: "Alamat", uid: "alamat", sortable: true },
-  { name: "Jarak (Km)", uid: "jarak", sortable: true },
-  { name: "PCL", uid: "pcl", sortable: true },
+  { name: "Jarak", uid: "jarak", sortable: true },
+  { name: "PCL", uid: "pcl_utama", sortable: true },
   { name: "Status", uid: "status", sortable: false },
   { name: "Aksi", uid: "actions", sortable: false },
 ];
 
 // Status options
 export const statusOptions = [
-  { name: "Aktif", uid: "aktif" },
-  { name: "Tidak Aktif", uid: "tidakAktif" },
-  { name: "Tutup", uid: "tutup" },
-];
-
-// PCL options
-export const pclOptions = [
-  { name: "Andri Wijaya", uid: "andri" },
-  { name: "Budi Santoso", uid: "budi" },
-  { name: "Citra Dewi", uid: "citra" },
-  { name: "Dimas Pratama", uid: "dimas" },
-];
-
-// Dummy data for the table
-export const businesses = [
-  {
-    id: 1,
-    no: 1,
-    kip: 3511111111,
-    namaUsaha: "Toko Sejahtera",
-    alamat: "Jl. Merdeka No. 123, Jakarta Pusat",
-    jarak: "2.5 km",
-    pcl: "Andri Wijaya",
-    aktivitas: "Perdagangan",
-    status: "aktif",
-  },
-  {
-    id: 2,
-    no: 2,
-    kip: 3511111112,
-    namaUsaha: "Warung Barokah",
-    alamat: "Jl. Pahlawan No. 45, Jakarta Selatan",
-    jarak: "1.2 km",
-    pcl: "Budi Santoso",
-    aktivitas: "Kuliner",
-    status: "aktif",
-  },
-  {
-    id: 3,
-    no: 3,
-    kip: 3511111113,
-    namaUsaha: "CV Makmur Jaya",
-    alamat: "Jl. Gatot Subroto Km. 3, Jakarta Timur",
-    jarak: "5.7 km",
-    pcl: "Citra Dewi",
-    aktivitas: "Jasa",
-    status: "tidakAktif",
-  },
-  {
-    id: 4,
-    no: 4,
-    kip: 3511111114,
-    namaUsaha: "PT Sentosa Abadi",
-    alamat: "Jl. Sudirman No. 78, Jakarta Pusat",
-    jarak: "3.8 km",
-    pcl: "Dimas Pratama",
-    aktivitas: "Manufaktur",
-    status: "aktif",
-  },
-  {
-    id: 5,
-    no: 5,
-    kip: "3511111115",
-    namaUsaha: "Rumah Makan Padang",
-    alamat: "Jl. Kemang Raya No. 15, Jakarta Selatan",
-    jarak: "0.9 km",
-    pcl: "Andri Wijaya",
-    aktivitas: "Kuliner",
-    status: "aktif",
-  },
-  {
-    id: 6,
-    no: 6,
-    kip: 3511111116,
-    namaUsaha: "Bengkel Motor Cepat",
-    alamat: "Jl. Raya Bogor Km. 25, Jakarta Timur",
-    jarak: "8.3 km",
-    pcl: "Budi Santoso",
-    aktivitas: "Jasa",
-    status: "aktif",
-  },
-  {
-    id: 7,
-    no: 7,
-    kip: 3511111117,
-    namaUsaha: "Salon Cantik",
-    alamat: "Jl. Kebon Jeruk No. 12, Jakarta Barat",
-    jarak: "4.1 km",
-    pcl: "Citra Dewi",
-    aktivitas: "Jasa",
-    status: "tutup",
-  },
-  {
-    id: 8,
-    no: 8,
-    kip: 3511111118,
-    namaUsaha: "Toko Bangunan Jaya",
-    alamat: "Jl. Raya Cilandak No. 45, Jakarta Selatan",
-    jarak: "6.7 km",
-    pcl: "Dimas Pratama",
-    aktivitas: "Perdagangan",
-    status: "aktif",
-  },
-  {
-    id: 9,
-    no: 9,
-    kip: 3511111119,
-    namaUsaha: "Apotek Sehat",
-    alamat: "Jl. Tebet Barat No. 30, Jakarta Selatan",
-    jarak: "2.3 km",
-    pcl: "Andri Wijaya",
-    aktivitas: "Kesehatan",
-    status: "aktif",
-  },
-  {
-    id: 10,
-    no: 10,
-    kip: 3511111120,
-    namaUsaha: "Kedai Kopi Aroma",
-    alamat: "Jl. Cikini Raya No. 5, Jakarta Pusat",
-    jarak: "1.5 km",
-    pcl: "Budi Santoso",
-    aktivitas: "Kuliner",
-    status: "aktif",
-  },
-  {
-    id: 11,
-    no: 11,
-    kip: 3511111121,
-    namaUsaha: "Percetakan Cepat",
-    alamat: "Jl. Panglima Polim No. 22, Jakarta Selatan",
-    jarak: "3.2 km",
-    pcl: "Citra Dewi",
-    aktivitas: "Jasa",
-    status: "tidakAktif",
-  },
-  {
-    id: 12,
-    no: 12,
-    kip: 3511111122,
-    namaUsaha: "Toko Elektronik Mega",
-    alamat: "Jl. Gajah Mada No. 100, Jakarta Barat",
-    jarak: "5.9 km",
-    pcl: "Dimas Pratama",
-    aktivitas: "Perdagangan",
-    status: "aktif",
-  },
-  {
-    id: 13,
-    no: 13,
-    kip: 3511111123,
-    namaUsaha: "Butik Fashion",
-    alamat: "Jl. Senopati No. 60, Jakarta Selatan",
-    jarak: "2.8 km",
-    pcl: "Andri Wijaya",
-    aktivitas: "Perdagangan",
-    status: "aktif",
-  },
-  {
-    id: 14,
-    no: 14,
-    kip: 3511111124,
-    namaUsaha: "Restoran Selera",
-    alamat: "Jl. Hayam Wuruk No. 35, Jakarta Pusat",
-    jarak: "4.5 km",
-    pcl: "Budi Santoso",
-    aktivitas: "Kuliner",
-    status: "tutup",
-  },
-  {
-    id: 15,
-    no: 15,
-    kip: 3511111125,
-    namaUsaha: "Laundry Bersih",
-    alamat: "Jl. Kelapa Gading No. 8, Jakarta Utara",
-    jarak: "7.1 km",
-    pcl: "Citra Dewi",
-    aktivitas: "Jasa",
-    status: "aktif",
-  },
+  { name: "Tinggi", uid: "tinggi" },
+  { name: "Sedang", uid: "sedang" },
+  { name: "Rendah", uid: "rendah" },
+  { name: "Kosong", uid: "kosong" },
 ];
 
 const statusColorMap: Record<string, string> = {
-  aktif: "bg-green-100 text-green-800",
-  tidakAktif: "bg-pink-100 text-pink-800",
-  tutup: "bg-amber-100 text-amber-800",
+  tinggi: "bg-green-100 text-green-800",
+  sedang: "bg-amber-100 text-amber-800",
+  rendah: "bg-red-100 text-red-800",
+  kosong: "bg-gray-100 text-gray-800",
 };
 
-type Business = (typeof businesses)[0];
+type Business = {
+  id_perusahaan: number;
+  no: number;
+  kip: string | number;
+  nama_perusahaan: string;
+  alamat: string;
+  jarak: string;
+  pcl_utama: string;
+  status: string;
+};
 type SortDirection = "ascending" | "descending" | null;
 
 interface SortDescriptor {
   column: string;
-  direction: SortDirection;
+  direction: "ascending" | "descending" | null;
 }
 
 const TabelDirektori = () => {
+  const router = useRouter();
+
+  // State declarations
   const [filterValue, setFilterValue] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<Set<number>>(new Set([]));
   const [statusFilter, setStatusFilter] = useState("all");
@@ -567,6 +405,20 @@ const TabelDirektori = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortDescriptors, setSortDescriptors] = useState<SortDescriptor[]>([]);
+  const [pclOptions, setPclOptions] = useState<{ name: string; uid: string }[]>(
+    []
+  );
+
+  // Additional state for API data
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const [allBusinesses, setAllBusinesses] = useState<Business[]>([]);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [hasLoadedAll, setHasLoadedAll] = useState(false);
 
   // State for dropdown visibility
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -576,11 +428,180 @@ const TabelDirektori = () => {
   // Refs for detecting outside clicks
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const pclDropdownRef = useRef<HTMLDivElement>(null);
+  const [uniqueYears, setUniqueYears] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState("");
   const [yearDropdownOpen, setYearDropdownOpen] = useState(false);
-  const [selectedYear, setSelectedYear] = useState("2024");
   const yearDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Fungsi untuk mengambil data direktori dan ekstrak tahun unik
+  const fetchDirectoryYears = useCallback(async () => {
+    try {
+      const response = await fetch("/api/direktori");
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Ekstrak tahun-tahun unik dari data direktori
+        const years = result.data
+          .map((dir) => dir.thn_direktori.toString())
+          .filter((year, index, self) => self.indexOf(year) === index)
+          .sort((a, b) => b - a); // Sortir tahun secara descending
+
+        setUniqueYears(years);
+
+        // Set tahun default ke tahun terbaru
+        if (years.length > 0 && !selectedYear) {
+          setSelectedYear(years[0]);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching directory data:", err);
+      // Gunakan tahun saat ini jika gagal
+      const currentYear = new Date().getFullYear().toString();
+      setUniqueYears([currentYear]);
+      if (!selectedYear) {
+        setSelectedYear(currentYear);
+      }
+    }
+  }, [selectedYear]);
+
+  // Panggil fetchDirectoryYears saat komponen dimuat
+  useEffect(() => {
+    fetchDirectoryYears();
+  }, [fetchDirectoryYears]);
+
+  // Fungsi untuk mengambil opsi PCL dari API
+  const fetchPclOptions = useCallback(async () => {
+    try {
+      const response = await fetch("/api/perusahaan/pcl_utama");
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setPclOptions(data);
+    } catch (err) {
+      console.error("Error fetching PCL options:", err);
+      // Gunakan array kosong jika gagal
+      setPclOptions([]);
+    }
+  }, []);
+
+  // Panggil fetchPclOptions saat komponen dimuat
+  useEffect(() => {
+    fetchPclOptions();
+  }, [fetchPclOptions]);
+
   const hasSearchFilter = Boolean(filterValue);
+
+  // Fetch data from API
+  const fetchData = useCallback(async () => {
+    if (!selectedYear) return;
+
+    try {
+      setIsLoading(true);
+
+      // Buat parameter untuk API request
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: rowsPerPage.toString(),
+        year: selectedYear,
+        search: filterValue,
+        status: statusFilter,
+        pcl: pclFilter,
+      });
+
+      // Tambahkan parameter sorting jika ada
+      sortDescriptors.forEach((sort, index) => {
+        if (sort.direction) {
+          params.append(`sort[${index}][column]`, sort.column);
+          params.append(`sort[${index}][direction]`, sort.direction);
+        }
+      });
+
+      const response = await fetch(`/api/perusahaan?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setBusinesses(data.data);
+      setTotalItems(data.pagination.total);
+      setTotalPages(data.pagination.totalPages);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError("Gagal memuat data perusahaan");
+      setBusinesses([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    currentPage,
+    rowsPerPage,
+    selectedYear,
+    filterValue,
+    statusFilter,
+    pclFilter,
+    sortDescriptors,
+  ]);
+
+  //Fungsi untuk mengambil semua data (tanpa paginasi)
+  const fetchAllData = useCallback(async () => {
+    if (!selectedYear || hasLoadedAll) return;
+
+    try {
+      setIsLoadingAll(true);
+
+      // Gunakan limit besar untuk mendapatkan semua data sekaligus
+      const params = new URLSearchParams({
+        year: selectedYear,
+        search: filterValue,
+        status: statusFilter,
+        pcl: pclFilter,
+        page: "1",
+        limit: "10000", // Jumlah besar untuk mendapatkan semua data
+      });
+
+      const response = await fetch(`/api/perusahaan?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setAllBusinesses(data.data);
+      setHasLoadedAll(true);
+    } catch (err) {
+      console.error("Error fetching all data:", err);
+    } finally {
+      setIsLoadingAll(false);
+    }
+  }, [selectedYear, filterValue, statusFilter, pclFilter, hasLoadedAll]);
+
+  // Call API when dependencies change
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  //Panggil fetchAllData saat diperlukan
+  useEffect(() => {
+    // Hanya fetch all data saat ada perubahan filter atau sorting pertama kali digunakan
+    if (sortDescriptors.length > 0 && !hasLoadedAll) {
+      fetchAllData();
+    }
+  }, [sortDescriptors, fetchAllData]);
+
+  //Reset hasLoadedAll ketika filter berubah
+  useEffect(() => {
+    setHasLoadedAll(false);
+  }, [selectedYear, filterValue, statusFilter, pclFilter]);
 
   const filteredItems = useMemo(() => {
     let filteredBusinesses = [...businesses];
@@ -590,10 +611,13 @@ const TabelDirektori = () => {
       const lowerFilter = filterValue.toLowerCase();
       filteredBusinesses = filteredBusinesses.filter(
         (business) =>
-          String(business.kip).toLowerCase().includes(lowerFilter) ||
-          business.namaUsaha.toLowerCase().includes(lowerFilter) ||
-          business.alamat.toLowerCase().includes(lowerFilter) ||
-          business.pcl.toLowerCase().includes(lowerFilter)
+          // Gunakan optional chaining dan pastikan tipe data sesuai
+          (business.kip &&
+            String(business.kip).toLowerCase().includes(lowerFilter)) ||
+          (business.nama_perusahaan &&
+            business.nama_perusahaan.toLowerCase().includes(lowerFilter)) ||
+          (business.alamat &&
+            business.alamat.toLowerCase().includes(lowerFilter))
       );
     }
 
@@ -606,74 +630,130 @@ const TabelDirektori = () => {
 
     // PCL filter
     if (pclFilter !== "all") {
-      const selectedPcl =
-        pclOptions.find((pcl) => pcl.uid === pclFilter)?.name || "";
       filteredBusinesses = filteredBusinesses.filter(
-        (business) => business.pcl === selectedPcl
+        (business) =>
+          business.pcl_utama && String(business.pcl_utama) === pclFilter
       );
     }
 
     return filteredBusinesses;
-  }, [filterValue, statusFilter, pclFilter]);
+  }, [businesses, filterValue, statusFilter, pclFilter, hasSearchFilter]);
 
-  // Apply sorting to the filtered items
+  // Implementasi client-side sorting yang bekerja dengan semua data
   const sortedItems = useMemo(() => {
-    if (sortDescriptors.length === 0) return [...filteredItems];
+    // Gunakan allBusinesses jika sudah diload dan sortDescriptors tidak kosong
+    // Jika tidak, gunakan data pagination biasa (businesses)
+    const dataToSort =
+      hasLoadedAll && sortDescriptors.length > 0
+        ? [...allBusinesses]
+        : [...businesses];
 
-    return [...filteredItems].sort((a, b) => {
+    if (sortDescriptors.length === 0) return dataToSort;
+
+    return dataToSort.sort((a, b) => {
       for (const sort of sortDescriptors) {
-        const { column, direction } = sort;
+        if (!sort.direction) continue;
 
-        if (direction === null) continue;
+        const column = sort.column as keyof Business;
 
-        const columnKey = column as keyof Business;
-        const valueA = a[columnKey] as string;
-        const valueB = b[columnKey] as string;
+        // Penanganan untuk nilai null/undefined
+        const valueA = a[column] ?? "";
+        const valueB = b[column] ?? "";
 
-        // Numeric comparison for jarak (remove 'km' and parse as number)
-        if (column === "jarak") {
-          const numA = parseFloat(valueA.replace(" km", ""));
-          const numB = parseFloat(valueB.replace(" km", ""));
+        // Penanganan khusus untuk setiap kolom
+        if (column === "kip") {
+          // Untuk KIP, konversi ke number
+          const numA =
+            typeof valueA === "number" ? valueA : parseInt(String(valueA)) || 0;
+          const numB =
+            typeof valueB === "number" ? valueB : parseInt(String(valueB)) || 0;
 
           if (numA !== numB) {
-            return direction === "ascending" ? numA - numB : numB - numA;
+            return sort.direction === "ascending" ? numA - numB : numB - numA;
           }
-        }
-        // String comparison for other columns
-        else {
-          const compareResult = valueA.localeCompare(valueB);
+        } else if (column === "jarak") {
+          // Untuk jarak, ekstrak nilai numerik
+          const numA = parseFloat(String(valueA).replace(/[^\d.-]/g, "")) || 0;
+          const numB = parseFloat(String(valueB).replace(/[^\d.-]/g, "")) || 0;
+
+          if (numA !== numB) {
+            return sort.direction === "ascending" ? numA - numB : numB - numA;
+          }
+        } else if (column === "pcl_utama" || column === "pcl") {
+          // Untuk PCL, yang bisa berisi string atau angka
+          const strA = String(valueA || "").toLowerCase();
+          const strB = String(valueB || "").toLowerCase();
+
+          const compareResult = strA.localeCompare(strB);
 
           if (compareResult !== 0) {
-            return direction === "ascending" ? compareResult : -compareResult;
+            return sort.direction === "ascending"
+              ? compareResult
+              : -compareResult;
+          }
+        } else {
+          // Untuk kolom teks lainnya (nama_perusahaan, alamat)
+          const strA = String(valueA || "").toLowerCase();
+          const strB = String(valueB || "").toLowerCase();
+
+          const compareResult = strA.localeCompare(strB);
+
+          if (compareResult !== 0) {
+            return sort.direction === "ascending"
+              ? compareResult
+              : -compareResult;
           }
         }
       }
 
-      return 0; // If all sort comparisons are equal
+      return 0;
     });
-  }, [filteredItems, sortDescriptors]);
+  }, [businesses, allBusinesses, sortDescriptors, hasLoadedAll]);
 
-  const pages = Math.ceil(sortedItems.length / rowsPerPage);
-
-  const items = useMemo(() => {
+  // Implementasi pagination client-side untuk data yang sudah disort
+  const paginatedItems = useMemo(() => {
+    // Gunakan data yang sudah di-sort
     const start = (currentPage - 1) * rowsPerPage;
     const end = start + rowsPerPage;
 
-    return sortedItems.slice(start, end);
-  }, [currentPage, sortedItems, rowsPerPage]);
+    // Jika ada sorting dan all data sudah di-load, paginate dari sorted data
+    if (hasLoadedAll && sortDescriptors.length > 0) {
+      // Update juga total pages berdasarkan data yang tersedia
+      const newTotalPages = Math.ceil(sortedItems.length / rowsPerPage);
 
-  // Function to handle multiple column sorting
-  const handleSort = (columnKey: string) => {
+      // Perbarui total items dan total pages
+      if (totalPages !== newTotalPages) {
+        setTotalPages(newTotalPages);
+        setTotalItems(sortedItems.length);
+      }
+
+      return sortedItems.slice(start, end);
+    }
+
+    // Jika tidak ada sorting atau belum load all data, gunakan pagination dari server
+    return businesses;
+  }, [
+    sortedItems,
+    currentPage,
+    rowsPerPage,
+    businesses,
+    hasLoadedAll,
+    sortDescriptors,
+    totalPages,
+  ]);
+
+  // Fungsi utama untuk sorting
+  const handleSort = useCallback((columnKey: string) => {
     setSortDescriptors((prevSorts) => {
-      // Find if this column is already being sorted
+      // Cari apakah kolom ini sudah ada dalam daftar sorting
       const existingIndex = prevSorts.findIndex((s) => s.column === columnKey);
 
       if (existingIndex >= 0) {
-        // Column is already being sorted - update its direction or remove it
+        // Jika kolom sudah ada dalam daftar sort
         const existingSort = prevSorts[existingIndex];
         const newSorts = [...prevSorts];
 
-        // Toggle direction: null -> ascending -> descending -> null
+        // Toggle arah sorting: null -> ascending -> descending -> hapus
         if (existingSort.direction === null) {
           newSorts[existingIndex] = {
             column: columnKey,
@@ -685,28 +765,34 @@ const TabelDirektori = () => {
             direction: "descending",
           };
         } else {
-          // Remove this sort entirely (third click)
+          // Jika sudah descending, hapus dari daftar sort
           newSorts.splice(existingIndex, 1);
         }
 
         return newSorts;
       } else {
-        // Add new sort for this column
+        // Jika kolom belum ada dalam daftar sort, tambahkan dengan arah ascending
         return [...prevSorts, { column: columnKey, direction: "ascending" }];
       }
     });
-  };
+  }, []);
 
-  // Function to get the current sort state for a column
-  const getSortDirection = (columnKey: string): SortDirection => {
-    const sort = sortDescriptors.find((s) => s.column === columnKey);
-    return sort ? sort.direction : null;
-  };
+  // Fungsi untuk mendapatkan arah sorting saat ini
+  const getSortDirection = useCallback(
+    (columnKey: string): "ascending" | "descending" | null => {
+      const sort = sortDescriptors.find((s) => s.column === columnKey);
+      return sort ? sort.direction : null;
+    },
+    [sortDescriptors]
+  );
 
-  // Function to get the sort order index for a column (used to display the sort order)
-  const getSortIndex = (columnKey: string): number => {
-    return sortDescriptors.findIndex((s) => s.column === columnKey) + 1;
-  };
+  // Fungsi untuk mendapatkan urutan prioritas sorting
+  const getSortIndex = useCallback(
+    (columnKey: string): number => {
+      return sortDescriptors.findIndex((s) => s.column === columnKey) + 1;
+    },
+    [sortDescriptors]
+  );
 
   // Handle clicking outside dropdowns
   useEffect(() => {
@@ -738,18 +824,7 @@ const TabelDirektori = () => {
     };
   }, []);
 
-  const onNextPage = useCallback(() => {
-    if (currentPage < pages) {
-      setCurrentPage(currentPage + 1);
-    }
-  }, [currentPage, pages]);
-
-  const onPreviousPage = useCallback(() => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  }, [currentPage]);
-
+  // Search handler
   const onSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
@@ -759,6 +834,7 @@ const TabelDirektori = () => {
     []
   );
 
+  // Rows per page handler
   const onRowsPerPageChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       setRowsPerPage(Number(e.target.value));
@@ -767,29 +843,36 @@ const TabelDirektori = () => {
     []
   );
 
+  // Filter handlers
   const onStatusFilterChange = useCallback((status: string) => {
     setStatusFilter(status);
     setCurrentPage(1);
   }, []);
 
   const onPclFilterChange = useCallback((pcl: string) => {
+    console.log("Mengubah filter PCL:", pcl);
     setPclFilter(pcl);
     setCurrentPage(1);
   }, []);
 
   // Action handlers
   const handleViewBusiness = (business: Business) => {
-    alert(`Melihat detail usaha: ${business.namaUsaha}`);
+    router.push(`/admin/direktori/${business.id_perusahaan}`);
   };
 
   const handleEditBusiness = (business: Business) => {
-    alert(`Mengedit usaha: ${business.namaUsaha}`);
+    alert(
+      `Fitur edit untuk ${business.nama_perusahaan} sedang dalam pengembangan`
+    );
+    // Implementasi future: router.push(`/admin/direktori/edit/${business.id_perusahaan}`);
   };
 
   const handleDeleteBusiness = (business: Business) => {
-    if (confirm(`Yakin ingin menghapus ${business.namaUsaha}?`)) {
-      alert(`${business.namaUsaha} telah dihapus`);
-      // In a real application, you would remove the business from your database
+    if (confirm(`Yakin ingin menghapus ${business.nama_perusahaan}?`)) {
+      // Implementasi future: API call untuk delete
+      alert(
+        `${business.nama_perusahaan} telah dihapus (fitur dalam pengembangan)`
+      );
     }
   };
 
@@ -798,11 +881,34 @@ const TabelDirektori = () => {
   };
 
   const handleExportClick = () => {
-    alert("Mengunduh data direktori usaha");
-    // In a real application, you would create and download a file
+    // Implementasi future: Export functionality
+    alert("Fitur download data sedang dalam pengembangan");
   };
 
-  // Render cell dengan perubahan warna pada tombol aksi hanya saat hover
+  // Calculate pages
+  const pages = totalPages;
+
+  // Pagination handlers
+  const onNextPage = useCallback(() => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  }, [currentPage, totalPages]);
+  
+  const onPreviousPage = useCallback(() => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  }, [currentPage]);
+  
+  // Dan jika perlu, reset ke halaman 1 saat sorting berubah
+  useEffect(() => {
+    if (sortDescriptors.length > 0) {
+      setCurrentPage(1);
+    }
+  }, [sortDescriptors]);
+
+  // Render cell
   const renderCell = useCallback(
     (business: Business, columnKey: keyof Business | "actions") => {
       const cellValue = business[columnKey as keyof Business];
@@ -812,26 +918,20 @@ const TabelDirektori = () => {
           return <span className="text-sm font-normal">{cellValue}</span>;
         case "kip":
           return <span className="text-sm font-normal">{cellValue}</span>;
-        case "namaUsaha":
+        case "nama_perusahaan":
           return <span className="text-sm font-normal">{cellValue}</span>;
         case "alamat":
           return <span className="text-sm font-normal">{cellValue}</span>;
         case "jarak":
           return <span className="text-sm font-normal">{cellValue}</span>;
-        case "pcl":
-          return <span className="text-sm font-normal">{cellValue}</span>;
+        case "pcl_utama":
+          return (
+            <span className="text-sm font-normal">{cellValue || "-"}</span>
+          );
         case "status":
           return (
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                statusColorMap[business.status]
-              }`}
-            >
-              {business.status === "aktif"
-                ? "Aktif"
-                : business.status === "tidakAktif"
-                  ? "Tidak Aktif"
-                  : "Tutup"}
+            <span className="px-3 py-1 rounded-full text-xs font-medium capitalize bg-gray-100 text-gray-800">
+              Kosong
             </span>
           );
         case "actions":
@@ -1014,14 +1114,14 @@ const TabelDirektori = () => {
       {/* Top section with search and filters */}
       <div className="p-4 flex flex-col gap-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="relative w-full md:w-auto">
+          <div className="relative w-full md:w-auto font-medium">
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
               <SearchIcon size={18} className="text-gray-400" />
             </div>
             <input
               type="text"
               className="pl-10 pr-4 py-2 w-full md:w-72 bg-gray-100 rounded-lg text-sm focus:outline-none"
-              placeholder="Cari KIP, nama usaha, alamat, PCL..."
+              placeholder="Cari KIP, nama usaha, alamat ..."
               value={filterValue}
               onChange={onSearchChange}
             />
@@ -1031,15 +1131,20 @@ const TabelDirektori = () => {
             {/* Status Dropdown */}
             <div className="relative" ref={statusDropdownRef}>
               <button
-                className="px-4 py-2 bg-gray-100 rounded-lg text-sm flex items-center gap-2"
+                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  statusFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                }`}
                 onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
               >
                 Status
+                {statusFilter !== "all" && (
+                  <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                )}
                 <ChevronDownIcon size={16} />
               </button>
 
               {statusDropdownOpen && (
-                <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-36">
+                <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-40">
                   <div className="py-1">
                     <button
                       className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
@@ -1055,7 +1160,7 @@ const TabelDirektori = () => {
                     {statusOptions.map((status) => (
                       <button
                         key={status.uid}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
                           statusFilter === status.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -1063,7 +1168,23 @@ const TabelDirektori = () => {
                           setStatusDropdownOpen(false);
                         }}
                       >
-                        {status.name}
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-block w-3 h-3 rounded-full ${
+                              status.uid === "tinggi"
+                                ? "bg-green-500"
+                                : status.uid === "sedang"
+                                  ? "bg-amber-500"
+                                  : status.uid === "rendah"
+                                    ? "bg-red-500"
+                                    : "bg-gray-500"
+                            }`}
+                          ></span>
+                          {status.name}
+                        </div>
+                        {statusFilter === status.uid && (
+                          <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1074,16 +1195,21 @@ const TabelDirektori = () => {
             {/* PCL Dropdown */}
             <div className="relative" ref={pclDropdownRef}>
               <button
-                className="px-4 py-2 bg-gray-100 rounded-lg text-sm flex items-center gap-2"
+                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  pclFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                }`}
                 onClick={() => setPclDropdownOpen(!pclDropdownOpen)}
               >
                 PCL
+                {pclFilter !== "all" && (
+                  <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                )}
                 <ChevronDownIcon size={16} />
               </button>
 
               {pclDropdownOpen && (
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-44">
-                  <div className="py-1">
+                  <div className="py-1 max-h-60 overflow-y-auto">
                     <button
                       className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
                         pclFilter === "all" ? "bg-gray-100" : ""
@@ -1098,7 +1224,7 @@ const TabelDirektori = () => {
                     {pclOptions.map((pcl) => (
                       <button
                         key={pcl.uid}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
                           pclFilter === pcl.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -1106,7 +1232,10 @@ const TabelDirektori = () => {
                           setPclDropdownOpen(false);
                         }}
                       >
-                        {pcl.name}
+                        <span>{pcl.name}</span>
+                        {pclFilter === pcl.uid && (
+                          <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1120,14 +1249,14 @@ const TabelDirektori = () => {
                 className="px-4 py-2 bg-gray-100 rounded-lg text-sm flex items-center gap-2"
                 onClick={() => setYearDropdownOpen(!yearDropdownOpen)}
               >
-                Tahun: {selectedYear}
+                {selectedYear || "Pilih Tahun"}
                 <ChevronDownIcon size={16} />
               </button>
 
               {yearDropdownOpen && (
                 <div className="absolute left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-36">
                   <div className="py-1">
-                    {["2023", "2024"].map((year) => (
+                    {uniqueYears.map((year) => (
                       <button
                         key={year}
                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
@@ -1136,6 +1265,7 @@ const TabelDirektori = () => {
                         onClick={() => {
                           setSelectedYear(year);
                           setYearDropdownOpen(false);
+                          setCurrentPage(1); // Reset halaman ke awal saat ganti tahun
                         }}
                       >
                         {year}
@@ -1216,32 +1346,25 @@ const TabelDirektori = () => {
                         onClick={() => handleSort(column.uid)}
                         className="ml-1 focus:outline-none"
                       >
-                        {(() => {
-                          const direction = getSortDirection(column.uid);
-                          const index = getSortIndex(column.uid);
-                          const showIndex =
-                            index > 0 && sortDescriptors.length > 1;
+                        <div className="relative">
+                          {getSortDirection(column.uid) === "ascending" && (
+                            <SortAscIcon className="text-blue-500" />
+                          )}
+                          {getSortDirection(column.uid) === "descending" && (
+                            <SortDescIcon className="text-blue-500" />
+                          )}
+                          {getSortDirection(column.uid) === null && (
+                            <SortIcon className="text-gray-400" />
+                          )}
 
-                          return (
-                            <div className="relative">
-                              {direction === "ascending" && (
-                                <SortAscIcon className="text-blue-500" />
-                              )}
-                              {direction === "descending" && (
-                                <SortDescIcon className="text-blue-500" />
-                              )}
-                              {direction === null && (
-                                <SortIcon className="text-gray-400" />
-                              )}
-
-                              {showIndex && (
-                                <span className="absolute -top-2 -right-2 w-4 h-4 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center">
-                                  {index}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })()}
+                          {/* Tampilkan indikator urutan prioritas jika ada multiple sort */}
+                          {getSortIndex(column.uid) > 0 &&
+                            sortDescriptors.length > 1 && (
+                              <span className="absolute -top-2 -right-2 w-4 h-4 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center">
+                                {getSortIndex(column.uid)}
+                              </span>
+                            )}
+                        </div>
                       </button>
                     )}
                   </div>
@@ -1250,16 +1373,46 @@ const TabelDirektori = () => {
             </tr>
           </thead>
           <tbody>
-            {items.length > 0 ? (
-              items.map((item) => (
+            {isLoading || (isLoadingAll && !hasLoadedAll) ? (
+              <tr>
+                <td colSpan={columns.length} className="p-4 text-center">
+                  <div className="flex justify-center items-center space-x-2">
+                    <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
+                    <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse delay-300"></div>
+                    <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse delay-600"></div>
+                  </div>
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="p-4 text-center text-red-500"
+                >
+                  {error}
+                </td>
+              </tr>
+            ) : paginatedItems.length > 0 ? (
+              paginatedItems.map((item, index) => (
                 <tr
-                  key={item.id}
+                  key={item.id_perusahaan}
                   className="border-t border-gray-200 hover:bg-gray-50"
                 >
                   {columns.map((column) => (
-                    <td key={`${item.id}-${column.uid}`} className="p-2">
+                    <td
+                      key={`${item.id_perusahaan}-${column.uid}`}
+                      className="p-2"
+                    >
                       {renderCell(
-                        item,
+                        // Perbarui nomor urut jika pagination client-side
+                        column.uid === "no" &&
+                          hasLoadedAll &&
+                          sortDescriptors.length > 0
+                          ? {
+                              ...item,
+                              no: (currentPage - 1) * rowsPerPage + index + 1,
+                            }
+                          : item,
                         column.uid as keyof Business | "actions"
                       )}
                     </td>
@@ -1283,47 +1436,210 @@ const TabelDirektori = () => {
       {/* Pagination */}
       <div className="p-4 flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 gap-4">
         <span className="text-sm text-gray-500 order-2 sm:order-1">
-          Total {sortedItems.length} data
+          Total {totalItems} data
         </span>
 
         <div className="flex items-center gap-2 order-1 sm:order-2">
-          <div className="flex">
-            {Array.from({ length: Math.min(4, pages) }, (_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`w-8 h-8 flex items-center justify-center rounded-full text-sm ${
-                  currentPage === i + 1
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-            {pages > 4 && (
-              <button className="w-8 h-8 flex items-center justify-center rounded-full text-sm text-gray-600 hover:bg-gray-100">
-                <ChevronRightIcon size={16} />
-              </button>
-            )}
-          </div>
-
-          <div className="flex gap-2 ml-4">
+          <nav className="flex items-center gap-1">
+            {/* Previous Button */}
             <button
               onClick={onPreviousPage}
               disabled={currentPage === 1}
-              className="px-4 py-2 bg-gray-100 rounded-lg text-sm disabled:opacity-50"
+              className="flex items-center justify-center w-8 h-8 rounded-md text-gray-500 disabled:opacity-50 disabled:pointer-events-none hover:bg-gray-100"
+              aria-label="Previous page"
             >
-              Sebelumnya
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
             </button>
+
+            {/* Page Numbers */}
+            <div className="flex items-center gap-1">
+              {pages <= 7 ? (
+                // Show all pages if total pages <= 7
+                [...Array(pages)].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                      currentPage === i + 1
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))
+              ) : (
+                // Show compact pagination for more than 7 pages
+                <>
+                  {/* First page */}
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                      currentPage === 1
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    1
+                  </button>
+
+                  {/* Ellipsis or second page */}
+                  {currentPage > 3 ? (
+                    <button className="flex items-center justify-center w-8 h-8 text-gray-500">
+                      ...
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setCurrentPage(2)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                        currentPage === 2
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      2
+                    </button>
+                  )}
+
+                  {/* Middle pages */}
+                  {currentPage <= 3 ? (
+                    // Near start
+                    <>
+                      <button
+                        onClick={() => setCurrentPage(3)}
+                        className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                          currentPage === 3
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        3
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(4)}
+                        className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                          currentPage === 4
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        4
+                      </button>
+                    </>
+                  ) : currentPage >= pages - 2 ? (
+                    // Near end
+                    <>
+                      <button
+                        onClick={() => setCurrentPage(pages - 3)}
+                        className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                          currentPage === pages - 3
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        {pages - 3}
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(pages - 2)}
+                        className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                          currentPage === pages - 2
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        {pages - 2}
+                      </button>
+                    </>
+                  ) : (
+                    // Middle
+                    <>
+                      <button
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                        className="flex items-center justify-center w-8 h-8 rounded-md text-gray-700 hover:bg-gray-100"
+                      >
+                        {currentPage - 1}
+                      </button>
+                      <button className="flex items-center justify-center w-8 h-8 rounded-md bg-blue-600 text-white">
+                        {currentPage}
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        className="flex items-center justify-center w-8 h-8 rounded-md text-gray-700 hover:bg-gray-100"
+                      >
+                        {currentPage + 1}
+                      </button>
+                    </>
+                  )}
+
+                  {/* Ellipsis or second-to-last page */}
+                  {currentPage < pages - 2 ? (
+                    <button className="flex items-center justify-center w-8 h-8 text-gray-500">
+                      ...
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setCurrentPage(pages - 1)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                        currentPage === pages - 1
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      {pages - 1}
+                    </button>
+                  )}
+
+                  {/* Last page */}
+                  <button
+                    onClick={() => setCurrentPage(pages)}
+                    className={`flex items-center justify-center w-8 h-8 rounded-md ${
+                      currentPage === pages
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {pages}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Next Button */}
             <button
               onClick={onNextPage}
               disabled={currentPage === pages}
-              className="px-4 py-2 bg-gray-100 rounded-lg text-sm disabled:opacity-50"
+              className="flex items-center justify-center w-8 h-8 rounded-md text-gray-500 disabled:opacity-50 disabled:pointer-events-none hover:bg-gray-100"
+              aria-label="Next page"
             >
-              Selanjutnya
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
             </button>
-          </div>
+          </nav>
         </div>
       </div>
     </div>
