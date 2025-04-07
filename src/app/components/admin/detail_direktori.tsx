@@ -75,10 +75,66 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   const [omsetOptions, setOmsetOptions] = useState<any[]>([]);
   const [pclOptions, setPclOptions] = useState<any[]>([]);
 
+  const [isAddingYear, setIsAddingYear] = useState(false);
+  const [newYear, setNewYear] = useState("");
+
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
 
+  // Fungsi untuk menghapus tahun dari array
+  const handleRemoveYear = (yearToRemove) => {
+    if (editedData) {
+      // Filter tahun yang akan dihapus
+      const updatedYears = editedData.tahun_direktori.filter(
+        (year) => year !== yearToRemove
+      );
+
+      // Update editedData dengan array tahun yang baru
+      setEditedData({
+        ...editedData,
+        tahun_direktori: updatedYears,
+      });
+    }
+  };
+
+  // Fungsi untuk menambahkan tahun baru ke array
+  const handleAddYear = () => {
+    if (newYear && editedData) {
+      // Validasi input tahun (hanya angka 4 digit)
+      const yearRegex = /^\d{4}$/;
+      if (!yearRegex.test(newYear)) {
+        alert("Tahun harus berupa 4 digit angka");
+        return;
+      }
+
+      const yearNumber = parseInt(newYear, 10);
+
+      // Cek apakah tahun sudah ada dalam array
+      if (editedData.tahun_direktori.includes(yearNumber)) {
+        alert("Tahun tersebut sudah ada dalam daftar");
+        return;
+      }
+
+      // Tambahkan tahun baru dan urutkan
+      const updatedYears = [...editedData.tahun_direktori, yearNumber].sort(
+        (a, b) => a - b
+      );
+
+      // Update editedData dengan array tahun yang baru
+      setEditedData({
+        ...editedData,
+        tahun_direktori: updatedYears,
+      });
+
+      // Reset input dan status penambahan
+      setNewYear("");
+      setIsAddingYear(false);
+    }
+  };
   const fetchDropdownOptions = async () => {
     try {
+      // Set loading state ketika mulai fetch
+      setIsLoadingOptions(true);
+
       // Fetch badan usaha options
       const buResponse = await fetch("/api/badan-usaha");
       if (buResponse.ok) {
@@ -91,15 +147,6 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       if (kecResponse.ok) {
         const kecData = await kecResponse.json();
         setKecamatanOptions(kecData.data || []);
-      }
-
-      // Fetch desa
-      if (editedData?.kec) {
-        const desaResponse = await fetch(`/api/desa?kec_id=${editedData.kec}`);
-        if (desaResponse.ok) {
-          const desaData = await desaResponse.json();
-          setDesaOptions(desaData.data || []);
-        }
       }
 
       // Fetch lokasi perusahaan
@@ -133,7 +180,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       // Fetch PCL options
       const pclResponse = await fetch("/api/pcl");
       if (pclResponse.ok) {
-        const pclData = await pclResponse.json();
+        const pclData = await pclResponse.json(); // perbaiki dari response menjadi pclResponse
         setPclOptions(pclData.data || []);
       }
     } catch (error) {
@@ -154,13 +201,16 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     if (mode === "edit" && editedData?.kec) {
       const fetchDesa = async () => {
         try {
-          const response = await fetch(`/api/desa?kec_id=${editedData.kec}`); // Fetch desa saat kecamatan berubah
+          setIsLoadingOptions(true);
+          const response = await fetch(`/api/desa?kec_id=${editedData.kec}`);
           if (response.ok) {
             const result = await response.json();
             setDesaOptions(result.data || []);
           }
         } catch (error) {
           console.error("Error fetching desa:", error);
+        } finally {
+          setIsLoadingOptions(false);
         }
       };
 
@@ -201,13 +251,17 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     }
   }, [data]);
 
-  // Handler untuk perubahan input
+  // Handler untuk perubahan input untuk kecamatan
   const handleInputChange = (field: keyof PerusahaanData, value: any) => {
     if (editedData) {
-      setEditedData({
-        ...editedData,
-        [field]: value,
-      });
+      const newData = { ...editedData, [field]: value };
+
+      // Jika kecamatan berubah, kosongkan pilihan desa
+      if (field === "kec") {
+        newData.des = null;
+      }
+
+      setEditedData(newData);
     }
   };
 
@@ -443,14 +497,18 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   onChange={(e) =>
                     handleInputChange("des", parseInt(e.target.value))
                   }
-                  disabled={!editedData?.kec}
+                  disabled={!editedData?.kec || isLoadingOptions}
                 >
                   <option value="">Pilih Desa</option>
-                  {desaOptions.map((option) => (
-                    <option key={option.kode_des} value={option.kode_des}>
-                      {option.nama_des}
-                    </option>
-                  ))}
+                  {isLoadingOptions ? (
+                    <option disabled>Memuat data...</option>
+                  ) : (
+                    desaOptions.map((option) => (
+                      <option key={option.kode_des} value={option.kode_des}>
+                        {option.nama_des}
+                      </option>
+                    ))
+                  )}
                 </select>
               )}
             </div>
@@ -583,16 +641,103 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
           <div>
             <p className="text-sm font-semibold">Tahun Direktori:</p>
-            <div className="flex gap-2">
-              {data.tahun_direktori.map((tahun) => (
-                <div
-                  key={tahun}
-                  className="bg-gray-200 font-medium text-sm px-4 py-2 rounded-lg"
-                >
-                  <p>{tahun}</p>
+            {mode === "view" ? (
+              <div className="flex gap-2">
+                {data.tahun_direktori.map((tahun) => (
+                  <div
+                    key={tahun}
+                    className="bg-gray-200 font-medium text-sm px-4 py-2 rounded-lg"
+                  >
+                    <p>{tahun}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {editedData?.tahun_direktori.map((tahun) => (
+                    <div
+                      key={tahun}
+                      className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded-full flex items-center"
+                    >
+                      <span>{tahun}</span>
+                      <button
+                        type="button"
+                        className="ml-2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                        onClick={() => handleRemoveYear(tahun)}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+
+                  {isAddingYear ? (
+                    <div className="flex items-center">
+                      <input
+                        type="text"
+                        className="border border-gray-300 rounded-l-lg px-3 py-1 text-sm w-20"
+                        placeholder="YYYY"
+                        maxLength={4}
+                        value={newYear}
+                        onChange={(e) =>
+                          setNewYear(e.target.value.replace(/[^0-9]/g, ""))
+                        }
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAddYear();
+                          if (e.key === "Escape") {
+                            setIsAddingYear(false);
+                            setNewYear("");
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="bg-blue-500 text-white rounded-r-lg px-2 py-1 text-sm"
+                        onClick={handleAddYear}
+                      >
+                        +
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="bg-gray-200 hover:bg-gray-300 rounded-full w-6 h-6 flex items-center justify-center"
+                      onClick={() => setIsAddingYear(true)}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-600"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
+                {editedData?.tahun_direktori.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    Tidak ada tahun yang dipilih
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div>
