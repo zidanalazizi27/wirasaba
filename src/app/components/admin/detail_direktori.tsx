@@ -433,11 +433,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                 {badanUsahaOptions.length > 0 ? (
                   badanUsahaOptions.map((option) => (
                     <option key={option.id_bu} value={option.id_bu}>
-                      {option.ket_bu}
+                      {option.id_bu}. {option.ket_bu}
                     </option>
                   ))
                 ) : (
-                  // Opsi default jika data belum dimuat
                   <option value="">Loading...</option>
                 )}
               </select>
@@ -477,7 +476,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <option value="">Pilih Kecamatan</option>
                   {kecamatanOptions.map((option) => (
                     <option key={option.kode_kec} value={option.kode_kec}>
-                      {option.nama_kec}
+                      {option.kode_kec}. {option.nama_kec}
                     </option>
                   ))}
                 </select>
@@ -503,11 +502,14 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   {isLoadingOptions ? (
                     <option disabled>Memuat data...</option>
                   ) : (
-                    desaOptions.map((option) => (
-                      <option key={option.kode_des} value={option.kode_des}>
-                        {option.nama_des}
-                      </option>
-                    ))
+                    desaOptions
+                      .slice() // Buat salinan array agar tidak memodifikasi aslinya
+                      .sort((a, b) => a.id_des - b.id_des) // Urutkan berdasarkan id_des
+                      .map((option) => (
+                        <option key={option.kode_des} value={option.kode_des}>
+                          {option.kode_des}. {option.nama_des}
+                        </option>
+                      ))
                   )}
                 </select>
               )}
@@ -782,7 +784,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                 <option value="">Pilih Lokasi</option>
                 {lokasiOptions.map((option) => (
                   <option key={option.id_lok} value={option.id_lok}>
-                    {option.ket_lok}
+                    {option.id_lok}. {option.ket_lok}
                   </option>
                 ))}
               </select>
@@ -899,7 +901,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <option value="">Pilih Tenaga Kerja</option>
                   {tenagaKerjaOptions.map((option) => (
                     <option key={option.id_tkerja} value={option.id_tkerja}>
-                      {option.ket_tkerja}
+                      {option.id_tkerja}. {option.ket_tkerja}
                     </option>
                   ))}
                 </select>
@@ -928,7 +930,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                       key={option.id_investasi}
                       value={option.id_investasi}
                     >
-                      {option.ket_investasi}
+                      {option.id_investasi}. {option.ket_investasi}
                     </option>
                   ))}
                 </select>
@@ -952,7 +954,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <option value="">Pilih Omset</option>
                   {omsetOptions.map((option) => (
                     <option key={option.id_omset} value={option.id_omset}>
-                      {option.ket_omset}
+                      {option.id_omset}. {option.ket_omset}
                     </option>
                   ))}
                 </select>
