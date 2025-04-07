@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import mysql from "mysql2/promise";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -64,5 +65,99 @@ export async function GET(
   } catch (error) {
     console.error("Database error:", error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+}
+
+// Ganti seluruh fungsi PUT dengan implementasi yang lengkap
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const id = params.id;
+  try {
+    const data = await request.json();
+    
+    // Buat koneksi ke database
+    const connection = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    });
+    
+    // Update data pada tabel perusahaan
+    await connection.execute(
+      `UPDATE perusahaan 
+       SET 
+         nama_perusahaan = ?, 
+         badan_usaha = ?, 
+         alamat = ?, 
+         kec = ?, 
+         des = ?, 
+         kode_pos = ?, 
+         skala = ?, 
+         lok_perusahaan = ?, 
+         nama_kawasan = ?, 
+         lat = ?, 
+         lon = ?, 
+         jarak = ?, 
+         produk = ?, 
+         KBLI = ?, 
+         telp_perusahaan = ?, 
+         email_perusahaan = ?, 
+         web_perusahaan = ?, 
+         tkerja = ?, 
+         investasi = ?, 
+         omset = ?, 
+         nama_narasumber = ?, 
+         jbtn_narasumber = ?, 
+         email_narasumber = ?, 
+         telp_narasumber = ?, 
+         pcl_utama = ?, 
+         catatan = ?
+       WHERE id_perusahaan = ?`,
+      [
+        data.nama_perusahaan,
+        data.badan_usaha,
+        data.alamat,
+        data.kec,
+        data.des,
+        data.kode_pos,
+        data.skala,
+        data.lok_perusahaan,
+        data.nama_kawasan,
+        data.lat,
+        data.lon,
+        data.jarak,
+        data.produk,
+        data.KBLI,
+        data.telp_perusahaan,
+        data.email_perusahaan,
+        data.web_perusahaan,
+        data.tkerja,
+        data.investasi,
+        data.omset,
+        data.nama_narasumber,
+        data.jbtn_narasumber,
+        data.email_narasumber,
+        data.telp_narasumber,
+        data.pcl_utama,
+        data.catatan,
+        id
+      ]
+    );
+    
+    await connection.end();
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: "Data berhasil diperbarui" 
+    });
+  } catch (error) {
+    console.error("Database error:", error);
+    return NextResponse.json({ 
+      success: false, 
+      error: "Database error: " + error.message 
+    }, { status: 500 });
   }
 }

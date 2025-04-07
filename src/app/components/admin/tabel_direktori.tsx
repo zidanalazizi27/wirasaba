@@ -861,10 +861,7 @@ const TabelDirektori = () => {
   };
 
   const handleEditBusiness = (business: Business) => {
-    alert(
-      `Fitur edit untuk ${business.nama_perusahaan} sedang dalam pengembangan`
-    );
-    // Implementasi future: router.push(`/admin/direktori/edit/${business.id_perusahaan}`);
+    router.push(`/admin/direktori/${business.id_perusahaan}/edit`);
   };
 
   const handleDeleteBusiness = (business: Business) => {
@@ -894,13 +891,13 @@ const TabelDirektori = () => {
       setCurrentPage(currentPage + 1);
     }
   }, [currentPage, totalPages]);
-  
+
   const onPreviousPage = useCallback(() => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
   }, [currentPage]);
-  
+
   // Dan jika perlu, reset ke halaman 1 saat sorting berubah
   useEffect(() => {
     if (sortDescriptors.length > 0) {

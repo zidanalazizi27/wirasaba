@@ -63,7 +63,7 @@ function SidebarLayout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden font-bold font-roboto">
       {/* Sidebar Section */}
-      <div className="fixed w-1/6 h-full z-40 bg-white">
+      <div className="fixed w-1/6 h-full z-40 bg-base">
         <Sidebar>
           {sidebarItems.map((item, key) => (
             <SidebarItem

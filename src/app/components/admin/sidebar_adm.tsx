@@ -96,7 +96,13 @@ export function SidebarItem({
   const router = useRouter();
   const isActive =
     pathname === to ||
-    (submenu && submenu.some((subItem) => subItem.to === pathname));
+    (pathname.startsWith(to) && to !== "/") ||
+    (submenu &&
+      submenu.some(
+        (subItem) =>
+          subItem.to === pathname ||
+          (subItem.to !== "/" && pathname.startsWith(subItem.to))
+      ));
   const hasSubmenu = submenu && submenu.length > 0;
   const [submenuOpen, setSubmenuOpen] = useState(false);
 
