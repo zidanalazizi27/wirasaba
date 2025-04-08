@@ -130,24 +130,8 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     }
   };
 
-  // Fungsi untuk menghapus tahun dari array
-  const handleRemoveYear = (yearToRemove) => {
-    if (editedData) {
-      // Filter tahun yang akan dihapus
-      const updatedYears = editedData.tahun_direktori.filter(
-        (year) => year !== yearToRemove
-      );
-
-      // Update editedData dengan array tahun yang baru
-      setEditedData({
-        ...editedData,
-        tahun_direktori: updatedYears,
-      });
-    }
-  };
-
-  // Fungsi untuk menambahkan tahun baru ke array
-  const handleAddYear = () => {
+  // Fungsi untuk menambahkan tahun baru
+  const handleAddYear = async () => {
     if (newYear && editedData) {
       // Validasi input tahun (hanya angka 4 digit)
       const yearRegex = /^\d{4}$/;
@@ -164,22 +148,80 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         return;
       }
 
-      // Tambahkan tahun baru dan urutkan
-      const updatedYears = [...editedData.tahun_direktori, yearNumber].sort(
-        (a, b) => a - b
-      );
+      try {
+        // Panggil API untuk menambahkan tahun direktori
+        const response = await fetch("/api/direktori", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id_perusahaan: id_perusahaan,
+            thn_direktori: yearNumber,
+          }),
+        });
 
-      // Update editedData dengan array tahun yang baru
-      setEditedData({
-        ...editedData,
-        tahun_direktori: updatedYears,
-      });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.message || "Error saat menambahkan tahun direktori"
+          );
+        }
 
-      // Reset input dan status penambahan
-      setNewYear("");
-      setIsAddingYear(false);
+        // Update state lokal
+        const updatedYears = [...editedData.tahun_direktori, yearNumber].sort(
+          (a, b) => a - b
+        );
+
+        setEditedData({
+          ...editedData,
+          tahun_direktori: updatedYears,
+        });
+
+        setNewYear("");
+        setIsAddingYear(false);
+      } catch (error) {
+        console.error("Error adding year:", error);
+        alert(`Error: ${error.message}`);
+      }
     }
   };
+
+  // Fungsi untuk menghapus tahun
+  const handleRemoveYear = async (yearToRemove) => {
+    if (editedData) {
+      try {
+        // Panggil API untuk menghapus tahun direktori
+        const response = await fetch(
+          `/api/direktori?id_perusahaan=${id_perusahaan}&thn_direktori=${yearToRemove}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.message || "Error saat menghapus tahun direktori"
+          );
+        }
+
+        // Update state lokal
+        const updatedYears = editedData.tahun_direktori.filter(
+          (year) => year !== yearToRemove
+        );
+
+        setEditedData({
+          ...editedData,
+          tahun_direktori: updatedYears,
+        });
+      } catch (error) {
+        console.error("Error removing year:", error);
+        alert(`Error: ${error.message}`);
+      }
+    }
+  };
+  
   const fetchDropdownOptions = async () => {
     try {
       // Set loading state ketika mulai fetch
