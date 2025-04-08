@@ -7,8 +7,8 @@ import { renderToString } from "react-dom/server";
 import { useRouter } from "next/navigation";
 
 interface DetailDirektoriProps {
-  id_perusahaan: string | string[];
-  mode?: "view" | "edit"; // Tambahkan prop mode
+  id_perusahaan: string | string[] | null;
+  mode?: "view" | "edit" | "add"; // Tambahkan prop mode
   onSave?: (data: PerusahaanData) => Promise<void>; // Handler untuk tombol simpan
   onCancel?: () => void; // Handler untuk tombol batalkan
 }
@@ -58,12 +58,19 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   onSave,
   onCancel,
 }) => {
-  const mapRef = useRef(null);
+  const mapRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PerusahaanData | null>(null);
   const [editedData, setEditedData] = useState<PerusahaanData | null>(null);
+  const [map, setMap] = useState(null);
+  const [marker, setMarker] = useState(null);
+  const [isAddingYear, setIsAddingYear] = useState(false);
+  const [newYear, setNewYear] = useState("");
+  const leafletMap = useRef<any>(null);
+  const leafletMarker = useRef<any>(null);
+  const mapInitialized = useRef<boolean>(false);
 
   // State untuk opsi dropdown
   const [badanUsahaOptions, setBadanUsahaOptions] = useState<any[]>([]);
@@ -74,11 +81,54 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   const [investasiOptions, setInvestasiOptions] = useState<any[]>([]);
   const [omsetOptions, setOmsetOptions] = useState<any[]>([]);
   const [pclOptions, setPclOptions] = useState<any[]>([]);
-
-  const [isAddingYear, setIsAddingYear] = useState(false);
-  const [newYear, setNewYear] = useState("");
-
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+
+  // Koordinat tetap BPS Kabupaten Sidoarjo
+  const BPS_LAT = -7.4483396;
+  const BPS_LON = 112.7039002;
+
+  // Fungsi untuk menghitung jarak
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+
+    // Konversi ke number jika input berupa string
+    lat1 = Number(lat1);
+    lon1 = Number(lon1);
+    lat2 = Number(lat2);
+    lon2 = Number(lon2);
+
+    // Konversi ke radian
+    const lat1Rad = (Math.PI * lat1) / 180;
+    const lon1Rad = (Math.PI * lon1) / 180;
+    const lat2Rad = (Math.PI * lat2) / 180;
+    const lon2Rad = (Math.PI * lon2) / 180;
+
+    // Rumus Haversine untuk menghitung jarak
+    const distance =
+      6371 *
+      Math.acos(
+        Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.cos(lon2Rad - lon1Rad) +
+          Math.sin(lat1Rad) * Math.sin(lat2Rad)
+      );
+
+    // Pembulatan ke 2 angka di belakang koma
+    return Math.round(distance * 100) / 100;
+  };
+
+  //Fungsi untuk menentukan skala
+  const determineScale = (tkerja, investasi, omset) => {
+    // Konversi ke number jika input berupa string
+    tkerja = Number(tkerja);
+    investasi = Number(investasi);
+    omset = Number(omset);
+
+    // Jika tkerja = 4 (>99 orang) ATAU investasi = 4 (>10M) ATAU omset = 4 (>50M)
+    if (tkerja === 4 || investasi === 4 || omset === 4) {
+      return "Besar";
+    } else {
+      return "Sedang";
+    }
+  };
 
   // Fungsi untuk menghapus tahun dari array
   const handleRemoveYear = (yearToRemove) => {
@@ -191,14 +241,15 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   };
 
   // Panggil fungsi fetch dropdown saat komponen dimuat dalam mode edit
+  // Jika dalam mode add, selalu fetch dropdown options
   useEffect(() => {
-    if (mode === "edit") {
+    if (mode === "edit" || mode === "add") {
       fetchDropdownOptions();
     }
   }, [mode]);
 
   useEffect(() => {
-    if (mode === "edit" && editedData?.kec) {
+    if ((mode === "edit" || mode === "add") && editedData?.kec) {
       const fetchDesa = async () => {
         try {
           setIsLoadingOptions(true);
@@ -222,16 +273,63 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Fetch data perusahaan dari API berdasarkan id_perusahaan
-        const response = await fetch(`/api/perusahaan/${id_perusahaan}`);
 
-        if (!response.ok) {
-          throw new Error(`Error: ${response.status}`);
+        // Jika mode add, tidak perlu fetch data
+        if (mode === "add") {
+          const emptyData = {
+            id_perusahaan: null,
+            kip: "",
+            nama_perusahaan: "",
+            badan_usaha: 8, // Default: Tidak Berbadan Usaha
+            badan_usaha_nama: "Tidak Berbadan Usaha",
+            alamat: "",
+            kec: "",
+            kec_nama: "",
+            des: "",
+            des_nama: "",
+            kode_pos: "",
+            skala: "",
+            lok_perusahaan: "",
+            lok_perusahaan_nama: "",
+            nama_kawasan: "",
+            lat: null,
+            lon: null,
+            jarak: null,
+            produk: "",
+            KBLI: "",
+            telp_perusahaan: "",
+            email_perusahaan: "",
+            web_perusahaan: "",
+            tkerja: "",
+            tkerja_nama: "",
+            investasi: "",
+            investasi_nama: "",
+            omset: "",
+            omset_nama: "",
+            nama_narasumber: "",
+            jbtn_narasumber: "",
+            email_narasumber: "",
+            telp_narasumber: "",
+            catatan: "",
+            tahun_direktori: [new Date().getFullYear()], // Default tahun saat ini
+            pcl_utama: "", // PCL Utama kosong
+          };
+          setData(emptyData);
+          setEditedData(emptyData);
+          setLoading(false);
+          return;
         }
 
-        const result = await response.json();
-        setData(result);
-        setLoading(false);
+        // Untuk mode view dan edit, fetch data seperti biasa
+        if (id_perusahaan) {
+          const response = await fetch(`/api/perusahaan/${id_perusahaan}`);
+          if (!response.ok) {
+            throw new Error(`Error: ${response.status}`);
+          }
+          const result = await response.json();
+          setData(result);
+          setLoading(false);
+        }
       } catch (err) {
         console.error("Error fetching data:", err);
         setError("Gagal memuat data perusahaan");
@@ -239,10 +337,8 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       }
     };
 
-    if (id_perusahaan) {
-      fetchData();
-    }
-  }, [id_perusahaan]);
+    fetchData();
+  }, [id_perusahaan, mode]);
 
   // Inisialisasi data edit saat data asli berubah
   useEffect(() => {
@@ -251,19 +347,142 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     }
   }, [data]);
 
-  // Handler untuk perubahan input untuk kecamatan
+  // Handler untuk perubahan input
   const handleInputChange = (field: keyof PerusahaanData, value: any) => {
     if (editedData) {
-      const newData = { ...editedData, [field]: value };
+      // Proses nilai sesuai tipe data yang diharapkan
+      let processedValue = value;
+
+      // Proses tipe data agar sesuai dengan ekspektasi database
+      if (field === "kip") {
+        // Pastikan KIP adalah number atau null
+        processedValue = value
+          ? value.trim() === ""
+            ? null
+            : isNaN(Number(value))
+              ? null
+              : Number(value)
+          : null;
+      } else if (
+        [
+          "badan_usaha",
+          "kec",
+          "des",
+          "lok_perusahaan",
+          "tkerja",
+          "investasi",
+          "omset",
+        ].includes(field)
+      ) {
+        // Pastikan field numerik adalah number atau null
+        processedValue = value
+          ? value === ""
+            ? null
+            : isNaN(Number(value))
+              ? null
+              : Number(value)
+          : null;
+      } else if (["lat", "lon", "jarak"].includes(field)) {
+        // Pastikan field floating point adalah number atau null
+        // Juga mengizinkan penggantian komma dengan titik untuk desimal
+        const normalizedValue =
+          typeof value === "string" ? value.replace(",", ".") : value;
+        processedValue = normalizedValue
+          ? normalizedValue === ""
+            ? null
+            : isNaN(parseFloat(normalizedValue))
+              ? null
+              : parseFloat(normalizedValue)
+          : null;
+      } else if (["telp_perusahaan", "telp_narasumber"].includes(field)) {
+        // Pastikan nomor telepon hanya berisi angka, +, dan -
+        processedValue = value ? value.replace(/[^\d+\-]/g, "") : null;
+      }
+
+      const newData = { ...editedData, [field]: processedValue };
 
       // Jika kecamatan berubah, kosongkan pilihan desa
       if (field === "kec") {
         newData.des = null;
+        newData.des_nama = "";
+      }
+
+      // Logging untuk debugging
+      console.log(`Field ${field} changed to:`, processedValue);
+
+      // Hanya proses pengisian otomatis dalam mode edit atau add
+      if (mode === "edit" || mode === "add") {
+        // 1. Pengisian otomatis jarak saat lat atau lon berubah
+        if (field === "lat" || field === "lon") {
+          const lat = field === "lat" ? processedValue : editedData.lat;
+          const lon = field === "lon" ? processedValue : editedData.lon;
+
+          // Hitung jarak jika kedua koordinat tersedia
+          if (lat && lon) {
+            const distance = calculateDistance(lat, lon, BPS_LAT, BPS_LON);
+            if (distance !== null) {
+              newData.jarak = distance;
+              console.log(`Jarak diperbarui otomatis: ${distance}`);
+            }
+          }
+        }
+
+        // 2. Pengisian otomatis skala saat tkerja, investasi, atau omset berubah
+        if (field === "tkerja" || field === "investasi" || field === "omset") {
+          const tkerja =
+            field === "tkerja" ? processedValue : editedData.tkerja;
+          const investasi =
+            field === "investasi" ? processedValue : editedData.investasi;
+          const omset = field === "omset" ? processedValue : editedData.omset;
+
+          // Tentukan skala jika setidaknya salah satu kriteria tersedia
+          if (tkerja || investasi || omset) {
+            const newScale = determineScale(tkerja, investasi, omset);
+            newData.skala = newScale;
+            console.log(`Skala diperbarui otomatis: ${newScale}`);
+          }
+        }
       }
 
       setEditedData(newData);
     }
   };
+
+  // Effect hooks untuk mengatur pengisian otomatis saat data pertama kali dimuat
+  useEffect(() => {
+    if (data && mode === "edit") {
+      // Clone data untuk menghindari referensi langsung
+      const newData = { ...data };
+
+      // Hitung jarak jika koordinat tersedia
+      if (newData.lat && newData.lon) {
+        const distance = calculateDistance(
+          newData.lat,
+          newData.lon,
+          BPS_LAT,
+          BPS_LON
+        );
+        if (distance !== null && !newData.jarak) {
+          newData.jarak = distance;
+        }
+      }
+
+      // Tentukan skala berdasarkan kriteria
+      if (newData.tkerja || newData.investasi || newData.omset) {
+        const autoScale = determineScale(
+          newData.tkerja,
+          newData.investasi,
+          newData.omset
+        );
+        if (!newData.skala) {
+          newData.skala = autoScale;
+        }
+      }
+
+      // Update editedData dengan kalkulasi otomatis
+      setEditedData(newData);
+    }
+  }, [data, mode]);
 
   //fungsi validasi sebelum menyimpan perubahan
   const validateData = (): boolean => {
@@ -312,68 +531,185 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     }
   };
 
-  useEffect(() => {
-    // Memastikan Leaflet hanya dijalankan di client-side dan hanya jika data sudah ada
-    if (typeof window !== "undefined" && data && data.lat && data.lon) {
-      // Async import Leaflet untuk client-side rendering
-      const loadMap = async () => {
-        const L = (await import("leaflet")).default;
-        // Pastikan CSS Leaflet dimuat
-        await import("leaflet/dist/leaflet.css");
+  // Fungsi inisialisasi peta
+  const initializeMap = async () => {
+    // Skip if not on client side or no mapRef
+    if (typeof window === "undefined" || !mapRef.current) return;
 
-        // Koordinat dari data
-        const latitude = data.lat;
-        const longitude = data.lon;
+    try {
+      // Dynamically import Leaflet
+      const L = (await import("leaflet")).default;
+      await import("leaflet/dist/leaflet.css");
 
-        // Render Material-UI icon ke string SVG
-        const iconSVG = renderToString(
-          <AddLocationRoundedIcon
-            style={{
-              color: "#E52020",
-              fontSize: 30,
-              filter: "drop-shadow(0px 3px 3px rgba(0, 0, 0, 1))",
-            }}
-          />
-        );
+      // Get coordinates based on mode and available data
+      let latitude = -7.4483396; // Default to BPS Sidoarjo coordinates
+      let longitude = 112.7039002;
 
-        if (mapRef.current && !mapRef.current._leaflet_id) {
-          const map = L.map(mapRef.current, {
-            dragging: true,
-            zoomControl: true,
-            scrollWheelZoom: true,
-            doubleClickZoom: true,
-          }).setView([latitude, longitude], 17);
+      if (
+        (mode === "edit" || mode === "add") &&
+        editedData?.lat &&
+        editedData?.lon
+      ) {
+        latitude = Number(editedData.lat);
+        longitude = Number(editedData.lon);
+      } else if (mode === "view" && data?.lat && data?.lon) {
+        latitude = Number(data.lat);
+        longitude = Number(data.lon);
+      } else {
+        // If no coordinates, don't initialize map
+        return;
+      }
 
-          // Menambahkan layer Google Satellite
-          L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
-            maxZoom: 20,
-            subdomains: ["mt0", "mt1", "mt2", "mt3"],
-            attribution: "&copy; Google Maps",
-          }).addTo(map);
+      // Create icon
+      const iconSVG = renderToString(
+        <AddLocationRoundedIcon
+          style={{
+            color: "#E52020",
+            fontSize: 30,
+            filter: "drop-shadow(0px 3px 3px rgba(0, 0, 0, 1))",
+          }}
+        />
+      );
 
-          // Membuat custom icon dengan SVG
-          const customIcon = L.divIcon({
-            html: iconSVG,
-            className: "",
-            iconSize: [36, 36],
-            iconAnchor: [18, 36],
-          });
+      const customIcon = L.divIcon({
+        html: iconSVG,
+        className: "",
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+      });
 
-          // Menambahkan marker dengan custom icon
-          L.marker([latitude, longitude], { icon: customIcon }).addTo(map);
-        }
-      };
+      // Remove existing map if any
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+        leafletMarker.current = null;
+      }
 
-      loadMap();
+      // Create new map instance
+      const map = L.map(mapRef.current).setView([latitude, longitude], 17);
+
+      L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+        maxZoom: 20,
+        subdomains: ["mt0", "mt1", "mt2", "mt3"],
+        attribution: "&copy; Google Maps",
+      }).addTo(map);
+
+      const marker = L.marker([latitude, longitude], {
+        icon: customIcon,
+      }).addTo(map);
+
+      // Store references
+      leafletMap.current = map;
+      leafletMarker.current = marker;
+      mapInitialized.current = true;
+
+      // Add click handler for edit mode
+      if (mode === "edit" || mode === "add") {
+        map.on("click", (e: any) => {
+          const { lat, lng } = e.latlng;
+          marker.setLatLng([lat, lng]);
+
+          if (editedData) {
+            const newData = { ...editedData };
+            newData.lat = parseFloat(lat.toFixed(5));
+            newData.lon = parseFloat(lng.toFixed(5));
+
+            // Calculate distance
+            const distance = calculateDistance(lat, lng, BPS_LAT, BPS_LON);
+            if (distance !== null) {
+              newData.jarak = distance;
+            }
+
+            setEditedData(newData);
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error initializing map:", error);
+    }
+  };
+
+  // Fungsi untuk update posisi marker saat koordinat berubah
+  const updateMarkerPosition = () => {
+    if (!leafletMap.current || !leafletMarker.current) return;
+
+    let lat, lon;
+
+    if (mode === "edit" || mode === "add") {
+      lat = editedData?.lat;
+      lon = editedData?.lon;
+    } else {
+      lat = data?.lat;
+      lon = data?.lon;
     }
 
-    // Cleanup function
+    if (lat && lon) {
+      try {
+        const numLat = Number(lat);
+        const numLon = Number(lon);
+
+        if (!isNaN(numLat) && !isNaN(numLon)) {
+          leafletMarker.current.setLatLng([numLat, numLon]);
+          leafletMap.current.setView(
+            [numLat, numLon],
+            leafletMap.current.getZoom()
+          );
+        }
+      } catch (error) {
+        console.error("Error updating marker position:", error);
+      }
+    }
+  };
+
+  // Effect untuk inisialisasi peta
+  useEffect(() => {
+    if (mapRef.current && !mapInitialized.current) {
+      const timer = setTimeout(() => {
+        initializeMap();
+      }, 100); // Delay pendek untuk memastikan DOM siap
+
+      return () => clearTimeout(timer);
+    }
+  }, [mapRef.current, data, editedData, mode]);
+
+  // Effect untuk update posisi marker
+  useEffect(() => {
+    if (mapInitialized.current) {
+      updateMarkerPosition();
+    }
+  }, [editedData?.lat, editedData?.lon, data?.lat, data?.lon]);
+
+  // Effect untuk cleanup saat unmount
+  useEffect(() => {
     return () => {
-      if (mapRef.current && mapRef.current._leaflet_id) {
-        mapRef.current._leaflet_id = null;
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+        leafletMarker.current = null;
+        mapInitialized.current = false;
       }
     };
-  }, [data]);
+  }, []);
+
+  // Effect untuk reinisialisasi peta saat mode berubah
+  useEffect(() => {
+    // Reset map initialization flag when mode changes
+    mapInitialized.current = false;
+
+    // Remove existing map
+    if (leafletMap.current) {
+      leafletMap.current.remove();
+      leafletMap.current = null;
+      leafletMarker.current = null;
+    }
+
+    // Delay untuk memastikan state bersih
+    const timer = setTimeout(() => {
+      initializeMap();
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [mode]);
 
   if (loading) {
     return <div className="p-4 text-center">Memuat data...</div>;
@@ -398,49 +734,39 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Kolom Kiri */}
         <div className="space-y-3">
-          <div>
-            <p className="text-sm font-semibold">Nama perusahaan :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.nama_perusahaan}</p>
-              </div>
-            ) : (
-              <input
-                type="text"
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.nama_perusahaan || ""}
-                onChange={(e) =>
-                  handleInputChange("nama_perusahaan", e.target.value)
-                }
-              />
-            )}
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold">Badan Usaha :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.badan_usaha_nama}</p>
-              </div>
-            ) : (
-              <select
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.badan_usaha || ""}
-                onChange={(e) =>
-                  handleInputChange("badan_usaha", parseInt(e.target.value))
-                }
-              >
-                {badanUsahaOptions.length > 0 ? (
-                  badanUsahaOptions.map((option) => (
-                    <option key={option.id_bu} value={option.id_bu}>
-                      {option.id_bu}. {option.ket_bu}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">Loading...</option>
-                )}
-              </select>
-            )}
+          <div className="grid grid-cols-4 gap-2">
+            <div>
+              <p className="text-sm font-semibold">KIP :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.kip || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.kip || ""}
+                  onChange={(e) => handleInputChange("kip", e.target.value)}
+                />
+              )}
+            </div>
+            <div className="col-span-3">
+              <p className="text-sm font-semibold">Nama perusahaan :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.nama_perusahaan}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.nama_perusahaan || ""}
+                  onChange={(e) =>
+                    handleInputChange("nama_perusahaan", e.target.value)
+                  }
+                />
+              )}
+            </div>
           </div>
 
           <div>
@@ -502,9 +828,9 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   {isLoadingOptions ? (
                     <option disabled>Memuat data...</option>
                   ) : (
-                    desaOptions
-                      .slice() // Buat salinan array agar tidak memodifikasi aslinya
-                      .sort((a, b) => a.id_des - b.id_des) // Urutkan berdasarkan id_des
+                    // Urutkan desaOptions berdasarkan id_des sebelum mapping
+                    [...desaOptions]
+                      .sort((a, b) => a.id_des - b.id_des)
                       .map((option) => (
                         <option key={option.kode_des} value={option.kode_des}>
                           {option.kode_des}. {option.nama_des}
@@ -516,7 +842,81 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm font-semibold">Badan Usaha :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.badan_usaha_nama}</p>
+                </div>
+              ) : (
+                <select
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.badan_usaha || ""}
+                  onChange={(e) =>
+                    handleInputChange("badan_usaha", parseInt(e.target.value))
+                  }
+                >
+                  {badanUsahaOptions.length > 0 ? (
+                    badanUsahaOptions.map((option) => (
+                      <option key={option.id_bu} value={option.id_bu}>
+                        {option.id_bu}. {option.ket_bu}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Loading...</option>
+                  )}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Lokasi Perusahaan :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.lok_perusahaan_nama}</p>
+                </div>
+              ) : (
+                <select
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.lok_perusahaan || ""}
+                  onChange={(e) =>
+                    handleInputChange(
+                      "lok_perusahaan",
+                      parseInt(e.target.value)
+                    )
+                  }
+                >
+                  <option value="">Pilih Lokasi</option>
+                  {lokasiOptions.map((option) => (
+                    <option key={option.id_lok} value={option.id_lok}>
+                      {option.id_lok}. {option.ket_lok}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold">Nama Kawasan :</p>
+            {mode === "view" ? (
+              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                <p>{data.nama_kawasan || "-"}</p>
+              </div>
+            ) : (
+              <input
+                type="text"
+                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                value={editedData?.nama_kawasan || ""}
+                onChange={(e) =>
+                  handleInputChange("nama_kawasan", e.target.value)
+                }
+              />
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <p className="text-sm font-semibold">Kode Pos :</p>
               {mode === "view" ? (
@@ -532,25 +932,6 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                     handleInputChange("kode_pos", e.target.value)
                   }
                 />
-              )}
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold">Skala :</p>
-              {mode === "view" ? (
-                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                  <p>{data.skala}</p>
-                </div>
-              ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.skala || ""}
-                  onChange={(e) => handleInputChange("skala", e.target.value)}
-                >
-                  <option value="">Pilih Skala</option>
-                  <option value="Besar">Besar</option>
-                  <option value="Sedang">Sedang</option>
-                </select>
               )}
             </div>
 
@@ -572,39 +953,57 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
           </div>
 
           <div>
-            <p className="text-sm font-semibold">Telepon :</p>
+            <p className="text-sm font-semibold">Produk :</p>
             {mode === "view" ? (
               <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.telp_perusahaan || "-"}</p>
+                <p>{data.produk || "-"}</p>
               </div>
             ) : (
               <input
                 type="text"
                 className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.telp_perusahaan || ""}
-                onChange={(e) =>
-                  handleInputChange("telp_perusahaan", e.target.value)
-                }
+                value={editedData?.produk || ""}
+                onChange={(e) => handleInputChange("produk", e.target.value)}
               />
             )}
           </div>
 
-          <div>
-            <p className="text-sm font-semibold">Email :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.email_perusahaan || "-"}</p>
-              </div>
-            ) : (
-              <input
-                type="email"
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.email_perusahaan || ""}
-                onChange={(e) =>
-                  handleInputChange("email_perusahaan", e.target.value)
-                }
-              />
-            )}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm font-semibold">Telepon :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.telp_perusahaan || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.telp_perusahaan || ""}
+                  onChange={(e) =>
+                    handleInputChange("telp_perusahaan", e.target.value)
+                  }
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Email :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.email_perusahaan || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="email"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.email_perusahaan || ""}
+                  onChange={(e) =>
+                    handleInputChange("email_perusahaan", e.target.value)
+                  }
+                />
+              )}
+            </div>
           </div>
 
           <div>
@@ -626,17 +1025,302 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
           </div>
 
           <div>
-            <p className="text-sm font-semibold">Produk :</p>
+            <p className="text-sm font-semibold">PCL Utama :</p>
             {mode === "view" ? (
               <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.produk || "-"}</p>
+                <p>{data.pcl_utama || "-"}</p>
+              </div>
+            ) : (
+              <select
+                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                value={editedData?.pcl_utama || ""}
+                onChange={(e) => handleInputChange("pcl_utama", e.target.value)}
+              >
+                <option value="">-- Pilih PCL --</option>
+                {pclOptions.map((option) => (
+                  <option key={option.id_pcl} value={option.nama_pcl}>
+                    {option.nama_pcl} ({option.status_pcl})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* Kolom Kanan */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <p className="text-sm font-semibold">Latitude :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.lat || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.lat || ""}
+                  onChange={(e) => handleInputChange("lat", e.target.value)}
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Longitude :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.lon || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.lon || ""}
+                  onChange={(e) => handleInputChange("lon", e.target.value)}
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Jarak (Km) :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.jarak || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.jarak || ""}
+                  onChange={(e) => handleInputChange("jarak", e.target.value)}
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="relative">
+            {(mode === "view" && data?.lat && data?.lon) ||
+            (mode !== "view" && editedData?.lat && editedData?.lon) ? (
+              <>
+                <div
+                  ref={mapRef}
+                  className="w-full rounded-lg h-48"
+                  id="map-container"
+                ></div>
+                <button
+                  onClick={() => {
+                    const coordinates =
+                      mode === "view"
+                        ? `${data.lat},${data.lon}`
+                        : `${editedData.lat},${editedData.lon}`;
+                    window.open(
+                      `https://www.google.com/maps?q=${coordinates}&z=17&t=k`,
+                      "_blank"
+                    );
+                  }}
+                  className="absolute top-3 right-3 bg-white p-1 rounded-md shadow-md hover:bg-gray-100 z-[999]"
+                  title="Buka di Google Maps Satelit"
+                >
+                  <FullscreenIcon style={{ fontSize: 24, color: "#555" }} />
+                </button>
+              </>
+            ) : (
+              <div className="w-full p-4 rounded-lg h-48 bg-gray-200 flex items-center justify-center">
+                <p className="text-gray-500">
+                  {mode === "add" || mode === "edit"
+                    ? "Masukkan koordinat untuk menampilkan peta"
+                    : "Koordinat tidak tersedia"}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm font-semibold">Tenaga Kerja :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.tkerja_nama}</p>
+                </div>
+              ) : (
+                <select
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.tkerja || ""}
+                  onChange={(e) =>
+                    handleInputChange("tkerja", parseInt(e.target.value))
+                  }
+                >
+                  <option value="">Pilih Tenaga Kerja</option>
+                  {tenagaKerjaOptions.map((option) => (
+                    <option key={option.id_tkerja} value={option.id_tkerja}>
+                      {option.id_tkerja}. {option.ket_tkerja}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Investasi :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.investasi_nama}</p>
+                </div>
+              ) : (
+                <select
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.investasi || ""}
+                  onChange={(e) =>
+                    handleInputChange("investasi", parseInt(e.target.value))
+                  }
+                >
+                  <option value="">Pilih Investasi</option>
+                  {investasiOptions.map((option) => (
+                    <option
+                      key={option.id_investasi}
+                      value={option.id_investasi}
+                    >
+                      {option.id_investasi}. {option.ket_investasi}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm font-semibold">Omset :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.omset_nama}</p>
+                </div>
+              ) : (
+                <select
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.omset || ""}
+                  onChange={(e) =>
+                    handleInputChange("omset", parseInt(e.target.value))
+                  }
+                >
+                  <option value="">Pilih Omset</option>
+                  {omsetOptions.map((option) => (
+                    <option key={option.id_omset} value={option.id_omset}>
+                      {option.id_omset}. {option.ket_omset}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Skala :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.skala}</p>
+                </div>
+              ) : (
+                <select
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.skala || ""}
+                  onChange={(e) => handleInputChange("skala", e.target.value)}
+                >
+                  <option value="">Pilih Skala</option>
+                  <option value="Besar">Besar</option>
+                  <option value="Sedang">Sedang</option>
+                </select>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm font-semibold">Narasumber :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.nama_narasumber || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.nama_narasumber || ""}
+                  onChange={(e) =>
+                    handleInputChange("nama_narasumber", e.target.value)
+                  }
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Jabatan Narasumber :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.jbtn_narasumber || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.jbtn_narasumber || ""}
+                  onChange={(e) =>
+                    handleInputChange("jbtn_narasumber", e.target.value)
+                  }
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm font-semibold">Telepon Narasumber :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.telp_narasumber || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.telp_narasumber || ""}
+                  onChange={(e) =>
+                    handleInputChange("telp_narasumber", e.target.value)
+                  }
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Email Narasumber :</p>
+              {mode === "view" ? (
+                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                  <p>{data.email_narasumber || "-"}</p>
+                </div>
+              ) : (
+                <input
+                  type="email"
+                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                  value={editedData?.email_narasumber || ""}
+                  onChange={(e) =>
+                    handleInputChange("email_narasumber", e.target.value)
+                  }
+                />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold">Catatan :</p>
+            {mode === "view" ? (
+              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
+                <p>{data.catatan || "-"}</p>
               </div>
             ) : (
               <input
-                type="text"
                 className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.produk || ""}
-                onChange={(e) => handleInputChange("produk", e.target.value)}
+                value={editedData?.catatan || ""}
+                onChange={(e) => handleInputChange("catatan", e.target.value)}
               />
             )}
           </div>
@@ -741,285 +1425,11 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
               </div>
             )}
           </div>
-
-          <div>
-            <p className="text-sm font-semibold">PCL Utama :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.pcl_utama || "-"}</p>
-              </div>
-            ) : (
-              <select
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.pcl_utama || ""}
-                onChange={(e) => handleInputChange("pcl_utama", e.target.value)}
-              >
-                <option value="">-- Pilih PCL --</option>
-                {pclOptions.map((option) => (
-                  <option key={option.id_pcl} value={option.nama_pcl}>
-                    {option.nama_pcl} ({option.status_pcl})
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-
-        {/* Kolom Kanan */}
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-semibold">Lokasi Perusahaan :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.lok_perusahaan_nama}</p>
-              </div>
-            ) : (
-              <select
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.lok_perusahaan || ""}
-                onChange={(e) =>
-                  handleInputChange("lok_perusahaan", parseInt(e.target.value))
-                }
-              >
-                <option value="">Pilih Lokasi</option>
-                {lokasiOptions.map((option) => (
-                  <option key={option.id_lok} value={option.id_lok}>
-                    {option.id_lok}. {option.ket_lok}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold">Nama Kawasan :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.nama_kawasan || "-"}</p>
-              </div>
-            ) : (
-              <input
-                type="text"
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.nama_kawasan || ""}
-                onChange={(e) =>
-                  handleInputChange("nama_kawasan", e.target.value)
-                }
-              />
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-sm font-semibold">Latitude :</p>
-              {mode === "view" ? (
-                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                  <p>{data.lat || "-"}</p>
-                </div>
-              ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.lat || ""}
-                  onChange={(e) => handleInputChange("lat", e.target.value)}
-                />
-              )}
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold">Longitude :</p>
-              {mode === "view" ? (
-                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                  <p>{data.lon || "-"}</p>
-                </div>
-              ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.lon || ""}
-                  onChange={(e) => handleInputChange("lon", e.target.value)}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="relative">
-            {data.lat && data.lon ? (
-              <>
-                <div ref={mapRef} className="w-full p-2 rounded-lg h-48"></div>
-                <button
-                  onClick={() =>
-                    window.open(
-                      `https://www.google.com/maps?q=${data.lat},${data.lon}&z=17&t=k`,
-                      "_blank"
-                    )
-                  }
-                  className="absolute top-3 right-3 bg-white p-1 rounded-md shadow-md hover:bg-gray-100 z-[1000]"
-                  title="Buka di Google Maps Satelit"
-                >
-                  <FullscreenIcon style={{ fontSize: 24, color: "#555" }} />
-                </button>
-              </>
-            ) : (
-              <div className="w-full p-4 rounded-lg h-48 bg-gray-200 flex items-center justify-center">
-                <p className="text-gray-500">Koordinat tidak tersedia</p>
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-sm font-semibold">Jarak (KM) :</p>
-              {mode === "view" ? (
-                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                  <p>{data.jarak || "-"}</p>
-                </div>
-              ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.jarak || ""}
-                  onChange={(e) => handleInputChange("jarak", e.target.value)}
-                />
-              )}
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold">Tenaga Kerja :</p>
-              {mode === "view" ? (
-                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                  <p>{data.tkerja_nama}</p>
-                </div>
-              ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.tkerja || ""}
-                  onChange={(e) =>
-                    handleInputChange("tkerja", parseInt(e.target.value))
-                  }
-                >
-                  <option value="">Pilih Tenaga Kerja</option>
-                  {tenagaKerjaOptions.map((option) => (
-                    <option key={option.id_tkerja} value={option.id_tkerja}>
-                      {option.id_tkerja}. {option.ket_tkerja}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-sm font-semibold">Investasi :</p>
-              {mode === "view" ? (
-                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                  <p>{data.investasi_nama}</p>
-                </div>
-              ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.investasi || ""}
-                  onChange={(e) =>
-                    handleInputChange("investasi", parseInt(e.target.value))
-                  }
-                >
-                  <option value="">Pilih Investasi</option>
-                  {investasiOptions.map((option) => (
-                    <option
-                      key={option.id_investasi}
-                      value={option.id_investasi}
-                    >
-                      {option.id_investasi}. {option.ket_investasi}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold">Omset :</p>
-              {mode === "view" ? (
-                <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                  <p>{data.omset_nama}</p>
-                </div>
-              ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.omset || ""}
-                  onChange={(e) =>
-                    handleInputChange("omset", parseInt(e.target.value))
-                  }
-                >
-                  <option value="">Pilih Omset</option>
-                  {omsetOptions.map((option) => (
-                    <option key={option.id_omset} value={option.id_omset}>
-                      {option.id_omset}. {option.ket_omset}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold">Narasumber :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.nama_narasumber || "-"}</p>
-              </div>
-            ) : (
-              <input
-                type="text"
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.nama_narasumber || ""}
-                onChange={(e) =>
-                  handleInputChange("nama_narasumber", e.target.value)
-                }
-              />
-            )}
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold">Telepon Narasumber :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.telp_narasumber || "-"}</p>
-              </div>
-            ) : (
-              <input
-                type="text"
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.telp_narasumber || ""}
-                onChange={(e) =>
-                  handleInputChange("telp_narasumber", e.target.value)
-                }
-              />
-            )}
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold">Email Narasumber :</p>
-            {mode === "view" ? (
-              <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.email_narasumber || "-"}</p>
-              </div>
-            ) : (
-              <input
-                type="email"
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.email_narasumber || ""}
-                onChange={(e) =>
-                  handleInputChange("email_narasumber", e.target.value)
-                }
-              />
-            )}
-          </div>
         </div>
       </div>
 
-      {/* Tambahkan kode tombol aksi di sini, setelah grid */}
-      {mode === "edit" && editedData && (
+      {/* Tombol aksi (edit/add) */}
+      {(mode === "edit" || mode === "add") && editedData && (
         <div className="mt-4 flex justify-end space-x-3 text-sm">
           <button
             onClick={handleCancel}
@@ -1028,7 +1438,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             Batalkan
           </button>
           <button
-            onClick={() => onSave && onSave(editedData)}
+            onClick={handleSave}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
           >
             Simpan

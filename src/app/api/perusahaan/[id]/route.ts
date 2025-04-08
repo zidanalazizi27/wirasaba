@@ -77,6 +77,10 @@ export async function PUT(
   try {
     const data = await request.json();
     
+    // Tambahkan logging untuk debugging
+    console.log("Update request for ID:", id);
+    console.log("Update data:", data);
+    
     // Buat koneksi ke database
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
@@ -86,9 +90,10 @@ export async function PUT(
     });
     
     // Update data pada tabel perusahaan
-    await connection.execute(
+    const [result] = await connection.execute(
       `UPDATE perusahaan 
        SET 
+         kip = ?, 
          nama_perusahaan = ?, 
          badan_usaha = ?, 
          alamat = ?, 
@@ -117,36 +122,57 @@ export async function PUT(
          catatan = ?
        WHERE id_perusahaan = ?`,
       [
+        data.kip || null,
         data.nama_perusahaan,
         data.badan_usaha,
         data.alamat,
-        data.kec,
-        data.des,
-        data.kode_pos,
+        data.kec || null,
+        data.des || null,
+        data.kode_pos || null,
         data.skala,
-        data.lok_perusahaan,
-        data.nama_kawasan,
-        data.lat,
-        data.lon,
-        data.jarak,
-        data.produk,
-        data.KBLI,
-        data.telp_perusahaan,
-        data.email_perusahaan,
-        data.web_perusahaan,
-        data.tkerja,
-        data.investasi,
-        data.omset,
-        data.nama_narasumber,
-        data.jbtn_narasumber,
-        data.email_narasumber,
-        data.telp_narasumber,
-        data.pcl_utama,
-        data.catatan,
+        data.lok_perusahaan || null,
+        data.nama_kawasan || null,
+        data.lat || null,
+        data.lon || null,
+        data.jarak || null,
+        data.produk || null,
+        data.KBLI || null,
+        data.telp_perusahaan || null,
+        data.email_perusahaan || null,
+        data.web_perusahaan || null,
+        data.tkerja || null,
+        data.investasi || null,
+        data.omset || null,
+        data.nama_narasumber || null,
+        data.jbtn_narasumber || null,
+        data.email_narasumber || null,
+        data.telp_narasumber || null,
+        data.pcl_utama || null,
+        data.catatan || null,
         id
       ]
     );
     
+    // Handle tahun direktori - hapus yang lama dan tambahkan yang baru
+    if (data.tahun_direktori && Array.isArray(data.tahun_direktori)) {
+      // Hapus semua tahun direktori untuk perusahaan ini
+      await connection.execute(
+        `DELETE FROM direktori WHERE id_perusahaan = ?`,
+        [id]
+      );
+      
+      // Tambahkan tahun direktori baru
+      if (data.tahun_direktori.length > 0) {
+        const direktoriValues = data.tahun_direktori.map(year => [id, year]);
+        
+        await connection.query(
+          `INSERT INTO direktori (id_perusahaan, thn_direktori) VALUES ?`,
+          [direktoriValues]
+        );
+      }
+    }
+    
+    console.log("Update result:", result);
     await connection.end();
     
     return NextResponse.json({ 
@@ -157,7 +183,7 @@ export async function PUT(
     console.error("Database error:", error);
     return NextResponse.json({ 
       success: false, 
-      error: "Database error: " + error.message 
+      message: "Error saat memperbarui data: " + error.message 
     }, { status: 500 });
   }
 }

@@ -109,3 +109,84 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const data = await request.json();
+    
+    // Buat koneksi ke database
+    const connection = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    });
+    
+    // 1. Insert ke tabel perusahaan
+    const [resultPerusahaan] = await connection.execute(
+      `INSERT INTO perusahaan (
+        kip, nama_perusahaan, badan_usaha, alamat, kec, des, 
+        kode_pos, skala, lok_perusahaan, nama_kawasan, lat, lon, 
+        jarak, produk, KBLI, telp_perusahaan, email_perusahaan, 
+        web_perusahaan, tkerja, investasi, omset, nama_narasumber, 
+        jbtn_narasumber, email_narasumber, telp_narasumber, pcl_utama, catatan
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        data.kip || null,
+        data.nama_perusahaan,
+        data.badan_usaha,
+        data.alamat,
+        data.kec || null,
+        data.des || null,
+        data.kode_pos || null,
+        data.skala,
+        data.lok_perusahaan || null,
+        data.nama_kawasan || null,
+        data.lat || null,
+        data.lon || null,
+        data.jarak || null,
+        data.produk || null,
+        data.KBLI || null,
+        data.telp_perusahaan || null,
+        data.email_perusahaan || null,
+        data.web_perusahaan || null,
+        data.tkerja || null,
+        data.investasi || null,
+        data.omset || null,
+        data.nama_narasumber || null,
+        data.jbtn_narasumber || null,
+        data.email_narasumber || null,
+        data.telp_narasumber || null,
+        data.pcl_utama || null,
+        data.catatan || null
+      ]
+    );
+    
+    // Ambil ID perusahaan yang baru saja dimasukkan
+    const newPerusahaanId = (resultPerusahaan as any).insertId;
+    
+    // 2. Insert ke tabel direktori untuk tahun-tahun yang dipilih
+    if (data.tahun_direktori && data.tahun_direktori.length > 0) {
+      const direktoriValues = data.tahun_direktori.map(year => [newPerusahaanId, year]);
+      
+      await connection.query(
+        `INSERT INTO direktori (id_perusahaan, thn_direktori) VALUES ?`,
+        [direktoriValues]
+      );
+    }
+    
+    await connection.end();
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: "Data berhasil disimpan",
+      id: newPerusahaanId
+    });
+  } catch (error) {
+    console.error("Database error:", error);
+    return NextResponse.json({ 
+      success: false, 
+      message: "Error saat menyimpan data: " + error.message 
+    }, { status: 500 });
+  }
+}

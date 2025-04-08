@@ -43,18 +43,44 @@ export default function EditDirektoriDetail() {
   const handleSave = async (data) => {
     try {
       setIsSaving(true);
-      
-      // Di implementasi nyata, ini akan memanggil API update
-      console.log("Data yang akan disimpan:", data);
-      
-      // Simulasi delay untuk demo
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      alert("Data berhasil diperbarui!");
-      router.push(`/admin/direktori/${id_perusahaan}`);
+
+      // Tambahkan logging untuk debugging
+      console.log("Saving data:", data);
+
+      // Panggil API untuk update data
+      const response = await fetch(`/api/perusahaan/${id_perusahaan}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      const responseText = await response.text();
+      console.log("Response text:", responseText);
+
+      // Parse response jika valid JSON
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${responseText}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(result.message || `Error: ${response.status}`);
+      }
+
+      if (result.success) {
+        alert("Data berhasil diperbarui!");
+        router.push(`/admin/direktori/${id_perusahaan}`);
+      } else {
+        throw new Error(result.message || "Gagal memperbarui data");
+      }
     } catch (error) {
       console.error("Error saving data:", error);
       alert("Gagal menyimpan data: " + error.message);
+    } finally {
       setIsSaving(false);
     }
   };
@@ -65,11 +91,11 @@ export default function EditDirektoriDetail() {
         <Breadcrumb
           items={[
             { label: "Direktori IBS", link: "/admin/direktori" },
-            { 
-              label: isLoading ? "Memuat..." : companyName, 
-              link: `/admin/direktori/${id_perusahaan}` 
+            {
+              label: isLoading ? "Memuat..." : companyName,
+              link: `/admin/direktori/${id_perusahaan}`,
             },
-            { label: "Edit" }
+            { label: "Edit" },
           ]}
         />
 
@@ -77,8 +103,8 @@ export default function EditDirektoriDetail() {
           <h2 className="text-xl font-semibold mb-4 text-center">
             Edit Informasi Perusahaan
           </h2>
-          <DetailDirektori 
-            id_perusahaan={id_perusahaan} 
+          <DetailDirektori
+            id_perusahaan={id_perusahaan}
             mode="edit"
             onSave={handleSave}
             onCancel={() => router.push(`/admin/direktori/${id_perusahaan}`)}

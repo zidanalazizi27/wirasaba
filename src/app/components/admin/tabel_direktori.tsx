@@ -1277,7 +1277,7 @@ const TabelDirektori = () => {
             <Tooltip content="Tambah Data" position="bottom">
               <button
                 className="p-2 bg-blue-500 text-white rounded-lg flex items-center justify-center hover:bg-blue-600"
-                onClick={() => alert("Tambah data baru")}
+                onClick={() => router.push("/admin/direktori/tambah")}
               >
                 <PlusIcon size={20} />
               </button>
