@@ -12,9 +12,9 @@ export default function Direktori() {
         <Breadcrumb items={[{ label: "Direktori IBS" }]} />
 
         <div className="bg-white p-4 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">
-            Data Perusahaan Industri Besar dan Sedang
-          </h2>
+          <h4 className="text-center text-xl font-semibold mb-4">
+            Direktori Perusahaan Industri Besar dan Sedang
+          </h4>
           <TabelDirektori />
         </div>
       </div>

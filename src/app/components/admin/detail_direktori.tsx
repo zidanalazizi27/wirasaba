@@ -307,10 +307,11 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       }
 
       // Fetch PCL options
-      const pclResponse = await fetch("/api/pcl");
+      // Fetch PCL options
+      const pclResponse = await fetch("/api/pcl?format=dropdown");
       if (pclResponse.ok) {
-        const pclData = await pclResponse.json(); // perbaiki dari response menjadi pclResponse
-        setPclOptions(pclData.data || []);
+        const pclData = await pclResponse.json();
+        setPclOptions(pclData); // Perhatikan perbedaan: langsung gunakan pclData, bukan pclData.data
       }
     } catch (error) {
       console.error("Error fetching dropdown options:", error);
