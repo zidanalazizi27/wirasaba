@@ -187,3 +187,56 @@ export async function PUT(
     }, { status: 500 });
   }
 }
+
+// DELETE method
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const id = params.id;
+  try {
+    // Buat koneksi ke database
+    const connection = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    });
+    
+    // Hapus terlebih dahulu data terkait di tabel direktori (karena ada foreign key)
+    await connection.execute(
+      `DELETE FROM direktori WHERE id_perusahaan = ?`,
+      [id]
+    );
+    
+    // Hapus data perusahaan
+    const [result] = await connection.execute(
+      `DELETE FROM perusahaan WHERE id_perusahaan = ?`,
+      [id]
+    );
+    
+    // Tutup koneksi
+    await connection.end();
+    
+    // Cek apakah ada baris yang dihapus
+    const rowsAffected = (result as any).affectedRows;
+    
+    if (rowsAffected === 0) {
+      return NextResponse.json({ 
+        success: false, 
+        message: "Data perusahaan tidak ditemukan" 
+      }, { status: 404 });
+    }
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: "Data perusahaan berhasil dihapus" 
+    });
+  } catch (error) {
+    console.error("Database error:", error);
+    return NextResponse.json({ 
+      success: false, 
+      message: "Error saat menghapus data: " + error.message 
+    }, { status: 500 });
+  }
+}

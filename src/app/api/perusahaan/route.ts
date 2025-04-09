@@ -114,6 +114,8 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
     
+    console.log("Data yang diterima:", data);
+    
     // Buat koneksi ke database
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
@@ -122,7 +124,7 @@ export async function POST(request: NextRequest) {
       database: process.env.DB_NAME,
     });
     
-    // 1. Insert ke tabel perusahaan
+    // 1. Insert ke tabel perusahaan - HAPUS id_perusahaan dari daftar kolom
     const [resultPerusahaan] = await connection.execute(
       `INSERT INTO perusahaan (
         kip, nama_perusahaan, badan_usaha, alamat, kec, des, 
@@ -162,13 +164,21 @@ export async function POST(request: NextRequest) {
       ]
     );
     
+    console.log("Hasil INSERT perusahaan:", resultPerusahaan);
+    
     // Ambil ID perusahaan yang baru saja dimasukkan
     const newPerusahaanId = (resultPerusahaan as any).insertId;
     
+    if (!newPerusahaanId) {
+      throw new Error("Insert berhasil tetapi tidak mendapatkan ID perusahaan baru");
+    }
+    
     // 2. Insert ke tabel direktori untuk tahun-tahun yang dipilih
-    if (data.tahun_direktori && data.tahun_direktori.length > 0) {
+    if (data.tahun_direktori && Array.isArray(data.tahun_direktori) && data.tahun_direktori.length > 0) {
+      // Prepare values for bulk insert
       const direktoriValues = data.tahun_direktori.map(year => [newPerusahaanId, year]);
       
+      // Gunakan prepared statement untuk menyisipkan data direktori
       await connection.query(
         `INSERT INTO direktori (id_perusahaan, thn_direktori) VALUES ?`,
         [direktoriValues]

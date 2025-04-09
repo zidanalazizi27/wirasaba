@@ -14,13 +14,24 @@ export default function TambahDirektori() {
     try {
       setIsSaving(true);
 
+      // Pastikan data tidak memiliki id_perusahaan
+      const dataToSend = { ...data };
+      delete dataToSend.id_perusahaan; // Hapus id_perusahaan jika ada
+
       // Generate KIP baru jika tidak ada
-      if (!data.kip) {
+      if (!dataToSend.kip) {
         const currentYear = new Date().getFullYear();
-        // Bisa gunakan timestamp sebagai bagian dari KIP
-        data.kip = parseInt(
+        dataToSend.kip = parseInt(
           `351${currentYear.toString().substr(2)}${Date.now().toString().substr(-5)}`
         );
+      }
+
+      // Pastikan tahun_direktori adalah array
+      if (
+        !Array.isArray(dataToSend.tahun_direktori) ||
+        dataToSend.tahun_direktori.length === 0
+      ) {
+        dataToSend.tahun_direktori = [new Date().getFullYear()];
       }
 
       // Panggil API untuk menyimpan data baru
@@ -29,15 +40,14 @@ export default function TambahDirektori() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(dataToSend),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Error: ${response.status}`);
-      }
-
       const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `Error: ${response.status}`);
+      }
 
       if (result.success) {
         alert("Data berhasil disimpan!");

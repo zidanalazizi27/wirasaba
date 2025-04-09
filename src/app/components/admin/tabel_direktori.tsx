@@ -864,12 +864,30 @@ const TabelDirektori = () => {
     router.push(`/admin/direktori/${business.id_perusahaan}/edit`);
   };
 
-  const handleDeleteBusiness = (business: Business) => {
+  const handleDeleteBusiness = async (business: Business) => {
     if (confirm(`Yakin ingin menghapus ${business.nama_perusahaan}?`)) {
-      // Implementasi future: API call untuk delete
-      alert(
-        `${business.nama_perusahaan} telah dihapus (fitur dalam pengembangan)`
-      );
+      try {
+        // Call the DELETE API endpoint
+        const response = await fetch(
+          `/api/perusahaan/${business.id_perusahaan}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`${business.nama_perusahaan} berhasil dihapus!`);
+          // Refresh data after successful deletion
+          fetchData();
+        } else {
+          alert(`Gagal menghapus: ${result.message}`);
+        }
+      } catch (error) {
+        console.error("Error deleting data:", error);
+        alert("Terjadi kesalahan saat menghapus data");
+      }
     }
   };
 

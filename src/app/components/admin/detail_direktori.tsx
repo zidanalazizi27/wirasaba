@@ -148,6 +148,23 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         return;
       }
 
+      // For new company (mode === "add"), simply update the local state
+      if (mode === "add") {
+        const updatedYears = [...editedData.tahun_direktori, yearNumber].sort(
+          (a, b) => a - b
+        );
+
+        setEditedData({
+          ...editedData,
+          tahun_direktori: updatedYears,
+        });
+
+        setNewYear("");
+        setIsAddingYear(false);
+        return;
+      }
+
+      // For existing company, call the API
       try {
         // Panggil API untuk menambahkan tahun direktori
         const response = await fetch("/api/direktori", {
@@ -190,6 +207,26 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   // Fungsi untuk menghapus tahun
   const handleRemoveYear = async (yearToRemove) => {
     if (editedData) {
+      // For new company (mode === "add"), simply update the local state
+      if (mode === "add") {
+        // Don't allow removing the last year
+        if (editedData.tahun_direktori.length <= 1) {
+          alert("Minimal satu tahun direktori diperlukan");
+          return;
+        }
+
+        const updatedYears = editedData.tahun_direktori.filter(
+          (year) => year !== yearToRemove
+        );
+
+        setEditedData({
+          ...editedData,
+          tahun_direktori: updatedYears,
+        });
+        return;
+      }
+
+      // For existing company, call the API
       try {
         // Panggil API untuk menghapus tahun direktori
         const response = await fetch(
@@ -221,7 +258,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       }
     }
   };
-  
+
   const fetchDropdownOptions = async () => {
     try {
       // Set loading state ketika mulai fetch
@@ -541,6 +578,14 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       errors.alamat = "Alamat tidak boleh kosong";
     }
 
+    // Validasi tahun direktori
+    if (
+      !editedData?.tahun_direktori ||
+      editedData.tahun_direktori.length === 0
+    ) {
+      errors.tahun_direktori = "Minimal satu tahun direktori diperlukan";
+    }
+
     // Tampilkan error jika ada
     if (Object.keys(errors).length > 0) {
       const errorMessage = Object.values(errors).join("\n");
@@ -553,7 +598,15 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
   const handleSave = () => {
     if (editedData && validateData()) {
-      onSave && onSave(editedData);
+      if (mode === "add") {
+        // Untuk mode add, hapus id_perusahaan untuk menghindari konflik
+        const dataToSave = { ...editedData };
+        delete dataToSave.id_perusahaan;
+        onSave && onSave(dataToSave);
+      } else {
+        // Untuk mode edit, kirim data lengkap termasuk id
+        onSave && onSave(editedData);
+      }
     }
   };
 
