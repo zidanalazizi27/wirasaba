@@ -307,11 +307,21 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       }
 
       // Fetch PCL options
-      // Fetch PCL options
       const pclResponse = await fetch("/api/pcl?format=dropdown");
       if (pclResponse.ok) {
         const pclData = await pclResponse.json();
-        setPclOptions(pclData); // Perhatikan perbedaan: langsung gunakan pclData, bukan pclData.data
+        // Periksa struktur pclData untuk menangani format lama dan baru
+        if (Array.isArray(pclData)) {
+          setPclOptions(pclData);
+        } else if (pclData.data && Array.isArray(pclData.data)) {
+          // Tangani format API baru
+          setPclOptions(
+            pclData.data.map((item) => ({
+              name: `${item.nama_pcl} (${item.status_pcl})`,
+              uid: item.nama_pcl,
+            }))
+          );
+        }
       }
     } catch (error) {
       console.error("Error fetching dropdown options:", error);
@@ -1134,8 +1144,8 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
               >
                 <option value="">-- Pilih PCL --</option>
                 {pclOptions.map((option) => (
-                  <option key={option.id_pcl} value={option.nama_pcl}>
-                    {option.nama_pcl} ({option.status_pcl})
+                  <option key={option.uid} value={option.uid}>
+                    {option.name}
                   </option>
                 ))}
               </select>
@@ -1439,7 +1449,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                 <div className="flex flex-wrap gap-2 mt-2">
                   {editedData?.tahun_direktori.map((tahun) => (
                     <div
-                      key={tahun}
+                      key={tahun} // Tambahkan prop key ini
                       className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded-full flex items-center"
                     >
                       <span>{tahun}</span>

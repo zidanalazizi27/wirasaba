@@ -864,6 +864,7 @@ const TabelDirektori = () => {
     router.push(`/admin/direktori/${business.id_perusahaan}/edit`);
   };
 
+  // Handle delete business
   const handleDeleteBusiness = async (business: Business) => {
     if (confirm(`Yakin ingin menghapus ${business.nama_perusahaan}?`)) {
       try {
@@ -880,7 +881,8 @@ const TabelDirektori = () => {
         if (result.success) {
           alert(`${business.nama_perusahaan} berhasil dihapus!`);
           // Refresh data after successful deletion
-          fetchData();
+          fetchData(); // Panggil fetchData untuk me-refresh data
+          setHasLoadedAll(false); // Reset state hasLoadedAll agar data bisa di-load ulang
         } else {
           alert(`Gagal menghapus: ${result.message}`);
         }
