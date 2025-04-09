@@ -170,6 +170,8 @@ export async function POST(request: NextRequest) {
     const newPerusahaanId = (resultPerusahaan as any).insertId;
     
     if (!newPerusahaanId) {
+      // Tambahkan logging untuk debugging
+      console.error("Insert berhasil tetapi tidak mendapatkan ID perusahaan baru", resultPerusahaan);
       throw new Error("Insert berhasil tetapi tidak mendapatkan ID perusahaan baru");
     }
     
