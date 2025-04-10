@@ -56,7 +56,29 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   const [selectedPerusahaan, setSelectedPerusahaan] =
     useState<PerusahaanOption | null>(null);
 
-  // No need for click outside handler for dropdown
+  // Tambahkan ini di awal file riwayat_survei_form.tsx
+  const DEBUG = true; // Set false di production
+
+  function debug(...args: any[]) {
+    if (DEBUG) {
+      console.log(...args);
+    }
+  }
+
+  // Gunakan di berbagai tempat
+  useEffect(() => {
+    debug("Component mounted, mode:", mode, "id:", id);
+    // ...
+  }, []);
+
+  useEffect(() => {
+    debug("Selected perusahaan changed:", selectedPerusahaan);
+  }, [selectedPerusahaan]);
+
+  // Gunakan untuk memantau perubahan state
+  useEffect(() => {
+    debug("perusahaanOptions updated:", perusahaanOptions);
+  }, [perusahaanOptions]);
 
   // Fetch riwayat data if in edit mode
   useEffect(() => {
@@ -92,68 +114,91 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     }
   }, [id, mode]);
 
-  // No need for search effect with dropdown
-
   // Fetch dropdown options
   useEffect(() => {
     const fetchOptions = async () => {
       try {
         setIsLoadingOptions(true);
+        setError(null);
 
         // Fetch survei options
-        const surveiResponse = await fetch("/api/survei?limit=1000");
-        if (surveiResponse.ok) {
-          const surveiData = await surveiResponse.json();
-          if (surveiData.data) {
-            setSurveiOptions(
-              surveiData.data.map((survei: any) => ({
-                id: survei.id_survei,
-                name: `${survei.nama_survei} (${survei.tahun})`,
-              }))
-            );
+        try {
+          const surveiResponse = await fetch("/api/survei?limit=1000");
+          if (surveiResponse.ok) {
+            const surveiData = await surveiResponse.json();
+            if (surveiData.data) {
+              setSurveiOptions(
+                surveiData.data.map((survei: any) => ({
+                  id: survei.id_survei,
+                  name: `${survei.nama_survei} (${survei.tahun})`,
+                }))
+              );
+            }
           }
+        } catch (err) {
+          console.error("Error fetching survei options:", err);
         }
 
         // Fetch PCL options
-        const pclResponse = await fetch("/api/pcl?limit=1000");
-        if (pclResponse.ok) {
-          const pclData = await pclResponse.json();
-          if (pclData.data) {
-            setPclOptions(
-              pclData.data.map((pcl: any) => ({
-                id: pcl.id_pcl,
-                name: `${pcl.nama_pcl} (${pcl.status_pcl})`,
-              }))
-            );
-          }
-        }
-
-        // Fetch all perusahaan options for dropdown
-        const perusahaanResponse = await fetch("/api/perusahaan?limit=1000");
-        if (perusahaanResponse.ok) {
-          const perusahaanData = await perusahaanResponse.json();
-          if (perusahaanData.data) {
-            const options = perusahaanData.data.map((perusahaan: any) => ({
-              id: perusahaan.id_perusahaan,
-              name: perusahaan.nama_perusahaan,
-              kip: perusahaan.kip,
-            }));
-            setPerusahaanOptions(options);
-
-            // If in edit mode, set the selected company
-            if (mode === "edit" && formData.id_perusahaan) {
-              const selected = options.find(
-                (opt) => opt.id === formData.id_perusahaan
+        try {
+          const pclResponse = await fetch("/api/pcl?limit=1000");
+          if (pclResponse.ok) {
+            const pclData = await pclResponse.json();
+            if (pclData.data) {
+              setPclOptions(
+                pclData.data.map((pcl: any) => ({
+                  id: pcl.id_pcl,
+                  name: `${pcl.nama_pcl} (${pcl.status_pcl})`,
+                }))
               );
-              if (selected) {
-                setSelectedPerusahaan(selected);
-              }
             }
           }
+        } catch (err) {
+          console.error("Error fetching PCL options:", err);
+        }
+
+        // Fetch perusahaan options using the new endpoint
+        try {
+          // Gunakan endpoint baru khusus dropdown
+          const perusahaanResponse = await fetch("/api/perusahaan/dropdown");
+          console.log("Perusahaan response status:", perusahaanResponse.status);
+
+          if (perusahaanResponse.ok) {
+            const result = await perusahaanResponse.json();
+            console.log("Perusahaan dropdown data:", result);
+
+            if (result.success && Array.isArray(result.data)) {
+              const options = result.data.map((item: any) => ({
+                id: item.id_perusahaan,
+                name: item.nama_perusahaan,
+                kip: item.kip || "-",
+              }));
+
+              setPerusahaanOptions(options);
+
+              // Jika dalam edit mode, set selected perusahaan
+              if (mode === "edit" && formData.id_perusahaan) {
+                const selected = options.find(
+                  (opt) => Number(opt.id) === Number(formData.id_perusahaan)
+                );
+                if (selected) {
+                  setSelectedPerusahaan(selected);
+                }
+              }
+            } else {
+              console.error("Invalid perusahaan data format:", result);
+              throw new Error("Format data perusahaan tidak valid");
+            }
+          } else {
+            throw new Error(`HTTP error! status: ${perusahaanResponse.status}`);
+          }
+        } catch (err) {
+          console.error("Error fetching perusahaan data:", err);
+          setError("Gagal memuat data perusahaan");
         }
       } catch (err) {
-        console.error("Error fetching options:", err);
-        setError("Gagal memuat pilihan dropdown");
+        console.error("Error in fetchOptions:", err);
+        setError("Gagal memuat opsi dropdown");
       } finally {
         setIsLoadingOptions(false);
       }
@@ -178,9 +223,19 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   // Handle perusahaan selection from dropdown
   const handleSelectPerusahaan = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const perusahaanId = e.target.value;
+    debug("Selected perusahaan ID:", perusahaanId);
+
+    if (!perusahaanId) {
+      setSelectedPerusahaan(null);
+      setFormData((prev) => ({ ...prev, id_perusahaan: "" }));
+      return;
+    }
+
     const selected = perusahaanOptions.find(
-      (p) => p.id.toString() === perusahaanId
+      (p) => p.id.toString() === perusahaanId.toString()
     );
+
+    debug("Found selected perusahaan:", selected);
 
     if (selected) {
       setSelectedPerusahaan(selected);
@@ -189,6 +244,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
         id_perusahaan: selected.id,
       }));
     } else {
+      debug("Selected perusahaan not found in options");
       setSelectedPerusahaan(null);
       setFormData((prev) => ({
         ...prev,
@@ -297,29 +353,31 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
         >
           Perusahaan <span className="text-red-500">*</span>
         </label>
-        <select
-          id="id_perusahaan"
-          name="id_perusahaan"
-          value={formData.id_perusahaan}
-          onChange={handleSelectPerusahaan}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          required
-          disabled={isLoadingOptions}
-        >
-          <option value="">Pilih Perusahaan</option>
-          {perusahaanOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.kip} - {option.name}
-            </option>
-          ))}
-        </select>
 
-        {isLoadingOptions && (
-          <div className="mt-2 flex items-center">
+        {isLoadingOptions ? (
+          <div className="flex items-center text-sm text-gray-500 my-2">
             <div className="animate-spin h-4 w-4 mr-2 border-2 border-blue-500 rounded-full border-t-transparent"></div>
-            <span className="text-sm text-gray-500">
-              Memuat data perusahaan...
-            </span>
+            Memuat data perusahaan...
+          </div>
+        ) : perusahaanOptions.length > 0 ? (
+          <select
+            id="id_perusahaan"
+            name="id_perusahaan"
+            value={formData.id_perusahaan || ""}
+            onChange={handleSelectPerusahaan}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            required
+          >
+            <option value="">Pilih Perusahaan</option>
+            {perusahaanOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.kip} - {option.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="text-red-500 text-sm my-2">
+            {error ? `Error: ${error}` : "Tidak ada data perusahaan tersedia"}
           </div>
         )}
       </div>
