@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 
 interface PCLFormProps {
   id?: string;
   mode: "add" | "edit";
+  onSuccess: () => void;
+  onCancel: () => void;
 }
 
 interface PCLData {
@@ -15,8 +16,7 @@ interface PCLData {
   telp_pcl: string;
 }
 
-const PCLForm: React.FC<PCLFormProps> = ({ id, mode }) => {
-  const router = useRouter();
+const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<PCLData>({
@@ -88,12 +88,7 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode }) => {
       const result = await response.json();
 
       if (result.success) {
-        alert(
-          mode === "edit"
-            ? "PCL berhasil diperbarui!"
-            : "PCL berhasil ditambahkan!"
-        );
-        router.push("/admin/pcl");
+        onSuccess(); // Notify parent component that operation was successful
       } else {
         throw new Error(
           result.message ||
@@ -116,13 +111,13 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode }) => {
 
   if (error) {
     return (
-      <div className="p-4 text-center">
+      <div className="p-4">
         <p className="text-red-500">{error}</p>
         <button
-          onClick={() => router.push("/admin/pcl")}
+          onClick={onCancel}
           className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg"
         >
-          Kembali ke Daftar PCL
+          Kembali
         </button>
       </div>
     );
@@ -190,7 +185,7 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode }) => {
       <div className="flex justify-end space-x-3">
         <button
           type="button"
-          onClick={() => router.push("/admin/pcl")}
+          onClick={onCancel}
           className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
         >
           Batal
