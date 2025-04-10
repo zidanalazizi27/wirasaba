@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 
 interface RiwayatSurveiFormProps {
   id?: string | number;
@@ -52,15 +52,11 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   >([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
 
-  // State untuk autocomplete perusahaan
-  const [perusahaanSearch, setPerusahaanSearch] = useState("");
-  const [perusahaanSuggestions, setPerusahaanSuggestions] = useState<
-    PerusahaanOption[]
-  >([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  // State untuk dropdown perusahaan
   const [selectedPerusahaan, setSelectedPerusahaan] =
     useState<PerusahaanOption | null>(null);
-  const suggestionRef = useRef<HTMLDivElement>(null);
+
+  // No need for click outside handler for dropdown
 
   // Fetch riwayat data if in edit mode
   useEffect(() => {
@@ -79,23 +75,8 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
           if (result.success) {
             setFormData(result.data);
 
-            // Jika dalam mode edit, kita perlu mengambil detail perusahaan
-            if (result.data.id_perusahaan) {
-              const perusahaanResponse = await fetch(
-                `/api/perusahaan/${result.data.id_perusahaan}`
-              );
-              if (perusahaanResponse.ok) {
-                const perusahaanData = await perusahaanResponse.json();
-                setSelectedPerusahaan({
-                  id: perusahaanData.id_perusahaan,
-                  name: perusahaanData.nama_perusahaan,
-                  kip: perusahaanData.kip,
-                });
-                setPerusahaanSearch(
-                  `${perusahaanData.kip} - ${perusahaanData.nama_perusahaan}`
-                );
-              }
-            }
+            // No need to fetch perusahaan details separately
+            // We'll use the selected option from the dropdown
           } else {
             throw new Error(result.message || "Failed to fetch riwayat data");
           }
@@ -111,22 +92,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     }
   }, [id, mode]);
 
-  // Handle click outside suggestions
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        suggestionRef.current &&
-        !suggestionRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
+  // No need for search effect with dropdown
 
   // Fetch dropdown options
   useEffect(() => {
@@ -162,18 +128,27 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
           }
         }
 
-        // Fetch some perusahaan options (initial load)
-        const perusahaanResponse = await fetch("/api/perusahaan?limit=100");
+        // Fetch all perusahaan options for dropdown
+        const perusahaanResponse = await fetch("/api/perusahaan?limit=1000");
         if (perusahaanResponse.ok) {
           const perusahaanData = await perusahaanResponse.json();
           if (perusahaanData.data) {
-            setPerusahaanOptions(
-              perusahaanData.data.map((perusahaan: any) => ({
-                id: perusahaan.id_perusahaan,
-                name: perusahaan.nama_perusahaan,
-                kip: perusahaan.kip,
-              }))
-            );
+            const options = perusahaanData.data.map((perusahaan: any) => ({
+              id: perusahaan.id_perusahaan,
+              name: perusahaan.nama_perusahaan,
+              kip: perusahaan.kip,
+            }));
+            setPerusahaanOptions(options);
+
+            // If in edit mode, set the selected company
+            if (mode === "edit" && formData.id_perusahaan) {
+              const selected = options.find(
+                (opt) => opt.id === formData.id_perusahaan
+              );
+              if (selected) {
+                setSelectedPerusahaan(selected);
+              }
+            }
           }
         }
       } catch (err) {
@@ -185,47 +160,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     };
 
     fetchOptions();
-  }, []);
-
-  // Handle perusahaan search
-  useEffect(() => {
-    const searchPerusahaan = async () => {
-      if (perusahaanSearch.length > 2) {
-        try {
-          setIsLoadingOptions(true);
-          const response = await fetch(
-            `/api/perusahaan?search=${perusahaanSearch}&limit=20`
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (data.data) {
-              const options = data.data.map((perusahaan: any) => ({
-                id: perusahaan.id_perusahaan,
-                name: perusahaan.nama_perusahaan,
-                kip: perusahaan.kip,
-              }));
-              setPerusahaanSuggestions(options);
-              setShowSuggestions(true);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching perusahaan suggestions:", error);
-        } finally {
-          setIsLoadingOptions(false);
-        }
-      } else {
-        setPerusahaanSuggestions([]);
-        setShowSuggestions(false);
-      }
-    };
-
-    // Debounce search
-    const timer = setTimeout(() => {
-      searchPerusahaan();
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [perusahaanSearch]);
+  }, [mode, formData.id_perusahaan]);
 
   // Handle form input changes
   const handleInputChange = (
@@ -240,15 +175,26 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     }));
   };
 
-  // Handle perusahaan selection from suggestion
-  const handleSelectPerusahaan = (perusahaan: PerusahaanOption) => {
-    setSelectedPerusahaan(perusahaan);
-    setPerusahaanSearch(`${perusahaan.kip} - ${perusahaan.name}`);
-    setFormData((prev) => ({
-      ...prev,
-      id_perusahaan: perusahaan.id,
-    }));
-    setShowSuggestions(false);
+  // Handle perusahaan selection from dropdown
+  const handleSelectPerusahaan = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const perusahaanId = e.target.value;
+    const selected = perusahaanOptions.find(
+      (p) => p.id.toString() === perusahaanId
+    );
+
+    if (selected) {
+      setSelectedPerusahaan(selected);
+      setFormData((prev) => ({
+        ...prev,
+        id_perusahaan: selected.id,
+      }));
+    } else {
+      setSelectedPerusahaan(null);
+      setFormData((prev) => ({
+        ...prev,
+        id_perusahaan: "",
+      }));
+    }
   };
 
   // Handle form submission
@@ -263,12 +209,6 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
       !formData.selesai
     ) {
       setError("Silakan isi semua field yang wajib diisi");
-      return;
-    }
-
-    // Verify if a valid perusahaan was selected
-    if (!selectedPerusahaan) {
-      setError("Silakan pilih perusahaan dari daftar yang tersedia");
       return;
     }
 
@@ -308,17 +248,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     }
   };
 
-  // Handle perusahaan search input change
-  const handlePerusahaanSearchChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const value = e.target.value;
-    setPerusahaanSearch(value);
-    if (!value) {
-      setSelectedPerusahaan(null);
-      setFormData((prev) => ({ ...prev, id_perusahaan: "" }));
-    }
-  };
+  // No need for search input change handler with dropdown
 
   if (isLoading && mode === "edit") {
     return <div className="p-4 text-center">Memuat data...</div>;
@@ -360,57 +290,38 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
         </select>
       </div>
 
-      <div className="relative">
+      <div>
         <label
-          htmlFor="perusahaanSearch"
+          htmlFor="id_perusahaan"
           className="block text-sm font-medium text-gray-700 mb-1"
         >
           Perusahaan <span className="text-red-500">*</span>
         </label>
-        <input
-          type="text"
-          id="perusahaanSearch"
-          value={perusahaanSearch}
-          onChange={handlePerusahaanSearchChange}
-          onFocus={() =>
-            perusahaanSearch.length > 2 && setShowSuggestions(true)
-          }
-          placeholder="Cari KIP atau nama perusahaan..."
+        <select
+          id="id_perusahaan"
+          name="id_perusahaan"
+          value={formData.id_perusahaan}
+          onChange={handleSelectPerusahaan}
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          autoComplete="off"
-        />
+          required
+          disabled={isLoadingOptions}
+        >
+          <option value="">Pilih Perusahaan</option>
+          {perusahaanOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.kip} - {option.name}
+            </option>
+          ))}
+        </select>
 
         {isLoadingOptions && (
-          <div className="absolute right-3 top-9">
-            <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+          <div className="mt-2 flex items-center">
+            <div className="animate-spin h-4 w-4 mr-2 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+            <span className="text-sm text-gray-500">
+              Memuat data perusahaan...
+            </span>
           </div>
         )}
-
-        {showSuggestions && perusahaanSuggestions.length > 0 && (
-          <div
-            ref={suggestionRef}
-            className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-sm overflow-auto border border-gray-200"
-          >
-            {perusahaanSuggestions.map((perusahaan) => (
-              <div
-                key={perusahaan.id}
-                className="px-4 py-2 hover:bg-blue-50 cursor-pointer"
-                onClick={() => handleSelectPerusahaan(perusahaan)}
-              >
-                <span className="font-medium">{perusahaan.kip}</span> -{" "}
-                {perusahaan.name}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {showSuggestions &&
-          perusahaanSuggestions.length === 0 &&
-          perusahaanSearch.length > 2 && (
-            <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md py-2 px-3 text-sm border border-gray-200">
-              Tidak ada perusahaan yang ditemukan
-            </div>
-          )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
