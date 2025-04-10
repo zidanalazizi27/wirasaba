@@ -379,25 +379,16 @@ const TabelRiwayatSurvei = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filter options
-  const [surveiOptions, setSurveiOptions] = useState;
-  {
-    name: string;
-    uid: string;
-  }
-  [] > [];
-  const [pclOptions, setPclOptions] = useState;
-  {
-    name: string;
-    uid: string;
-  }
-  [] > [];
-  const [tahunOptions, setTahunOptions] = useState;
-  {
-    name: string;
-    uid: string;
-  }
-  [] > [];
+  // Filter options - FIX: Properly define state types and initialize with empty arrays
+  const [surveiOptions, setSurveiOptions] = useState<
+    Array<{ name: string; uid: string }>
+  >([]);
+  const [pclOptions, setPclOptions] = useState<
+    Array<{ name: string; uid: string }>
+  >([]);
+  const [tahunOptions, setTahunOptions] = useState<
+    Array<{ name: string; uid: string }>
+  >([]);
 
   // Refs for dropdown outside clicks
   const surveiDropdownRef = useRef<HTMLDivElement>(null);
@@ -411,7 +402,9 @@ const TabelRiwayatSurvei = () => {
   const fetchFilterOptions = useCallback(async () => {
     try {
       // Fetch survei options
-      const surveiResponse = await fetch("/api/riwayat-survei/filters?type=survei");
+      const surveiResponse = await fetch(
+        "/api/riwayat-survei/filters?type=survei"
+      );
       if (surveiResponse.ok) {
         const surveiData = await surveiResponse.json();
         if (surveiData.success) {
@@ -429,7 +422,9 @@ const TabelRiwayatSurvei = () => {
       }
 
       // Fetch tahun options
-      const tahunResponse = await fetch("/api/riwayat-survei/filters?type=tahun");
+      const tahunResponse = await fetch(
+        "/api/riwayat-survei/filters?type=tahun"
+      );
       if (tahunResponse.ok) {
         const tahunData = await tahunResponse.json();
         if (tahunData.success) {
@@ -880,8 +875,8 @@ const TabelRiwayatSurvei = () => {
     <div className="w-full mx-auto bg-white rounded-lg shadow-sm overflow-hidden">
       {/* Modals */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-hidden">
             <h2 className="text-xl font-medium mb-4">
               Tambah Riwayat Survei Baru
             </h2>
@@ -895,8 +890,8 @@ const TabelRiwayatSurvei = () => {
       )}
 
       {showEditModal && selectedRiwayat && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-hidden">
             <h2 className="text-xl font-medium mb-4">Edit Riwayat Survei</h2>
             <RiwayatSurveiForm
               id={selectedRiwayat.id_riwayat}
