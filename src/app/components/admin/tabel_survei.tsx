@@ -695,14 +695,6 @@ const TabelSurvei = () => {
         case "actions":
           return (
             <div className="relative flex items-center gap-2">
-              <Tooltip content="Lihat Detail" color="primary">
-                <span
-                  onClick={() => handleViewSurvey(survey)}
-                  className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-blue-500"
-                >
-                  <EyeIcon />
-                </span>
-              </Tooltip>
               <Tooltip content="Edit" color="warning">
                 <span
                   onClick={() => handleEditSurvey(survey)}

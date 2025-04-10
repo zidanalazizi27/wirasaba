@@ -8,8 +8,7 @@ import React, {
   useEffect,
 } from "react";
 import type { SVGProps } from "react";
-import { useRouter } from "next/navigation";
-import PCLForm from "./pcl_form";
+import RiwayatSurveiForm from "./riwayat_survei_form";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -311,109 +310,154 @@ const Tooltip = ({
   );
 };
 
-// Table column definitions untuk PCL
+// Table column definitions
 export const columns = [
   { name: "No", uid: "no", sortable: false },
-  { name: "Nama PCL", uid: "nama_pcl", sortable: true },
-  { name: "Status", uid: "status_pcl", sortable: true },
-  { name: "Telepon", uid: "telp_pcl", sortable: false },
+  { name: "Nama Survei", uid: "nama_survei", sortable: true },
+  { name: "KIP", uid: "kip", sortable: true },
+  { name: "Nama Perusahaan", uid: "nama_perusahaan", sortable: true },
+  { name: "PCL", uid: "nama_pcl", sortable: true },
+  { name: "Tahun", uid: "tahun", sortable: true },
   { name: "Aksi", uid: "actions", sortable: false },
 ];
 
-// Status options untuk PCL
-export const statusOptions = [
-  { name: "Mitra", uid: "Mitra" },
-  { name: "Staff", uid: "Staff" },
+// Status "selesai" options
+export const selesaiOptions = [
+  { name: "Iya", uid: "Iya" },
+  { name: "Tidak", uid: "Tidak" },
 ];
 
-type PCL = {
-  id_pcl: number;
+type RiwayatSurvei = {
+  id_riwayat: number;
   no: number;
+  id_survei: number;
+  nama_survei: string;
+  id_perusahaan: number;
+  kip: string | number;
+  nama_perusahaan: string;
+  id_pcl: number;
   nama_pcl: string;
-  status_pcl: string;
-  telp_pcl: string;
+  tahun: number;
+  selesai: string;
+  ket_survei: string;
 };
-
-type SortDirection = "ascending" | "descending" | null;
 
 interface SortDescriptor {
   column: string;
   direction: "ascending" | "descending" | null;
 }
 
-const TabelPCL = () => {
-  const router = useRouter();
-
+const TabelRiwayatSurvei = () => {
   // State declarations
   const [filterValue, setFilterValue] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [surveiFilter, setSurveiFilter] = useState("all");
+  const [pclFilter, setPclFilter] = useState("all");
+  const [selesaiFilter, setSelesaiFilter] = useState("all");
+  const [tahunFilter, setTahunFilter] = useState("all");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortDescriptors, setSortDescriptors] = useState<SortDescriptor[]>([]);
-  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
-  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Additional state for API data
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [pclList, setPclList] = useState<PCL[]>([]);
-  const [totalItems, setTotalItems] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  // Dropdown state
+  const [surveiDropdownOpen, setSurveiDropdownOpen] = useState(false);
+  const [pclDropdownOpen, setPclDropdownOpen] = useState(false);
+  const [selesaiDropdownOpen, setSelesaiDropdownOpen] = useState(false);
+  const [tahunDropdownOpen, setTahunDropdownOpen] = useState(false);
+
+  // Modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedPCL, setSelectedPCL] = useState<PCL | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedRiwayat, setSelectedRiwayat] = useState<RiwayatSurvei | null>(
+    null
+  );
 
-  // State for storing all PCL data for client-side sorting
-  const [allPclData, setAllPclData] = useState<PCL[]>([]);
-  const [isLoadingAll, setIsLoadingAll] = useState(false);
-  const [hasLoadedAll, setHasLoadedAll] = useState(false);
+  // Data state
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [riwayatList, setRiwayatList] = useState<RiwayatSurvei[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Filter options
+  const [surveiOptions, setSurveiOptions] = useState;
+  {
+    name: string;
+    uid: string;
+  }
+  [] > [];
+  const [pclOptions, setPclOptions] = useState;
+  {
+    name: string;
+    uid: string;
+  }
+  [] > [];
+  const [tahunOptions, setTahunOptions] = useState;
+  {
+    name: string;
+    uid: string;
+  }
+  [] > [];
+
+  // Refs for dropdown outside clicks
+  const surveiDropdownRef = useRef<HTMLDivElement>(null);
+  const pclDropdownRef = useRef<HTMLDivElement>(null);
+  const selesaiDropdownRef = useRef<HTMLDivElement>(null);
+  const tahunDropdownRef = useRef<HTMLDivElement>(null);
 
   const hasSearchFilter = Boolean(filterValue);
 
-  // State untuk modal upload
-  const [showUploadModal, setShowUploadModal] = useState(false);
-
-  // Handler untuk tombol upload
-  const handleUploadClick = () => {
-    setShowUploadModal(true);
-  };
-
-  // Handler untuk tombol download
-  const handleDownloadClick = async () => {
+  // Fetch filter options
+  const fetchFilterOptions = useCallback(async () => {
     try {
-      // Mekanisme download data PCL
-      const params = new URLSearchParams({
-        format: "excel",
-        status: statusFilter !== "all" ? statusFilter : "",
-        search: filterValue,
-      });
+      // Fetch survei options
+      const surveiResponse = await fetch("/api/riwayat-survei/filters/survei");
+      if (surveiResponse.ok) {
+        const surveiData = await surveiResponse.json();
+        if (surveiData.success) {
+          setSurveiOptions(surveiData.data);
+        }
+      }
 
-      // Dalam versi nyata, Anda akan mengarahkan ke endpoint API khusus untuk download
-      // Contoh:
-      // window.location.href = `/api/pcl/download?${params.toString()}`;
+      // Fetch PCL options
+      const pclResponse = await fetch("/api/riwayat-survei/filters/pcl");
+      if (pclResponse.ok) {
+        const pclData = await pclResponse.json();
+        if (pclData.success) {
+          setPclOptions(pclData.data);
+        }
+      }
 
-      // Untuk contoh ini, kita hanya tampilkan alert
-      alert("Fitur download data sedang dalam pengembangan");
+      // Fetch tahun options
+      const tahunResponse = await fetch("/api/riwayat-survei/filters/tahun");
+      if (tahunResponse.ok) {
+        const tahunData = await tahunResponse.json();
+        if (tahunData.success) {
+          setTahunOptions(tahunData.data);
+        }
+      }
     } catch (error) {
-      console.error("Error downloading data:", error);
-      alert("Terjadi kesalahan saat mengunduh data");
+      console.error("Error fetching filter options:", error);
     }
-  };
+  }, []);
 
-  // Fetch PCL data from API
+  // Fetch riwayat data
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
 
-      // Buat parameter untuk API request
+      // Build query parameters
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: rowsPerPage.toString(),
         search: filterValue,
-        status: statusFilter,
+        survei: surveiFilter,
+        pcl: pclFilter,
+        selesai: selesaiFilter,
+        tahun: tahunFilter,
       });
 
-      // Tambahkan parameter sorting jika ada
+      // Add sort parameters
       sortDescriptors.forEach((sort, index) => {
         if (sort.direction) {
           params.append(`sort[${index}][column]`, sort.column);
@@ -421,7 +465,7 @@ const TabelPCL = () => {
         }
       });
 
-      const response = await fetch(`/api/pcl?${params.toString()}`);
+      const response = await fetch(`/api/riwayat-survei?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -430,172 +474,115 @@ const TabelPCL = () => {
       const result = await response.json();
 
       if (result.success) {
-        setPclList(
-          result.data.map((pcl: any, index: number) => ({
-            ...pcl,
-            no: (currentPage - 1) * rowsPerPage + index + 1,
-          }))
-        );
-        setTotalItems(result.count);
-        setTotalPages(Math.ceil(result.count / rowsPerPage));
+        setRiwayatList(result.data);
+        setTotalItems(result.pagination.total);
+        setTotalPages(result.pagination.totalPages);
         setError(null);
       } else {
-        throw new Error(result.message || "Failed to fetch PCL data");
+        throw new Error(result.message || "Failed to fetch data");
       }
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setError("Gagal memuat data PCL");
-      setPclList([]);
+    } catch (error) {
+      console.error("Error fetching riwayat data:", error);
+      setError("Gagal memuat data riwayat survei");
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, rowsPerPage, filterValue, statusFilter, sortDescriptors]);
+  }, [
+    currentPage,
+    rowsPerPage,
+    filterValue,
+    surveiFilter,
+    pclFilter,
+    selesaiFilter,
+    tahunFilter,
+    sortDescriptors,
+  ]);
 
-  // Fungsi untuk mengambil semua data (tanpa paginasi) untuk sorting client-side
-  const fetchAllData = useCallback(async () => {
-    if (hasLoadedAll) return;
+  // Initial data load
+  useEffect(() => {
+    fetchFilterOptions();
+  }, [fetchFilterOptions]);
 
-    try {
-      setIsLoadingAll(true);
-
-      // Gunakan limit besar untuk mendapatkan semua data sekaligus
-      const params = new URLSearchParams({
-        limit: "10000", // Jumlah besar untuk mendapatkan semua data
-        search: filterValue,
-        status: statusFilter,
-      });
-
-      const response = await fetch(`/api/pcl?${params.toString()}`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        setAllPclData(result.data);
-        setHasLoadedAll(true);
-      } else {
-        throw new Error(result.message || "Failed to fetch all PCL data");
-      }
-    } catch (err) {
-      console.error("Error fetching all data:", err);
-    } finally {
-      setIsLoadingAll(false);
-    }
-  }, [filterValue, statusFilter, hasLoadedAll]);
-
-  // Call API when dependencies change
+  // Fetch data when filters or pagination change
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Fetch all data when needed for client-side sorting
+  // Handle outside clicks for dropdowns
   useEffect(() => {
-    if (sortDescriptors.length > 0 && !hasLoadedAll) {
-      fetchAllData();
-    }
-  }, [sortDescriptors, fetchAllData]);
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
 
-  // Reset hasLoadedAll when filters change
-  useEffect(() => {
-    setHasLoadedAll(false);
-  }, [filterValue, statusFilter]);
-
-  // Filter the data based on search and status
-  const filteredItems = useMemo(() => {
-    let filteredPcl = [...pclList];
-
-    // Text search filter
-    if (hasSearchFilter) {
-      const lowerFilter = filterValue.toLowerCase();
-      filteredPcl = filteredPcl.filter((pcl) =>
-        pcl.nama_pcl.toLowerCase().includes(lowerFilter)
-      );
-    }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filteredPcl = filteredPcl.filter(
-        (pcl) => pcl.status_pcl === statusFilter
-      );
-    }
-
-    return filteredPcl;
-  }, [pclList, filterValue, statusFilter, hasSearchFilter]);
-
-  // Client-side sorting implementation
-  const sortedItems = useMemo(() => {
-    // Use all data if loaded and sorting is active, otherwise use paginated data
-    const dataToSort =
-      hasLoadedAll && sortDescriptors.length > 0
-        ? [...allPclData]
-        : [...pclList];
-
-    if (sortDescriptors.length === 0) return dataToSort;
-
-    return dataToSort.sort((a, b) => {
-      for (const sort of sortDescriptors) {
-        if (!sort.direction) continue;
-
-        const column = sort.column as keyof PCL;
-
-        // Handle null/undefined values
-        const valueA = a[column] ?? "";
-        const valueB = b[column] ?? "";
-
-        // Handle different column types
-        if (column === "nama_pcl" || column === "status_pcl") {
-          const strA = String(valueA).toLowerCase();
-          const strB = String(valueB).toLowerCase();
-
-          const compareResult = strA.localeCompare(strB);
-
-          if (compareResult !== 0) {
-            return sort.direction === "ascending"
-              ? compareResult
-              : -compareResult;
-          }
-        }
+      if (
+        surveiDropdownRef.current &&
+        !surveiDropdownRef.current.contains(target)
+      ) {
+        setSurveiDropdownOpen(false);
       }
 
-      return 0;
-    });
-  }, [pclList, allPclData, sortDescriptors, hasLoadedAll]);
-
-  // Paginate the sorted data
-  const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-
-    // If sorting is active and all data is loaded, paginate from sorted data
-    if (hasLoadedAll && sortDescriptors.length > 0) {
-      const newTotalPages = Math.ceil(sortedItems.length / rowsPerPage);
-
-      // Update total pages and items
-      if (totalPages !== newTotalPages) {
-        setTotalPages(newTotalPages);
-        setTotalItems(sortedItems.length);
+      if (pclDropdownRef.current && !pclDropdownRef.current.contains(target)) {
+        setPclDropdownOpen(false);
       }
 
-      return sortedItems.slice(start, end).map((item, index) => ({
-        ...item,
-        no: start + index + 1,
-      }));
-    }
+      if (
+        selesaiDropdownRef.current &&
+        !selesaiDropdownRef.current.contains(target)
+      ) {
+        setSelesaiDropdownOpen(false);
+      }
 
-    // Otherwise use the server-paginated data
-    return pclList;
-  }, [
-    sortedItems,
-    currentPage,
-    rowsPerPage,
-    pclList,
-    hasLoadedAll,
-    sortDescriptors,
-    totalPages,
-  ]);
+      if (
+        tahunDropdownRef.current &&
+        !tahunDropdownRef.current.contains(target)
+      ) {
+        setTahunDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Search handler
+  const onSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFilterValue(e.target.value);
+      setCurrentPage(1);
+    },
+    []
+  );
+
+  // Rows per page handler
+  const onRowsPerPageChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setRowsPerPage(Number(e.target.value));
+      setCurrentPage(1);
+    },
+    []
+  );
+
+  // Filter handlers
+  const onSurveiFilterChange = useCallback((survei: string) => {
+    setSurveiFilter(survei);
+    setCurrentPage(1);
+  }, []);
+
+  const onPclFilterChange = useCallback((pcl: string) => {
+    setPclFilter(pcl);
+    setCurrentPage(1);
+  }, []);
+
+  const onSelesaiFilterChange = useCallback((selesai: string) => {
+    setSelesaiFilter(selesai);
+    setCurrentPage(1);
+  }, []);
+
+  const onTahunFilterChange = useCallback((tahun: string) => {
+    setTahunFilter(tahun);
+    setCurrentPage(1);
+  }, []);
 
   // Sorting handlers
   const handleSort = useCallback((columnKey: string) => {
@@ -606,7 +593,6 @@ const TabelPCL = () => {
         const existingSort = prevSorts[existingIndex];
         const newSorts = [...prevSorts];
 
-        // Toggle sort direction: null -> ascending -> descending -> remove
         if (existingSort.direction === null) {
           newSorts[existingIndex] = {
             column: columnKey,
@@ -618,16 +604,17 @@ const TabelPCL = () => {
             direction: "descending",
           };
         } else {
-          // If already descending, remove from sort list
           newSorts.splice(existingIndex, 1);
         }
 
         return newSorts;
       } else {
-        // If column not in sort list, add with ascending direction
         return [...prevSorts, { column: columnKey, direction: "ascending" }];
       }
     });
+
+    // Reset to page 1 when sorting changes
+    setCurrentPage(1);
   }, []);
 
   // Get current sort direction for a column
@@ -647,80 +634,60 @@ const TabelPCL = () => {
     [sortDescriptors]
   );
 
-  // Handle clicking outside dropdowns
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
-
-      if (
-        statusDropdownRef.current &&
-        !statusDropdownRef.current.contains(target)
-      ) {
-        setStatusDropdownOpen(false);
-      }
+  // Pagination handlers
+  const onNextPage = useCallback(() => {
+    if (currentPage < totalPages) {
+      setCurrentPage((prev) => prev + 1);
     }
+  }, [currentPage, totalPages]);
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  // Search handler
-  const onSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setFilterValue(value);
-      setCurrentPage(1); // Reset to first page when searching
-    },
-    []
-  );
-
-  // Rows per page handler
-  const onRowsPerPageChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      setRowsPerPage(Number(e.target.value));
-      setCurrentPage(1); // Reset to first page when changing rows per page
-    },
-    []
-  );
-
-  // Status filter handler
-  const onStatusFilterChange = useCallback((status: string) => {
-    setStatusFilter(status);
-    setCurrentPage(1); // Reset to first page when changing status filter
-  }, []);
+  const onPreviousPage = useCallback(() => {
+    if (currentPage > 1) {
+      setCurrentPage((prev) => prev - 1);
+    }
+  }, [currentPage]);
 
   // Action handlers
-  const handleEditPCL = (pcl: PCL) => {
-    setSelectedPCL(pcl);
+  const handleEditRiwayat = (riwayat: RiwayatSurvei) => {
+    setSelectedRiwayat(riwayat);
     setShowEditModal(true);
   };
 
-  const handleDeletePCL = async (pcl: PCL) => {
-    if (confirm(`Yakin ingin menghapus ${pcl.nama_pcl}?`)) {
+  const handleDeleteRiwayat = async (riwayat: RiwayatSurvei) => {
+    if (confirm(`Yakin ingin menghapus riwayat survei ini?`)) {
       try {
-        // Call DELETE API endpoint
-        const response = await fetch(`/api/pcl/${pcl.id_pcl}`, {
-          method: "DELETE",
-        });
+        const response = await fetch(
+          `/api/riwayat-survei/${riwayat.id_riwayat}`,
+          {
+            method: "DELETE",
+          }
+        );
 
         const result = await response.json();
 
         if (result.success) {
-          alert(`${pcl.nama_pcl} berhasil dihapus!`);
-          // Refresh data after successful deletion
-          fetchData();
+          alert("Riwayat survei berhasil dihapus");
+          fetchData(); // Refresh the data
         } else {
           alert(`Gagal menghapus: ${result.message}`);
         }
       } catch (error) {
-        console.error("Error deleting data:", error);
+        console.error("Error deleting riwayat survei:", error);
         alert("Terjadi kesalahan saat menghapus data");
       }
     }
   };
 
+  // Handle upload and download
+  const handleUploadClick = () => {
+    setShowUploadModal(true);
+  };
+
+  const handleDownloadClick = () => {
+    alert("Fitur download data sedang dalam pengembangan");
+  };
+
+  // Modal success handlers
   const handleAddSuccess = () => {
     setShowAddModal(false);
     fetchData(); // Refresh data
@@ -728,62 +695,34 @@ const TabelPCL = () => {
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
-    setSelectedPCL(null);
+    setSelectedRiwayat(null);
     fetchData(); // Refresh data
   };
 
-  // Pagination handlers
-  const onNextPage = useCallback(() => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  }, [currentPage, totalPages]);
-
-  const onPreviousPage = useCallback(() => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  }, [currentPage]);
-
-  // Reset to page 1 when sorting changes
-  useEffect(() => {
-    if (sortDescriptors.length > 0) {
-      setCurrentPage(1);
-    }
-  }, [sortDescriptors]);
-
   // Render cell content
   const renderCell = useCallback(
-    (pcl: PCL, columnKey: keyof PCL | "actions") => {
-      const cellValue = pcl[columnKey as keyof PCL];
+    (riwayat: RiwayatSurvei, columnKey: keyof RiwayatSurvei | "actions") => {
+      const cellValue = riwayat[columnKey as keyof RiwayatSurvei];
 
       switch (columnKey) {
         case "no":
           return <span className="text-sm font-normal">{cellValue}</span>;
+        case "nama_survei":
+          return <span className="text-sm font-normal">{cellValue}</span>;
+        case "kip":
+          return <span className="text-sm font-normal">{cellValue}</span>;
+        case "nama_perusahaan":
+          return <span className="text-sm font-normal">{cellValue}</span>;
         case "nama_pcl":
           return <span className="text-sm font-normal">{cellValue}</span>;
-        case "status_pcl":
-          return (
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                cellValue === "Staff"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-blue-100 text-blue-800"
-              }`}
-            >
-              {cellValue}
-            </span>
-          );
-        case "telp_pcl":
-          return (
-            <span className="text-sm font-normal">{cellValue || "-"}</span>
-          );
+        case "tahun":
+          return <span className="text-sm font-normal">{cellValue}</span>;
         case "actions":
           return (
             <div className="relative flex items-center gap-2">
               <Tooltip content="Edit" color="warning">
                 <span
-                  onClick={() => handleEditPCL(pcl)}
+                  onClick={() => handleEditRiwayat(riwayat)}
                   className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-amber-500"
                 >
                   <EditIcon />
@@ -791,7 +730,7 @@ const TabelPCL = () => {
               </Tooltip>
               <Tooltip color="danger" content="Hapus">
                 <span
-                  onClick={() => handleDeletePCL(pcl)}
+                  onClick={() => handleDeleteRiwayat(riwayat)}
                   className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-red-500"
                 >
                   <DeleteIcon />
@@ -806,14 +745,147 @@ const TabelPCL = () => {
     []
   );
 
+  // Upload Modal component
+  const UploadModal = () => {
+    const [file, setFile] = useState<File | null>(null);
+    const [uploadMode, setUploadMode] = useState("append");
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        setFile(e.target.files[0]);
+      }
+    };
+
+    const handleSubmit = () => {
+      if (!file) {
+        alert("Silakan pilih file terlebih dahulu");
+        return;
+      }
+
+      alert(
+        `File ${file.name} berhasil diupload dengan mode: ${
+          uploadMode === "append" ? "Tambah Data" : "Ganti Semua Data"
+        }`
+      );
+      setShowUploadModal(false);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <h2 className="text-xl font-medium mb-4">
+            Upload Data Riwayat Survei
+          </h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pilih File Excel (.xlsx, .xls, .csv)
+              </label>
+              <input
+                type="file"
+                onChange={handleFileChange}
+                accept=".xlsx, .xls, .csv"
+                className="w-full p-2 border border-gray-300 rounded-md"
+              />
+              {file && (
+                <p className="mt-2 text-sm text-gray-600">
+                  File terpilih: {file.name}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mode Upload
+              </label>
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  <input
+                    type="radio"
+                    id="append"
+                    name="uploadMode"
+                    value="append"
+                    checked={uploadMode === "append"}
+                    onChange={() => setUploadMode("append")}
+                    className="h-4 w-4 text-blue-600"
+                  />
+                  <label
+                    htmlFor="append"
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    Tambah Data — Menambahkan data baru, memperbarui data yang
+                    sudah ada
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="radio"
+                    id="replace"
+                    name="uploadMode"
+                    value="replace"
+                    checked={uploadMode === "replace"}
+                    onChange={() => setUploadMode("replace")}
+                    className="h-4 w-4 text-blue-600"
+                  />
+                  <label
+                    htmlFor="replace"
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    Ganti Semua Data — Menghapus semua data yang ada dan
+                    menggantinya dengan data baru
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              <p>Catatan:</p>
+              <ul className="list-disc pl-5 mt-1">
+                <li>Format file harus sesuai dengan template</li>
+                <li>Ukuran file maksimal 5MB</li>
+                {uploadMode === "replace" && (
+                  <li className="text-red-600 font-medium">
+                    Semua data akan dihapus dan diganti dengan data baru!
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              onClick={() => setShowUploadModal(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleSubmit}
+              className={`px-4 py-2 text-white rounded-md transition-colors ${
+                uploadMode === "replace"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
+            >
+              {uploadMode === "replace" ? "Ganti Semua" : "Upload"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full mx-auto bg-white rounded-lg shadow-sm overflow-hidden">
       {/* Modals */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-medium mb-4">Tambah PCL Baru</h2>
-            <PCLForm
+            <h2 className="text-xl font-medium mb-4">
+              Tambah Riwayat Survei Baru
+            </h2>
+            <RiwayatSurveiForm
               mode="add"
               onSuccess={handleAddSuccess}
               onCancel={() => setShowAddModal(false)}
@@ -822,24 +894,23 @@ const TabelPCL = () => {
         </div>
       )}
 
-      {showEditModal && selectedPCL && (
+      {showEditModal && selectedRiwayat && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-medium mb-4">Edit PCL</h2>
-            <PCLForm
-              id={selectedPCL.id_pcl.toString()}
+            <h2 className="text-xl font-medium mb-4">Edit Riwayat Survei</h2>
+            <RiwayatSurveiForm
+              id={selectedRiwayat.id_riwayat}
               mode="edit"
               onSuccess={handleEditSuccess}
               onCancel={() => {
                 setShowEditModal(false);
-                setSelectedPCL(null);
+                setSelectedRiwayat(null);
               }}
             />
           </div>
         </div>
       )}
 
-      {/* Upload Modal */}
       {showUploadModal && <UploadModal />}
 
       {/* Top section with search and filters */}
@@ -852,66 +923,198 @@ const TabelPCL = () => {
             <input
               type="text"
               className="pl-10 pr-4 py-2 w-full md:w-72 bg-gray-100 rounded-lg text-sm focus:outline-none"
-              placeholder="Cari nama PCL..."
+              placeholder="Cari nama survei, KIP, nama perusahaan, PCL..."
               value={filterValue}
               onChange={onSearchChange}
             />
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {/* Status Dropdown */}
-            <div className="relative" ref={statusDropdownRef}>
+            {/* Survei Dropdown */}
+            <div className="relative" ref={surveiDropdownRef}>
               <button
                 className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                  statusFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                  surveiFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
                 }`}
-                onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                onClick={() => setSurveiDropdownOpen(!surveiDropdownOpen)}
               >
-                Status
-                {statusFilter !== "all" && (
+                Survei
+                {surveiFilter !== "all" && (
                   <span className="h-2 w-2 rounded-full bg-blue-600"></span>
                 )}
                 <ChevronDownIcon size={16} />
               </button>
 
-              {statusDropdownOpen && (
+              {surveiDropdownOpen && (
+                <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-56">
+                  <div className="py-1 max-h-60 overflow-y-auto">
+                    <button
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                        surveiFilter === "all" ? "bg-gray-100" : ""
+                      }`}
+                      onClick={() => {
+                        onSurveiFilterChange("all");
+                        setSurveiDropdownOpen(false);
+                      }}
+                    >
+                      Semua Survei
+                    </button>
+                    {surveiOptions.map((option) => (
+                      <button
+                        key={option.uid}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                          surveiFilter === option.uid ? "bg-gray-100" : ""
+                        }`}
+                        onClick={() => {
+                          onSurveiFilterChange(option.uid);
+                          setSurveiDropdownOpen(false);
+                        }}
+                      >
+                        {option.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PCL Dropdown */}
+            <div className="relative" ref={pclDropdownRef}>
+              <button
+                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  pclFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                }`}
+                onClick={() => setPclDropdownOpen(!pclDropdownOpen)}
+              >
+                PCL
+                {pclFilter !== "all" && (
+                  <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                )}
+                <ChevronDownIcon size={16} />
+              </button>
+
+              {pclDropdownOpen && (
+                <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-56">
+                  <div className="py-1 max-h-60 overflow-y-auto">
+                    <button
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                        pclFilter === "all" ? "bg-gray-100" : ""
+                      }`}
+                      onClick={() => {
+                        onPclFilterChange("all");
+                        setPclDropdownOpen(false);
+                      }}
+                    >
+                      Semua PCL
+                    </button>
+                    {pclOptions.map((option) => (
+                      <button
+                        key={option.uid}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                          pclFilter === option.uid ? "bg-gray-100" : ""
+                        }`}
+                        onClick={() => {
+                          onPclFilterChange(option.uid);
+                          setPclDropdownOpen(false);
+                        }}
+                      >
+                        {option.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Status Selesai Dropdown */}
+            <div className="relative" ref={selesaiDropdownRef}>
+              <button
+                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  selesaiFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                }`}
+                onClick={() => setSelesaiDropdownOpen(!selesaiDropdownOpen)}
+              >
+                Status
+                {selesaiFilter !== "all" && (
+                  <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                )}
+                <ChevronDownIcon size={16} />
+              </button>
+
+              {selesaiDropdownOpen && (
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-40">
                   <div className="py-1">
                     <button
                       className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
-                        statusFilter === "all" ? "bg-gray-100" : ""
+                        selesaiFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
-                        onStatusFilterChange("all");
-                        setStatusDropdownOpen(false);
+                        onSelesaiFilterChange("all");
+                        setSelesaiDropdownOpen(false);
                       }}
                     >
-                      Semua
+                      Semua Status
                     </button>
-                    {statusOptions.map((status) => (
+                    {selesaiOptions.map((option) => (
                       <button
-                        key={status.uid}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
-                          statusFilter === status.uid ? "bg-gray-100" : ""
+                        key={option.uid}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                          selesaiFilter === option.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
-                          onStatusFilterChange(status.uid);
-                          setStatusDropdownOpen(false);
+                          onSelesaiFilterChange(option.uid);
+                          setSelesaiDropdownOpen(false);
                         }}
                       >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-block w-3 h-3 rounded-full ${
-                              status.uid === "Staff"
-                                ? "bg-green-500"
-                                : "bg-blue-500"
-                            }`}
-                          ></span>
-                          {status.name}
-                        </div>
-                        {statusFilter === status.uid && (
-                          <span className="h-2 w-2 rounded-full bg-blue-600"></span>
-                        )}
+                        {option.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tahun Dropdown */}
+            <div className="relative" ref={tahunDropdownRef}>
+              <button
+                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  tahunFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                }`}
+                onClick={() => setTahunDropdownOpen(!tahunDropdownOpen)}
+              >
+                Tahun
+                {tahunFilter !== "all" && (
+                  <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                )}
+                <ChevronDownIcon size={16} />
+              </button>
+
+              {tahunDropdownOpen && (
+                <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-40">
+                  <div className="py-1 max-h-60 overflow-y-auto">
+                    <button
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                        tahunFilter === "all" ? "bg-gray-100" : ""
+                      }`}
+                      onClick={() => {
+                        onTahunFilterChange("all");
+                        setTahunDropdownOpen(false);
+                      }}
+                    >
+                      Semua Tahun
+                    </button>
+                    {tahunOptions.map((option) => (
+                      <button
+                        key={option.uid}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                          tahunFilter === option.uid ? "bg-gray-100" : ""
+                        }`}
+                        onClick={() => {
+                          onTahunFilterChange(option.uid);
+                          setTahunDropdownOpen(false);
+                        }}
+                      >
+                        {option.name}
                       </button>
                     ))}
                   </div>
@@ -920,7 +1123,7 @@ const TabelPCL = () => {
             </div>
 
             {/* Tombol Tambah */}
-            <Tooltip content="Tambah PCL" position="bottom">
+            <Tooltip content="Tambah Riwayat" position="bottom">
               <button
                 className="p-2 bg-blue-500 text-white rounded-lg flex items-center justify-center hover:bg-blue-600"
                 onClick={() => setShowAddModal(true)}
@@ -1016,7 +1219,7 @@ const TabelPCL = () => {
             </tr>
           </thead>
           <tbody>
-            {isLoading || (isLoadingAll && !hasLoadedAll) ? (
+            {isLoading ? (
               <tr>
                 <td colSpan={columns.length} className="p-4 text-center">
                   <div className="flex justify-center items-center space-x-2">
@@ -1035,15 +1238,26 @@ const TabelPCL = () => {
                   {error}
                 </td>
               </tr>
-            ) : paginatedItems.length > 0 ? (
-              paginatedItems.map((item) => (
+            ) : riwayatList.length > 0 ? (
+              riwayatList.map((item, index) => (
                 <tr
-                  key={item.id_pcl}
+                  key={item.id_riwayat}
                   className="border-t border-gray-200 hover:bg-gray-50"
                 >
                   {columns.map((column) => (
-                    <td key={`${item.id_pcl}-${column.uid}`} className="p-2">
-                      {renderCell(item, column.uid as keyof PCL | "actions")}
+                    <td
+                      key={`${item.id_riwayat}-${column.uid}`}
+                      className="p-4"
+                    >
+                      {renderCell(
+                        column.uid === "no"
+                          ? {
+                              ...item,
+                              no: (currentPage - 1) * rowsPerPage + index + 1,
+                            }
+                          : item,
+                        column.uid as keyof RiwayatSurvei | "actions"
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -1275,4 +1489,4 @@ const TabelPCL = () => {
   );
 };
 
-export default TabelPCL;
+export default TabelRiwayatSurvei;

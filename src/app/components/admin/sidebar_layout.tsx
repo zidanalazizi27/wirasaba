@@ -8,6 +8,7 @@ import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import ImportContactsRoundedIcon from "@mui/icons-material/ImportContactsRounded";
 import AccountCircleRoundedIcon from "@mui/icons-material/AccountCircleRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import { AnimatePresence, motion } from "framer-motion";
 
 function SidebarLayout({ children }) {
@@ -39,6 +40,12 @@ function SidebarLayout({ children }) {
       icon: <GroupRoundedIcon />,
       text: "Daftar PCL",
       to: "/admin/pcl",
+      submenu: [],
+    },
+    {
+      icon: <HistoryRoundedIcon />,
+      text: "Riwayat Survei",
+      to: "/admin/riwayat_survei",
       submenu: [],
     },
     {
