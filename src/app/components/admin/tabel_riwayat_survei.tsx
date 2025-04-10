@@ -411,7 +411,7 @@ const TabelRiwayatSurvei = () => {
   const fetchFilterOptions = useCallback(async () => {
     try {
       // Fetch survei options
-      const surveiResponse = await fetch("/api/riwayat-survei/filters/survei");
+      const surveiResponse = await fetch("/api/riwayat-survei/filters?type=survei");
       if (surveiResponse.ok) {
         const surveiData = await surveiResponse.json();
         if (surveiData.success) {
@@ -420,7 +420,7 @@ const TabelRiwayatSurvei = () => {
       }
 
       // Fetch PCL options
-      const pclResponse = await fetch("/api/riwayat-survei/filters/pcl");
+      const pclResponse = await fetch("/api/riwayat-survei/filters?type=pcl");
       if (pclResponse.ok) {
         const pclData = await pclResponse.json();
         if (pclData.success) {
@@ -429,7 +429,7 @@ const TabelRiwayatSurvei = () => {
       }
 
       // Fetch tahun options
-      const tahunResponse = await fetch("/api/riwayat-survei/filters/tahun");
+      const tahunResponse = await fetch("/api/riwayat-survei/filters?type=tahun");
       if (tahunResponse.ok) {
         const tahunData = await tahunResponse.json();
         if (tahunData.success) {
