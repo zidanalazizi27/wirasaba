@@ -56,16 +56,7 @@ export async function GET(request: NextRequest) {
       ? "WHERE " + whereConditions.join(" AND ") 
       : "";
 
-    // Query untuk menghitung total data
-    const [totalRows] = await connection.execute(
-      `SELECT COUNT(DISTINCT p.id_perusahaan) as total
-       FROM perusahaan p
-       JOIN direktori d ON p.id_perusahaan = d.id_perusahaan
-       ${whereClause}`,
-      queryParams
-    );
-
-    // Query untuk mendapatkan data perusahaan dengan status survei
+    // Query untuk menghitung total data dan data survei
     const [rows] = await connection.execute(
       `SELECT 
         p.id_perusahaan, 
@@ -80,45 +71,47 @@ export async function GET(request: NextRequest) {
       JOIN direktori d ON p.id_perusahaan = d.id_perusahaan
       ${whereClause}
       GROUP BY p.id_perusahaan
-      ORDER BY p.id_perusahaan ASC
-      LIMIT ? OFFSET ?`,
-      [...queryParams, limit, offset]
+      ORDER BY p.id_perusahaan ASC`,
+      [...queryParams]
     );
 
-    // Close connection
-    await connection.end();
-
-    // Format the response
-    const total = (totalRows as any[])[0].total;
-    const totalPages = Math.ceil(total / limit);
-    
-    // Calculate status for each company
+    // Format and calculate status for each company
     const formattedRows = (rows as any[]).map((row, index) => {
       const totalSurvei = row.total_survei || 0;
       const completedSurvei = row.completed_survei || 0;
-      const status = determineStatus(completedSurvei, totalSurvei);
+      const calcStatus = determineStatus(completedSurvei, totalSurvei);
       
       return {
         ...row,
-        no: offset + index + 1,
         jarak: row.jarak ? `${row.jarak} km` : "",
         pcl: row.pcl_utama || "-",
-        status,
+        status: calcStatus,
         completion_percentage: totalSurvei > 0 ? Math.round((completedSurvei / totalSurvei) * 100) : 0
       };
     });
 
-    // Jika filter status diterapkan, filter hasil berdasarkan status
+    // Filter berdasarkan status
     let filteredRows = formattedRows;
     if (status !== "all") {
       filteredRows = formattedRows.filter(row => row.status === status);
     }
+    
+    // Apply pagination after filtering
+    const total = filteredRows.length;
+    const totalPages = Math.ceil(total / limit);
+    const paginatedRows = filteredRows.slice(offset, offset + limit).map((row, idx) => ({
+      ...row,
+      no: offset + idx + 1
+    }));
+
+    // Close connection
+    await connection.end();
 
     return NextResponse.json({
-      data: filteredRows,
+      data: paginatedRows,
       pagination: {
-        total: status === "all" ? total : filteredRows.length,
-        totalPages: status === "all" ? totalPages : Math.ceil(filteredRows.length / limit),
+        total,
+        totalPages,
         currentPage: page,
         perPage: limit,
       }

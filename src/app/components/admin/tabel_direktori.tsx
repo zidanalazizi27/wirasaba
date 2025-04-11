@@ -778,6 +778,17 @@ const TabelDirektori = () => {
         return [...prevSorts, { column: columnKey, direction: "ascending" }];
       }
     });
+
+    // Reset ke page 1 ketika sorting berubah
+    setCurrentPage(1);
+    setHasLoadedAll(false); // Reset status loaded data
+  }, []);
+
+  // Ubah implementasi untuk filter status
+  const onStatusFilterChange = useCallback((status: string) => {
+    setStatusFilter(status);
+    setCurrentPage(1); // Reset ke halaman pertama
+    setHasLoadedAll(false); // Reset status loaded data
   }, []);
 
   // Fungsi untuk mendapatkan arah sorting saat ini
@@ -845,12 +856,6 @@ const TabelDirektori = () => {
     },
     []
   );
-
-  // Filter handlers
-  const onStatusFilterChange = useCallback((status: string) => {
-    setStatusFilter(status);
-    setCurrentPage(1);
-  }, []);
 
   const onPclFilterChange = useCallback((pcl: string) => {
     console.log("Mengubah filter PCL:", pcl);
