@@ -6,6 +6,7 @@ import Link from "next/link";
 import SidebarLayout from "@/app/components/admin/sidebar_layout";
 import Breadcrumb from "@/app/components/admin/breadcrumb";
 import DetailDirektori from "@/app/components/admin/detail_direktori";
+import RiwayatSurveiPerusahaan from "@/app/components/admin/riwayat_survei_perusahaaan";
 
 export default function DirektoriDetail() {
   const params = useParams();
@@ -54,7 +55,11 @@ export default function DirektoriDetail() {
             Informasi Detail Perusahaan
           </h2>
           <DetailDirektori id_perusahaan={id_perusahaan} />
-          {/* Lokasi Tabel Riwayat Survei */}
+
+          {/* Tabel Riwayat Survei */}
+          <div className="mt-8 border-t pt-6">
+            <RiwayatSurveiPerusahaan id_perusahaan={id_perusahaan} />
+          </div>
         </div>
       </div>
     </SidebarLayout>

@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import mysql from "mysql2/promise";
 
+// Fungsi untuk menentukan status berdasarkan persentase penyelesaian
+function determineStatus(completedCount: number, totalCount: number): string {
+  if (totalCount === 0) return "kosong";
+  
+  const percentage = (completedCount / totalCount) * 100;
+  
+  if (percentage >= 80) return "tinggi";
+  if (percentage >= 50) return "sedang";
+  return "rendah";
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const year = searchParams.get("year") || new Date().getFullYear().toString();
@@ -34,12 +45,6 @@ export async function GET(request: NextRequest) {
       queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`);
     }
 
-    // Filter berdasarkan status di backend (api/perusahaan/route.ts)
-    if (status !== "all" && status !== "kosong") {
-      // Jika status bukan "kosong" atau "all", tidak akan ada data yang cocok
-      whereConditions.push("1=0");
-    }
-
     // Filter berdasarkan PCL
     if (pcl !== "all") {
       whereConditions.push("p.pcl_utama = ?");
@@ -56,12 +61,11 @@ export async function GET(request: NextRequest) {
       `SELECT COUNT(DISTINCT p.id_perusahaan) as total
        FROM perusahaan p
        JOIN direktori d ON p.id_perusahaan = d.id_perusahaan
-       LEFT JOIN pcl ON p.pcl_utama = pcl.id_pcl
        ${whereClause}`,
       queryParams
     );
 
-    // Query data perusahaan dengan pagination
+    // Query untuk mendapatkan data perusahaan dengan status survei
     const [rows] = await connection.execute(
       `SELECT 
         p.id_perusahaan, 
@@ -70,7 +74,8 @@ export async function GET(request: NextRequest) {
         p.alamat, 
         p.jarak,
         p.pcl_utama,
-        'kosong' as status
+        (SELECT COUNT(*) FROM riwayat_survei rs WHERE rs.id_perusahaan = p.id_perusahaan) AS total_survei,
+        (SELECT COUNT(*) FROM riwayat_survei rs WHERE rs.id_perusahaan = p.id_perusahaan AND rs.selesai = 'Iya') AS completed_survei
       FROM perusahaan p
       JOIN direktori d ON p.id_perusahaan = d.id_perusahaan
       ${whereClause}
@@ -87,19 +92,33 @@ export async function GET(request: NextRequest) {
     const total = (totalRows as any[])[0].total;
     const totalPages = Math.ceil(total / limit);
     
-    // Add row numbers for display
-    const formattedRows = (rows as any[]).map((row, index) => ({
-      ...row,
-      no: offset + index + 1,
-      jarak: row.jarak ? `${row.jarak} km` : "",
-      pcl: row.pcl || "-", // Pastikan nilai PCL tidak null
-    }));
+    // Calculate status for each company
+    const formattedRows = (rows as any[]).map((row, index) => {
+      const totalSurvei = row.total_survei || 0;
+      const completedSurvei = row.completed_survei || 0;
+      const status = determineStatus(completedSurvei, totalSurvei);
+      
+      return {
+        ...row,
+        no: offset + index + 1,
+        jarak: row.jarak ? `${row.jarak} km` : "",
+        pcl: row.pcl_utama || "-",
+        status,
+        completion_percentage: totalSurvei > 0 ? Math.round((completedSurvei / totalSurvei) * 100) : 0
+      };
+    });
+
+    // Jika filter status diterapkan, filter hasil berdasarkan status
+    let filteredRows = formattedRows;
+    if (status !== "all") {
+      filteredRows = formattedRows.filter(row => row.status === status);
+    }
 
     return NextResponse.json({
-      data: formattedRows,
+      data: filteredRows,
       pagination: {
-        total,
-        totalPages,
+        total: status === "all" ? total : filteredRows.length,
+        totalPages: status === "all" ? totalPages : Math.ceil(filteredRows.length / limit),
         currentPage: page,
         perPage: limit,
       }

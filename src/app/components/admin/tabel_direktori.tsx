@@ -386,6 +386,9 @@ type Business = {
   jarak: string;
   pcl_utama: string;
   status: string;
+  completion_percentage: number;
+  total_survei: number;
+  completed_survei: number;
 };
 type SortDirection = "ascending" | "descending" | null;
 
@@ -945,11 +948,51 @@ const TabelDirektori = () => {
           return (
             <span className="text-sm font-normal">{cellValue || "-"}</span>
           );
+        // Perbarui kode untuk status di renderCell
         case "status":
+          const statusText =
+            cellValue === "tinggi"
+              ? "Tinggi"
+              : cellValue === "sedang"
+                ? "Sedang"
+                : cellValue === "rendah"
+                  ? "Rendah"
+                  : "Kosong";
+
+          const tooltipText =
+            cellValue === "kosong"
+              ? "Tidak ada riwayat survei"
+              : `${business.completion_percentage}% survei selesai (${business.completed_survei}/${business.total_survei})`;
+
           return (
-            <span className="px-3 py-1 rounded-full text-xs font-medium capitalize bg-gray-100 text-gray-800">
-              Kosong
-            </span>
+            <Tooltip
+              content={tooltipText}
+              color={
+                cellValue === "tinggi"
+                  ? "primary"
+                  : cellValue === "sedang"
+                    ? "warning"
+                    : cellValue === "rendah"
+                      ? "danger"
+                      : "default"
+              }
+            >
+              <div className="flex flex-col">
+                <span
+                  className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${
+                    cellValue === "tinggi"
+                      ? "bg-green-100 text-green-800"
+                      : cellValue === "sedang"
+                        ? "bg-amber-100 text-amber-800"
+                        : cellValue === "rendah"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {statusText}
+                </span>
+              </div>
+            </Tooltip>
           );
         case "actions":
           return (
