@@ -54,6 +54,7 @@ export default function DirektoriDetail() {
             Informasi Detail Perusahaan
           </h2>
           <DetailDirektori id_perusahaan={id_perusahaan} />
+          {/* Lokasi Tabel Riwayat Survei */}
         </div>
       </div>
     </SidebarLayout>

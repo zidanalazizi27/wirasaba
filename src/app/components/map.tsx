@@ -1214,14 +1214,19 @@ const MapComponent = () => {
                       </table>
 
                       <div className="text-center mt-2.5">
-                        <button
-                          className="bg-gray-800 text-white px-5 py-1 border-none rounded cursor-pointer text-sm"
-                          onClick={() =>
-                            console.log(`Detail untuk ${company.id_perusahaan}`)
-                          }
+                        <a
+                          href={`/admin/direktori/${company.id_perusahaan}`}
+                          className="inline-block bg-gray-800 text-white px-5 py-1 border-none rounded cursor-pointer text-sm no-underline"
+                          onClick={(e) => {
+                            // Mencegah popup tertutup saat link diklik
+                            e.stopPropagation();
+                          }}
+                          style={{ color: "white" }}
+                          target="_blank"
+                          rel="noopener noreferrer"
                         >
                           Detail
-                        </button>
+                        </a>
                       </div>
                     </div>
                   </Popup>

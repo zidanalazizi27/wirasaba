@@ -1029,7 +1029,7 @@ const TabelRiwayatSurvei = () => {
                 }`}
                 onClick={() => setSelesaiDropdownOpen(!selesaiDropdownOpen)}
               >
-                Status
+                Selesai
                 {selesaiFilter !== "all" && (
                   <span className="h-2 w-2 rounded-full bg-blue-600"></span>
                 )}
@@ -1048,7 +1048,7 @@ const TabelRiwayatSurvei = () => {
                         setSelesaiDropdownOpen(false);
                       }}
                     >
-                      Semua Status
+                      Semua
                     </button>
                     {selesaiOptions.map((option) => (
                       <button
