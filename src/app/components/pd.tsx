@@ -9,15 +9,16 @@ export default function PD() {
   const controls = useAnimation();
 
   useEffect(() => {
-    // Buat variabel untuk menyimpan fungsi handleScroll
     const handleScroll = () => {
-      // controls.start() di dalam event listener di useEffect aman digunakan
-      controls.start(
-        window.scrollY > 100 ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }
-      );
+      // Pindahkan logika controls.start() ke dalam fungsi handleScroll
+      if (window.scrollY > 100) {
+        controls.start({ opacity: 1, y: 0 });
+      } else {
+        controls.start({ opacity: 0, y: 50 });
+      }
     };
 
-    // Panggil sekali untuk set nilai awal
+    // Panggil sekali untuk set nilai awal setelah komponen terpasang
     handleScroll();
 
     // Pasang event listener
