@@ -85,7 +85,7 @@ const RiwayatSurveiPerusahaan: React.FC<RiwayatSurveiPerusahaanProps> = ({
 
   return (
     <div className="mt-8">
-      <h3 className="text-lg font-semibold mb-4">Riwayat Survei</h3>
+      <h3 className="text-lg font-semibold mb-4 text-center">Riwayat Survei</h3>
 
       {riwayatList.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-6 rounded text-center">
@@ -96,28 +96,28 @@ const RiwayatSurveiPerusahaan: React.FC<RiwayatSurveiPerusahaanProps> = ({
           <table className="min-w-full bg-white border border-gray-200 rounded-lg">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   No
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   Nama Survei
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   Fungsi
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   Periode
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   Tahun
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   PCL
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   Selesai
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
                   Keterangan
                 </th>
               </tr>
