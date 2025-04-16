@@ -862,7 +862,7 @@ const TabelPCL = () => {
             {/* Status Dropdown */}
             <div className="relative" ref={statusDropdownRef}>
               <button
-                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                className={`px-2 py-2 rounded-lg text-sm flex items-center gap-2 ${
                   statusFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
                 }`}
                 onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
@@ -878,7 +878,7 @@ const TabelPCL = () => {
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-40">
                   <div className="py-1">
                     <button
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      className={`w-full text-left 2 py-2 text-sm hover:bg-gray-100 ${
                         statusFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
@@ -891,7 +891,7 @@ const TabelPCL = () => {
                     {statusOptions.map((status) => (
                       <button
                         key={status.uid}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
+                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
                           statusFilter === status.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {

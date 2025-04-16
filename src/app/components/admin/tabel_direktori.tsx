@@ -1151,13 +1151,13 @@ const TabelDirektori = () => {
           <div className="mt-6 flex justify-end space-x-3">
             <button
               onClick={() => setShowUploadModal(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+              className="px-2 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
             >
               Batal
             </button>
             <button
               onClick={handleSubmit}
-              className={`px-4 py-2 text-white rounded-md transition-colors ${
+              className={`px-2 py-2 text-white rounded-md transition-colors ${
                 uploadMode === "replace"
                   ? "bg-red-600 hover:bg-red-700"
                   : "bg-blue-600 hover:bg-blue-700"
@@ -1196,7 +1196,7 @@ const TabelDirektori = () => {
             {/* Status Dropdown */}
             <div className="relative" ref={statusDropdownRef}>
               <button
-                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                className={`px-2 py-2 rounded-lg text-sm flex items-center gap-2 ${
                   statusFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
                 }`}
                 onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
@@ -1212,7 +1212,7 @@ const TabelDirektori = () => {
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-40">
                   <div className="py-1">
                     <button
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
                         statusFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
@@ -1225,7 +1225,7 @@ const TabelDirektori = () => {
                     {statusOptions.map((status) => (
                       <button
                         key={status.uid}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
+                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
                           statusFilter === status.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -1260,7 +1260,7 @@ const TabelDirektori = () => {
             {/* PCL Dropdown */}
             <div className="relative" ref={pclDropdownRef}>
               <button
-                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                className={`px-2 py-2 rounded-lg text-sm flex items-center gap-2 ${
                   pclFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
                 }`}
                 onClick={() => setPclDropdownOpen(!pclDropdownOpen)}
@@ -1276,7 +1276,7 @@ const TabelDirektori = () => {
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-44">
                   <div className="py-1 max-h-60 overflow-y-auto">
                     <button
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
                         pclFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
@@ -1289,7 +1289,7 @@ const TabelDirektori = () => {
                     {pclOptions.map((pcl) => (
                       <button
                         key={pcl.uid}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
+                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
                           pclFilter === pcl.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -1311,7 +1311,7 @@ const TabelDirektori = () => {
             {/* Tahun Dropdown */}
             <div className="relative" ref={yearDropdownRef}>
               <button
-                className="px-4 py-2 bg-gray-100 rounded-lg text-sm flex items-center gap-2"
+                className="px-2 py-2 bg-gray-100 rounded-lg text-sm flex items-center gap-2"
                 onClick={() => setYearDropdownOpen(!yearDropdownOpen)}
               >
                 {selectedYear || "Pilih Tahun"}
@@ -1324,7 +1324,7 @@ const TabelDirektori = () => {
                     {uniqueYears.map((year) => (
                       <button
                         key={year}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
                           selectedYear === year ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
