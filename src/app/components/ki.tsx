@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion, useAnimation } from "framer-motion";
 import Image from "next/image";
 
@@ -45,14 +45,14 @@ const classifications = [
 
 export default function KI() {
   const controls = useAnimation();
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      // Pindahkan logika controls.start() ke dalam fungsi handleScroll
       if (window.scrollY > 100) {
-        controls.start({ opacity: 1, y: 0 });
+        setIsVisible(true);
       } else {
-        controls.start({ opacity: 0, y: 50 });
+        setIsVisible(false);
       }
     };
 
@@ -64,7 +64,16 @@ export default function KI() {
 
     // Cleanup event listener saat komponen unmount
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [controls]); // controls sebagai dependensi
+  }, []);
+
+  // Efek terpisah untuk mengontrol animasi berdasarkan state isVisible
+  useEffect(() => {
+    if (isVisible) {
+      controls.start({ opacity: 1, y: 0 });
+    } else {
+      controls.start({ opacity: 0, y: 50 });
+    }
+  }, [isVisible, controls]);
 
   return (
     <motion.div

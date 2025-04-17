@@ -4,31 +4,38 @@ import { useState, useEffect } from "react";
 import { motion, useAnimation } from "framer-motion";
 
 export default function SDA() {
-  const [showContent, setShowContent] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const controls = useAnimation();
 
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 100) {
-        setShowContent(true);
+        setIsVisible(true);
       } else {
-        setShowContent(false);
+        setIsVisible(false);
       }
     };
 
+    // Panggil sekali untuk set nilai awal
+    handleScroll();
+
+    // Pasang event listener
     window.addEventListener("scroll", handleScroll);
+
+    // Cleanup event listener saat komponen unmount
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
   }, []);
 
+  // Efek terpisah untuk mengontrol animasi berdasarkan state isVisible
   useEffect(() => {
-    if (showContent) {
+    if (isVisible) {
       controls.start({ opacity: 1, y: 0 });
     } else {
       controls.start({ opacity: 0, y: 50 });
     }
-  }, [showContent, controls]);
+  }, [isVisible, controls]);
 
   return (
     <motion.div

@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion, useAnimation } from "framer-motion";
 
 export default function IM() {
   const controls = useAnimation();
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      // Pindahkan logika controls.start() ke dalam fungsi handleScroll
       if (window.scrollY > 100) {
-        controls.start({ opacity: 1, y: 0 });
+        setIsVisible(true);
       } else {
-        controls.start({ opacity: 0, y: 50 });
+        setIsVisible(false);
       }
     };
 
@@ -24,7 +24,16 @@ export default function IM() {
 
     // Cleanup event listener saat komponen unmount
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [controls]); // controls sebagai dependensi
+  }, []); // Tidak ada dependencies disini
+
+  // Efek terpisah untuk mengontrol animasi berdasarkan state isVisible
+  useEffect(() => {
+    if (isVisible) {
+      controls.start({ opacity: 1, y: 0 });
+    } else {
+      controls.start({ opacity: 0, y: 50 });
+    }
+  }, [isVisible, controls]); // Bergantung pada isVisible dan controls
 
   return (
     <motion.div
