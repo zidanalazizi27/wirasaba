@@ -8,6 +8,39 @@ function BerandaCard() {
   const [showCard, setShowCard] = useState(false);
   const controls = useAnimation();
   const cardRef = useRef(null);
+  const [stats, setStats] = useState({
+    perusahaan: 0,
+    pcl: 0,
+    survei: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch stats data from API
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch("/api/stats");
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const result = await response.json();
+
+        if (result.success) {
+          setStats(result.data);
+        } else {
+          throw new Error(result.message || "Failed to fetch statistics");
+        }
+      } catch (err) {
+        console.error("Error fetching stats:", err);
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -52,9 +85,9 @@ function BerandaCard() {
             srcSet=""
             width={60}
           />
-          {showCard && (
+          {showCard && !isLoading && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
-              <CountUp end={1244} duration={5} />
+              <CountUp end={stats.perusahaan} duration={5} />
             </h5>
           )}
           <p className="text-center text-lg text-cdark font-roboto font-semibold">
@@ -71,9 +104,9 @@ function BerandaCard() {
             srcSet=""
             width={60}
           />
-          {showCard && (
+          {showCard && !isLoading && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
-              <CountUp end={51} duration={2} />
+              <CountUp end={stats.pcl} duration={2} />
             </h5>
           )}
           <p className="text-center text-lg text-cdark font-roboto font-semibold">
@@ -90,9 +123,9 @@ function BerandaCard() {
             srcSet=""
             width={60}
           />
-          {showCard && (
+          {showCard && !isLoading && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
-              <CountUp end={8} duration={1} />
+              <CountUp end={stats.survei} duration={1} />
             </h5>
           )}
           <p className="text-center text-lg text-cdark font-roboto font-semibold">
