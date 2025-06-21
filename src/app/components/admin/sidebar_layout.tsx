@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Sidebar, { SidebarItem } from "./sidebar_adm";
 import FactoryRoundedIcon from "@mui/icons-material/FactoryRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
@@ -10,17 +10,15 @@ import AccountCircleRoundedIcon from "@mui/icons-material/AccountCircleRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import { AnimatePresence, motion } from "framer-motion";
+import { useAuth } from "@/app/context/AuthContext";
 
 function SidebarLayout({ children }) {
-  const [toast, setToast] = React.useState(false);
+  const [toast, setToast] = useState(false);
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    // Clear specific items from local storage if needed
-    // localStorage.removeItem('loginSuccess');
-    // localStorage.removeItem('email');
-
-    // Redirect to the home page
-    window.location.href = "/";
+    // Use the logout function from AuthContext
+    logout();
   };
 
   const sidebarItems = [
@@ -62,7 +60,7 @@ function SidebarLayout({ children }) {
     {
       icon: <LogoutRoundedIcon />,
       text: "Keluar",
-      to: "/",
+      action: handleLogout, // Use action property for logout instead of to
       submenu: [],
     },
   ];
@@ -78,6 +76,7 @@ function SidebarLayout({ children }) {
               text={item.text}
               icon={item.icon}
               to={item.to}
+              action={item.action} // Pass the action property to SidebarItem
               submenu={item.submenu}
             />
           ))}

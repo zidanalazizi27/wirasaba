@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { IoLogIn, IoLogOut } from "react-icons/io5";
+import { useAuth } from "@/app/context/AuthContext";
 
 // Icon Components remain the same, just moved them to a separate file for cleaner organization
 // Import them from a separate file like: import { ChevronDown, Lock, Activity, etc } from "@/components/icons"
@@ -13,24 +14,25 @@ const Navbar = () => {
   const pathname = usePathname();
   const [activeMenu, setActiveMenu] = useState(pathname);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { isLoggedIn, logout, user } = useAuth();
 
   useEffect(() => {
-    // Check login status from localStorage on component mount and route changes
-    const loginSuccess = localStorage.getItem("loginSuccess");
-    setIsLoggedIn(loginSuccess === "true");
-
     // Update active menu based on current path
     if (pathname === "/") setActiveMenu("Beranda");
     else if (pathname === "/peta_tematik") setActiveMenu("PTematik");
     else if (pathname === "/kbli") setActiveMenu("KBLI");
     else if (pathname === "/tentang") setActiveMenu("Tentang");
+    else if (pathname?.startsWith("/admin")) setActiveMenu("Admin");
   }, [pathname]);
 
   const getMenuClasses = (menu: string) => {
     return activeMenu === menu
       ? "font-bold font-roboto text-sm text-clightbrown bg-white py-2 px-4 rounded-full transition-colors duration-100"
       : "font-bold font-roboto text-sm text-white transition-colors duration-100";
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (
@@ -106,13 +108,28 @@ const Navbar = () => {
             <Link href="/tentang" className={getMenuClasses("Tentang")}>
               Tentang
             </Link>
-            <Link
-                href={isLoggedIn ? "/dashboard" : "/login"}
-                className={`${getMenuClasses(isLoggedIn ? "Logout" : "Login")} flex items-center gap-0`}
-                >
+            {isLoggedIn && (
+              <Link href="/admin/direktori" className={getMenuClasses("Admin")}>
+                Admin
+              </Link>
+            )}
+            {isLoggedIn ? (
+              <button
+                onClick={handleLogout}
+                className="font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+              >
+                <span>Logout</span>
+                <IoLogOut size={18} />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+              >
                 <span>Login</span>
-                {isLoggedIn ? <IoLogOut size={32} /> : <IoLogIn size={32} />}
-            </Link>
+                <IoLogIn size={18} />
+              </Link>
+            )}
           </div>
         </div>
 
@@ -147,13 +164,36 @@ const Navbar = () => {
             >
               Tentang
             </Link>
-            <Link
-                href={isLoggedIn ? "/dashboard" : "/login"}
-                className={`${getMenuClasses(isLoggedIn ? "Logout" : "Login")} flex items-center gap-0`}
-                >
+            {isLoggedIn && (
+              <Link
+                href="/admin"
+                className={`block ${getMenuClasses("Admin")}`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Admin
+              </Link>
+            )}
+            {isLoggedIn ? (
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+              >
+                <span>Logout</span>
+                <IoLogOut size={18} />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+                onClick={() => setIsMenuOpen(false)}
+              >
                 <span>Login</span>
-                {isLoggedIn ? <IoLogOut size={24} /> : <IoLogIn size={24} />}
-            </Link>
+                <IoLogIn size={18} />
+              </Link>
+            )}
           </div>
         </div>
       </div>

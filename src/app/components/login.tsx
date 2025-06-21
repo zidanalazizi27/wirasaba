@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation"; // Import useRouter hook
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/context/AuthContext";
 
 // Import Material UI icons
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -14,20 +15,33 @@ const Login = () => {
   const [error, setError] = useState({
     username: "",
     password: "",
+    general: "",
   });
-  const router = useRouter(); // Initialize router
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const router = useRouter();
+  const { login, isLoggedIn } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isLoggedIn) {
+      router.push("/admin/direktori");
+    }
+  }, [isLoggedIn, router]);
 
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     // Reset errors
     setError({
       username: "",
       password: "",
+      general: "",
     });
 
     // Simple validation
@@ -35,28 +49,46 @@ const Login = () => {
     const newErrors = {
       username: "",
       password: "",
+      general: "",
     };
 
     if (!username.trim()) {
-      newErrors.username = "Username is required";
+      newErrors.username = "Username harus diisi";
       hasError = true;
     }
 
     if (!password) {
-      newErrors.password = "Password is required";
+      newErrors.password = "Password harus diisi";
       hasError = true;
     }
 
     if (hasError) {
       setError(newErrors);
+      setIsSubmitting(false);
       return;
     }
 
-    // Here you would typically handle the login logic
-    console.log("Login attempt with:", { username, password });
+    try {
+      // Call login function from AuthContext
+      const result = await login(username, password);
 
-    // Navigate to admin page after successful login
-    router.push("/admin");
+      if (result.success) {
+        // Login successful, redirect is handled by AuthContext
+      } else {
+        setError({
+          ...newErrors,
+          general: result.message || "Login gagal. Silakan coba lagi.",
+        });
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError({
+        ...newErrors,
+        general: "Terjadi kesalahan. Silakan coba lagi.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -76,6 +108,13 @@ const Login = () => {
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
+          {/* General error message */}
+          {error.general && (
+            <div className="mb-4 text-center">
+              <p className="text-sm text-red-500">{error.general}</p>
+            </div>
+          )}
+
           {/* Username field */}
           <div className="mb-4">
             <label
@@ -91,6 +130,7 @@ const Login = () => {
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              disabled={isSubmitting}
             />
             {error.username && (
               <p className="text-xs text-red-500 mt-1">{error.username}</p>
@@ -113,6 +153,7 @@ const Login = () => {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isSubmitting}
               />
               <span
                 className="absolute right-2 top-2.5 cursor-pointer text-gray-500"
@@ -136,14 +177,18 @@ const Login = () => {
               type="button"
               className="text-gray-600 text-sm hover:underline"
               onClick={() => router.push("/")}
+              disabled={isSubmitting}
             >
               Kembali
             </button>
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm"
+              className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm ${
+                isSubmitting ? "opacity-70 cursor-not-allowed" : ""
+              }`}
+              disabled={isSubmitting}
             >
-              Login
+              {isSubmitting ? "Login..." : "Login"}
             </button>
           </div>
         </form>

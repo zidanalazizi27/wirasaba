@@ -232,11 +232,11 @@ const MapComponent = () => {
   const markersRef = useRef({});
 
   // Tambahkan fungsi handler untuk popup close event
-  const handlePopupOpen = (company) => {
+  const handlePopupOpen = (company : any) => {
     setActiveMarkerId(company.id_perusahaan);
   };
 
-  const handlePopupClose = (company) => {
+  const handlePopupClose = (company : any) => {
     if (activeMarkerId === company.id_perusahaan) {
       setActiveMarkerId(null);
     }

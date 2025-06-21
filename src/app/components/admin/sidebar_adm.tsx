@@ -88,6 +88,7 @@ export function SidebarItem({
   text,
   alert,
   to,
+  action, // Add action prop for items like logout
   submenu,
   isSidebarOpen,
   pathname,
@@ -96,12 +97,12 @@ export function SidebarItem({
   const router = useRouter();
   const isActive =
     pathname === to ||
-    (pathname.startsWith(to) && to !== "/") ||
+    (pathname?.startsWith(to) && to !== "/") ||
     (submenu &&
       submenu.some(
         (subItem) =>
           subItem.to === pathname ||
-          (subItem.to !== "/" && pathname.startsWith(subItem.to))
+          (subItem.to !== "/" && pathname?.startsWith(subItem.to))
       ));
   const hasSubmenu = submenu && submenu.length > 0;
   const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -124,10 +125,11 @@ export function SidebarItem({
     if (hasSubmenu) {
       e.preventDefault();
       handleSubmenuToggle(e);
-    } else if (text === "Keluar") {
-      // Handle logout
-      window.location.href = "/";
-    } else {
+    } else if (action) {
+      // If there's an action prop (like logout), execute it
+      e.preventDefault();
+      action();
+    } else if (to) {
       router.push(to);
     }
   };
