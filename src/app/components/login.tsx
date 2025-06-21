@@ -25,7 +25,7 @@ const Login = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (isLoggedIn) {
-      router.push("/admin/direktori");
+      router.push("/admin/direktori"); 
     }
   }, [isLoggedIn, router]);
 
