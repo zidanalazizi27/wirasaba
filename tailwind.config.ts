@@ -14,7 +14,7 @@ export default {
         // background: "var(--background)",
         // foreground: "var(--foreground)",
         cdark: "#1A120B",
-        cdakbrown: "#74512D",
+        cdarkbrown: "#74512D",
         clightbrown: "#AF8F6F",
         cbeige: "#FFEAC5",
         base: "#EEF0F2",
