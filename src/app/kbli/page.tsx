@@ -115,7 +115,7 @@ const KBLIPage: React.FC = () => {
     },
     {
       id: "G",
-      name: "Perdagangan Besar Dan Eceran; Reparasi Dan Perawatan Mobil Dan Sepeda Motor",
+      name: "Perdagangan Besar & Eceran; Reparasi & Perawatan Kendaraan",
       description:
         "Kategori ini mencakup kegiatan perdagangan besar dan eceran berbagai jenis barang tanpa perubahan teknis, serta jasa terkait penjualan. Perdagangan besar meliputi penjualan barang baru atau bekas kepada pengecer, industri, atau lembaga melalui grosir, distributor, agen, dan broker, termasuk aktivitas penyortiran, pengepakan, dan distribusi. Perdagangan eceran ditujukan langsung kepada konsumen akhir melalui berbagai saluran seperti toko, kios, atau penjual keliling. Kategori ini juga mencakup layanan reparasi dan perawatan mobil serta sepeda motor. Penjualan dapat dilakukan dengan kepemilikan barang atau melalui sistem komisi/konsinyasi.",
       icon: "/image/kbli_g.svg",
@@ -164,7 +164,7 @@ const KBLIPage: React.FC = () => {
     },
     {
       id: "N",
-      name: "Aktivitas Penyewaan dan Sewa Guna Usaha Tanpa Hak Opsi, Ketenagakerjaan, Agen Perjalanan dan Penunjang Usaha Lainnya",
+      name: "Aktivitas Penyewaan dan Sewa Guna Usaha, Ketenagakerjaan, Agen Perjalanan",
       description:
         "Kategori ini mencakup berbagai macam kegiatan yang mendukung operasional usaha atau bisnis secara umum. Kegiatan ini berbeda dari kegiatan yang termasuk dalam kategori M, karena tujuan utamanya bukanlah transfer ilmu pengetahuan khusus.",
       icon: "/image/kbli_n.svg",
@@ -206,14 +206,14 @@ const KBLIPage: React.FC = () => {
     },
     {
       id: "T",
-      name: "Aktivitas Rumah Tangga Sebagai Pemberi Kerja; Aktivitas Yang Menghasilkan Barang Dan Jasa Oleh Rumah Tangga yang Digunakan untuk Memenuhi Kebutuhan Sendiri",
+      name: "Aktivitas Rumah Tangga Sebagai Pemberi Kerja",
       description:
         "Kategori ini mencakup kegiatan rumah tangga sebagai pemberi kerja dan kegiatan yang menghasilkan barang dan jasa oleh rumah tangga yang digunakan untuk memenuhi kebutuhan sendiri.",
       icon: "/image/kbli_t.svg",
     },
     {
       id: "U",
-      name: "Aktivitas Badan Internasional Dan Badan Ekstra Internasional Lainnya",
+      name: "Aktivitas Badan Internasional & Ekstra Internasional Lain",
       description:
         "Kategori ini mencakup kegiatan badan internasional seperti Perserikatan Bangsa-Bangsa (PBB), IMF, Bank Dunia, WHO, OECD, OPEC, serta organisasi regional seperti Uni Eropa dan EFTA. Juga termasuk kegiatan perwakilan diplomatik dan konsuler (seperti kedutaan besar) yang beroperasi di negara tempat mereka berada, mewakili negara lain atau organisasi internasional.",
       icon: "/image/kbli_u.svg",
@@ -256,38 +256,49 @@ const KBLIPage: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<number>(0);
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState<number>(0);
 
-  // Auto-scroll carousel untuk kategori
+  // Auto-scroll carousel untuk kategori dengan infinite loop
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentCategoryIndex((prevIndex) => {
-        const nextIndex = (prevIndex + 1) % kbliCategories.length;
-        setActiveCategory(nextIndex);
+        const nextIndex = prevIndex + 1;
+        // Reset ke posisi awal set kedua saat mencapai akhir
+        if (nextIndex >= kbliCategories.length * 2) {
+          setActiveCategory(0);
+          return kbliCategories.length; // Mulai dari set kedua
+        }
+        setActiveCategory(nextIndex % kbliCategories.length);
         return nextIndex;
       });
-    }, 3000); // Berganti setiap 3 detik
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [kbliCategories.length]);
 
-  // Update activeCategory bersamaan dengan currentCategoryIndex
-  useEffect(() => {
-    setActiveCategory(currentCategoryIndex);
-  }, [currentCategoryIndex]);
-
-  // Navigation functions for carousel
+  // Navigation functions for carousel dengan infinite scroll
   const goToPrevious = () => {
-    const prevIndex =
-      currentCategoryIndex === 0
-        ? kbliCategories.length - 1
-        : currentCategoryIndex - 1;
-    setCurrentCategoryIndex(prevIndex);
-    setActiveCategory(prevIndex);
+    setCurrentCategoryIndex((prevIndex) => {
+      let newIndex = prevIndex - 1;
+      // Jika kurang dari 0, pindah ke akhir set kedua
+      if (newIndex < 0) {
+        newIndex = kbliCategories.length * 2 - 1;
+      }
+      const activeIndex = newIndex % kbliCategories.length;
+      setActiveCategory(activeIndex);
+      return newIndex;
+    });
   };
 
   const goToNext = () => {
-    const nextIndex = (currentCategoryIndex + 1) % kbliCategories.length;
-    setCurrentCategoryIndex(nextIndex);
-    setActiveCategory(nextIndex);
+    setCurrentCategoryIndex((prevIndex) => {
+      let newIndex = prevIndex + 1;
+      // Reset ke awal set kedua jika melebihi batas
+      if (newIndex >= kbliCategories.length * 3) {
+        newIndex = kbliCategories.length;
+      }
+      const activeIndex = newIndex % kbliCategories.length;
+      setActiveCategory(activeIndex);
+      return newIndex;
+    });
   };
 
   // State untuk pencarian
@@ -386,7 +397,7 @@ const KBLIPage: React.FC = () => {
           </div>
 
           {/* Struktur KBLI Section - Updated Design */}
-          <div className="text-center mb-12">
+          <div className="text-center mb-10">
             <h1 className="text-2xl font-bold text-cdark text-center mt-10 mb-6">
               Struktur KBLI
             </h1>
@@ -443,7 +454,7 @@ const KBLIPage: React.FC = () => {
           </div>
 
           {/* Accordion Section */}
-          <div className="max-w-4xl mx-auto mb-12">
+          <div className="max-w-4xl mx-auto mb-10">
             <div className="space-y-2">
               {accordionItems.map((item) => (
                 <div
@@ -458,9 +469,9 @@ const KBLIPage: React.FC = () => {
                       {item.title}
                     </span>
                     {item.isExpanded ? (
-                      <ChevronUpIcon className="w-6 h-6" strokeWidth={2.5} />
+                      <ChevronUpIcon className="w-6 h-6" strokeWidth={3} />
                     ) : (
-                      <ChevronDownIcon className="w-6 h-6" strokeWidth={2.5} />
+                      <ChevronDownIcon className="w-6 h-6" strokeWidth={3} />
                     )}
                   </button>
 
@@ -485,11 +496,11 @@ const KBLIPage: React.FC = () => {
           </div>
 
           {/* KBLI 2020 Section */}
-          <div className="max-w-4xl mx-auto mb-12">
+          <div className="w-full mx-auto mb-10">
             <h1 className="text-2xl font-bold text-cdark text-center mb-6">
               KBLI 2020
             </h1>
-            <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed mb-8">
+            <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed">
               <p className="indent-8">
                 KBLI 2020 merupakan hasil penyempurnaan dari KBLI 2015, disusun
                 dengan mengacu pada International Standard Industrial
@@ -505,17 +516,17 @@ const KBLIPage: React.FC = () => {
                 untuk mendukung perkembangan sektor usaha dan sistem perizinan
                 di Indonesia.
               </p>
-            </div> 
+            </div>
           </div>
 
           {/* List Kategori Section */}
-          <div className="max-w-6xl mx-auto">
-            <h1 className="text-2xl font-bold text-cdark text-center mb-6">
+          <div className="w-full mx-auto mb-10">
+            <h1 className="text-2xl font-bold text-cdark text-center mb-2">
               List Kategori
             </h1>
 
             {/* Horizontal Cards Container */}
-            <div className="relative mb-6">
+            <div className="relative mb-10">
               {/* Navigation Arrow Left */}
               <button
                 onClick={goToPrevious}
@@ -537,58 +548,73 @@ const KBLIPage: React.FC = () => {
               </button>
 
               {/* Cards Container */}
-              <div className="mx-12 md:mx-16 overflow-hidden">
+              <div className="mx-12 md:mx-16 pt-6 overflow-hidden">
                 <div
-                  className="flex transition-transform duration-500 ease-in-out gap-4"
+                  className="flex transition-transform duration-500 ease-in-out gap-3"
                   style={{
-                    transform: `translateX(-${currentCategoryIndex * (100 / Math.min(5, kbliCategories.length))}%)`,
+                    transform: `translateX(-${currentCategoryIndex * 20}%)`,
                   }}
                 >
-                  {kbliCategories.map((category, index) => (
-                    <motion.div
-                      key={category.id}
-                      className={`flex-shrink-0 rounded-xl shadow-lg overflow-hidden cursor-pointer ${
-                        activeCategory === index
-                          ? "bg-cdark"
-                          : "bg-cdarkbrown hover:bg-opacity-90"
-                      }`}
-                      style={{
-                        width: `${100 / Math.min(5, kbliCategories.length) - 1}%`,
-                      }}
-                      onClick={() => {
-                        setActiveCategory(index);
-                        setCurrentCategoryIndex(index);
-                      }}
-                      whileHover={{
-                        translateY: -5,
-                        scale: 1.02,
-                      }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      <div className="p-4 md:p-6 text-white text-center">
-                        {/* Icon */}
-                        <div className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 flex items-center justify-center">
-                          <Image
-                            src={category.icon}
-                            alt={`KBLI ${category.id}`}
-                            width={48}
-                            height={48}
-                            className="w-8 h-8 md:w-12 md:h-12 filter brightness-0 invert"
-                          />
-                        </div>
+                  {/* Render cards dengan duplikasi untuk infinite scroll */}
+                  {[
+                    ...kbliCategories,
+                    ...kbliCategories,
+                    ...kbliCategories,
+                  ].map((category, index) => {
+                    const originalIndex = index % kbliCategories.length;
+                    const currentCategory = kbliCategories[originalIndex]; // Safe access
 
-                        {/* Category ID */}
-                        <div className="text-2xl md:text-3xl font-bold mb-2">
-                          {category.id}
-                        </div>
+                    if (!currentCategory) return null; // Safety check
 
-                        {/* Category Name */}
-                        <div className="text-xs md:text-sm font-medium leading-tight">
-                          {category.name}
+                    return (
+                      <motion.div
+                        key={`${currentCategory.id}-${index}`}
+                        className={`flex-shrink-0 rounded-xl shadow-lg overflow-hidden cursor-pointer ${
+                          activeCategory === originalIndex
+                            ? "bg-cdark"
+                            : "bg-cdarkbrown hover:bg-opacity-90"
+                        }`}
+                        style={{
+                          width: "19%",
+                          minHeight: "180px",
+                        }}
+                        onClick={() => {
+                          setActiveCategory(originalIndex);
+                          setCurrentCategoryIndex(
+                            originalIndex + kbliCategories.length
+                          );
+                        }}
+                        whileHover={{
+                          translateY: -8,
+                          scale: 1.02,
+                        }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <div className="p-3 md:p-4 text-white text-center h-full flex flex-col justify-center">
+                          {/* Icon */}
+                          <div className="w-12 h-12 md:w-14 md:h-14 mx-auto mb-3 flex items-center justify-center">
+                            <Image
+                              src={currentCategory.icon}
+                              alt={`KBLI ${currentCategory.id}`}
+                              width={48}
+                              height={48}
+                              className="w-8 h-8 md:w-10 md:h-10 filter brightness-0 invert"
+                            />
+                          </div>
+
+                          {/* Category ID */}
+                          <div className="text-xl md:text-2xl font-bold mb-2">
+                            {currentCategory.id}
+                          </div>
+
+                          {/* Category Name */}
+                          <div className="text-xs md:text-sm font-medium leading-tight px-1">
+                            {currentCategory.name}
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -614,34 +640,36 @@ const KBLIPage: React.FC = () => {
             </div>
 
             {/* Active Category Details */}
-            <motion.div
-              key={activeCategory}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="bg-white rounded-lg shadow-lg p-6 md:p-8"
-            >
-              <div className="flex items-center mb-6">
-                <div className="w-12 h-12 md:w-16 md:h-16 bg-cdarkbrown rounded-full flex items-center justify-center text-white mr-4">
-                  <span className="text-xl md:text-2xl font-bold">
-                    {kbliCategories[activeCategory].id}
-                  </span>
+            {kbliCategories[activeCategory] && (
+              <motion.div
+                key={activeCategory}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="bg-white rounded-lg shadow-lg p-4 md:p-8"
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-8 h-8 md:w-12 md:h-12 bg-cdarkbrown rounded-full flex items-center justify-center text-white mr-4">
+                    <span className="text-xl md:text-2xl font-semibold">
+                      {kbliCategories[activeCategory].id}
+                    </span>
+                  </div>
+                  <h3 className="text-lg md:text-xl font-semibold text-cdark">
+                    {kbliCategories[activeCategory].name}
+                  </h3>
                 </div>
-                <h3 className="text-lg md:text-xl font-bold text-cdark">
-                  {kbliCategories[activeCategory].name}
-                </h3>
-              </div>
-              <p className="text-cdark text-sm md:text-base leading-relaxed text-justify">
-                {kbliCategories[activeCategory].description}
-              </p>
-            </motion.div>
+                <p className="text-cdark text-sm font-semibold leading-relaxed text-justify">
+                  {kbliCategories[activeCategory].description}
+                </p>
+              </motion.div>
+            )}
           </div>
 
           {/* Search Section */}
           <div className="max-w-2xl mx-auto mt-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-cdark text-center mb-6">
-              Pencarian Klasifikasi
-            </h2>
+            <h1 className="text-2xl font-bold text-cdark text-center mb-6">
+              Pencarian KBLI
+            </h1>
             <div className="relative">
               <input
                 type="text"
@@ -670,7 +698,7 @@ const KBLIPage: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <p className="text-center text-xs md:text-sm text-cdark mt-2">
+            <p className="text-center text-xs md:text-sm text-cdark mt-2 font-semibold">
               Pencarian akan mengarahkan ke database KBLI 2020 BPS
             </p>
           </div>
