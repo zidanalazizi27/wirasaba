@@ -234,7 +234,7 @@ const KBLIPage: React.FC = () => {
       title: "Golongan",
       content:
         "Adalah uraian lebih lanjut dari golongan pokok dengan kode tiga digit. Dua digit pertama menunjukkan golongan pokok terkait, sementara digit terakhir merepresentasikan aktivitas ekonomi. Setiap golongan pokok dapat memiliki hingga sembilan golongan.",
-      isExpanded: true,
+      isExpanded: false,
     },
     {
       id: "subgolongan",
