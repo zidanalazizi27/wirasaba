@@ -505,7 +505,7 @@ const KBLIPage: React.FC = () => {
                 untuk mendukung perkembangan sektor usaha dan sistem perizinan
                 di Indonesia.
               </p>
-            </div>
+            </div> 
           </div>
 
           {/* List Kategori Section */}
