@@ -1157,7 +1157,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <p className="text-sm font-semibold">Latitude :</p>
+              <p className="text-sm font-semibold">Lintang (Latitude) :</p>
               {mode === "view" ? (
                 <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
                   <p>{data.lat || "-"}</p>
@@ -1173,7 +1173,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             </div>
 
             <div>
-              <p className="text-sm font-semibold">Longitude :</p>
+              <p className="text-sm font-semibold">Bujur (Longitude) :</p>
               {mode === "view" ? (
                 <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
                   <p>{data.lon || "-"}</p>
