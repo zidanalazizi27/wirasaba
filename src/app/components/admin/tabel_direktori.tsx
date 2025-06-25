@@ -1135,7 +1135,7 @@ const TabelDirektori = () => {
                 <li>Ukuran file maksimal 5MB</li>
                 {uploadMode === "append" && (
                   <li>
-                    Data yang sudah ada akan diperbarui jika terdapat ID yang
+                    Data yang sudah ada akan diperbarui jika terdapat KIP yang
                     sama
                   </li>
                 )}

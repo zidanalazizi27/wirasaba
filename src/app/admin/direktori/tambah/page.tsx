@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SidebarLayout from "@/app/components/admin/sidebar_layout";
 import Breadcrumb from "@/app/components/admin/breadcrumb";
 import DetailDirektori from "@/app/components/admin/detail_direktori";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 export default function TambahDirektori() {
   const router = useRouter();
@@ -14,11 +15,9 @@ export default function TambahDirektori() {
     try {
       setIsSaving(true);
 
-      // Pastikan data tidak memiliki id_perusahaan
       const dataToSend = { ...data };
-      delete dataToSend.id_perusahaan; // Hapus id_perusahaan jika ada
+      delete dataToSend.id_perusahaan;
 
-      // Generate KIP baru jika tidak ada
       if (!dataToSend.kip) {
         const currentYear = new Date().getFullYear();
         dataToSend.kip = parseInt(
@@ -26,7 +25,6 @@ export default function TambahDirektori() {
         );
       }
 
-      // Pastikan tahun_direktori adalah array
       if (
         !Array.isArray(dataToSend.tahun_direktori) ||
         dataToSend.tahun_direktori.length === 0
@@ -34,7 +32,6 @@ export default function TambahDirektori() {
         dataToSend.tahun_direktori = [new Date().getFullYear()];
       }
 
-      // Panggil API untuk menyimpan data baru
       const response = await fetch("/api/perusahaan", {
         method: "POST",
         headers: {
@@ -50,22 +47,20 @@ export default function TambahDirektori() {
       }
 
       if (result.success) {
-        alert("Data berhasil disimpan!");
-        // Redirect ke halaman detail perusahaan baru
+        await SweetAlertUtils.success(
+          "Berhasil!",
+          "Data perusahaan baru berhasil ditambahkan!"
+        );
         router.push(`/admin/direktori/${result.id}`);
       } else {
         throw new Error(result.message || "Gagal menyimpan data");
       }
     } catch (error) {
       console.error("Error saving data:", error);
-      alert("Gagal menyimpan data: " + error.message);
+      SweetAlertUtils.error("Error", `Gagal menyimpan data: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleCancel = () => {
-    router.push("/admin/direktori");
   };
 
   return (
@@ -86,7 +81,7 @@ export default function TambahDirektori() {
             id_perusahaan={null}
             mode="add"
             onSave={handleSave}
-            onCancel={handleCancel}
+            onCancel={() => router.push("/admin/direktori")} // 🎯 SEDERHANA
           />
         </div>
       </div>

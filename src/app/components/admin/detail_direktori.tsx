@@ -5,6 +5,7 @@ import AddLocationRoundedIcon from "@mui/icons-material/AddLocationRounded";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import { renderToString } from "react-dom/server";
 import { useRouter } from "next/navigation";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 interface DetailDirektoriProps {
   id_perusahaan: string | string[] | null;
@@ -429,7 +430,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       }
 
       if (editedData.tahun_direktori.includes(yearNumber)) {
-        alert("Tahun tersebut sudah ada dalam daftar");
+        SweetAlertUtils.error(
+          "Duplikasi Data",
+          "Tahun tersebut sudah ada dalam daftar"
+        );
         return;
       }
 
@@ -469,11 +473,19 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             skala: "Skala",
             tahun_direktori: "Tahun Direktori",
           };
-          return `• ${fieldNames[field] || field}: ${error}`;
+          return ` ${fieldNames[field] || field}: ${error}`;
         })
         .join("\n");
 
-      alert(`Mohon perbaiki kesalahan input berikut:\n\n${errorMessages}`);
+      SweetAlertUtils.warning(
+        "Mohon Perbaiki Input",
+        `Mohon perbaiki kesalahan input berikut:\n\n${errorMessages}`,
+        {
+          customClass: {
+            content: "text-left whitespace-pre-line",
+          },
+        }
+      );
     }
   };
 
@@ -504,7 +516,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       // Validasi input tahun (hanya angka 4 digit)
       const yearRegex = /^\d{4}$/;
       if (!yearRegex.test(newYear)) {
-        alert("Tahun harus berupa 4 digit angka");
+        SweetAlertUtils.error(
+          "Input Error",
+          "Tahun harus berupa 4 digit angka"
+        );
         return;
       }
 
@@ -512,7 +527,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
       // Cek apakah tahun sudah ada dalam array
       if (editedData.tahun_direktori.includes(yearNumber)) {
-        alert("Tahun tersebut sudah ada dalam daftar");
+        SweetAlertUtils.error(
+          "Duplikasi Data",
+          "Tahun tersebut sudah ada dalam daftar"
+        );
         return;
       }
 
@@ -567,11 +585,12 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         setIsAddingYear(false);
       } catch (error) {
         console.error("Error adding year:", error);
-        alert(`Error: ${error.message}`);
+        SweetAlertUtils.error("Error", `Error: ${error.message}`);
       }
     }
   };
 
+  // Fungsi untuk menghapus tahun
   // Fungsi untuk menghapus tahun
   const handleRemoveYear = async (yearToRemove) => {
     if (editedData) {
@@ -579,9 +598,20 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       if (mode === "add") {
         // Don't allow removing the last year
         if (editedData.tahun_direktori.length <= 1) {
-          alert("Minimal satu tahun direktori diperlukan");
+          SweetAlertUtils.error(
+            "Validation Error",
+            "Minimal satu tahun direktori diperlukan"
+          );
           return;
         }
+
+        // Konfirmasi sebelum hapus
+        const confirmed = await SweetAlertUtils.confirmDelete(
+          "Hapus Tahun Direktori",
+          `Apakah Anda yakin ingin menghapus tahun ${yearToRemove}?`
+        );
+
+        if (!confirmed) return;
 
         const updatedYears = editedData.tahun_direktori.filter(
           (year) => year !== yearToRemove
@@ -596,6 +626,14 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
       // For existing company, call the API
       try {
+        // Konfirmasi sebelum hapus untuk mode edit
+        const confirmed = await SweetAlertUtils.confirmDelete(
+          "Hapus Tahun Direktori",
+          `Apakah Anda yakin ingin menghapus tahun ${yearToRemove}?`
+        );
+
+        if (!confirmed) return;
+
         // Panggil API untuk menghapus tahun direktori
         const response = await fetch(
           `/api/direktori?id_perusahaan=${id_perusahaan}&thn_direktori=${yearToRemove}`,
@@ -620,9 +658,15 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
           ...editedData,
           tahun_direktori: updatedYears,
         });
+
+        // Toast sukses
+        SweetAlertUtils.toast(
+          `Tahun ${yearToRemove} berhasil dihapus`,
+          "success"
+        );
       } catch (error) {
         console.error("Error removing year:", error);
-        alert(`Error: ${error.message}`);
+        SweetAlertUtils.error("Error", `Error: ${error.message}`);
       }
     }
   };
@@ -967,42 +1011,42 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
     // Tampilkan error jika ada
     if (Object.keys(errors).length > 0) {
-      const errorMessage = Object.values(errors).join("\n");
-      alert(errorMessage);
+      SweetAlertUtils.validationError(Object.values(errors));
       return false;
     }
-
     return true;
   };
 
-  const handleSave = () => {
-    if (editedData && validateData()) {
+  const handleSave = async () => {
+    if (!editedData || !validateData()) return;
+
+    const confirmed = await SweetAlertUtils.confirmSave(
+      "Konfirmasi Penyimpanan",
+      mode === "add"
+        ? "Apakah Anda yakin ingin menyimpan data perusahaan baru?"
+        : "Apakah Anda yakin ingin menyimpan perubahan data?"
+    );
+
+    if (confirmed) {
       if (mode === "add") {
-        // Untuk mode add, hapus id_perusahaan untuk menghindari konflik
         const dataToSave = { ...editedData };
         delete dataToSave.id_perusahaan;
         onSave && onSave(dataToSave);
       } else {
-        // Untuk mode edit, kirim data lengkap termasuk id
         onSave && onSave(editedData);
       }
     }
   };
 
-  const handleCancel = () => {
-    // Jika ada perubahan, konfirmasi dulu
-    if (JSON.stringify(data) !== JSON.stringify(editedData)) {
-      if (
-        confirm(
-          "Perubahan yang Anda buat belum disimpan. Yakin ingin membatalkan?"
-        )
-      ) {
-        onCancel && onCancel();
-      }
-    } else {
-      // Jika tidak ada perubahan, langsung batalkan
-      onCancel && onCancel();
+  const handleCancel = async () => {
+    const hasChanges = JSON.stringify(data) !== JSON.stringify(editedData);
+
+    if (hasChanges || mode === "add") {
+      const confirmed = await SweetAlertUtils.confirmCancel();
+      if (!confirmed) return;
     }
+
+    onCancel && onCancel();
   };
 
   // Fungsi inisialisasi peta

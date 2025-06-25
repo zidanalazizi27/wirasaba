@@ -1,4 +1,3 @@
-// src/app/admin/direktori/[id_perusahaan]/edit/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -6,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import SidebarLayout from "@/app/components/admin/sidebar_layout";
 import Breadcrumb from "@/app/components/admin/breadcrumb";
 import DetailDirektori from "@/app/components/admin/detail_direktori";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 export default function EditDirektoriDetail() {
   const params = useParams();
@@ -32,6 +32,7 @@ export default function EditDirektoriDetail() {
         console.error("Error fetching company name:", error);
         setCompanyName("Detail Perusahaan");
         setIsLoading(false);
+        SweetAlertUtils.error("Error", "Gagal memuat data perusahaan");
       }
     };
 
@@ -44,10 +45,8 @@ export default function EditDirektoriDetail() {
     try {
       setIsSaving(true);
 
-      // Tambahkan logging untuk debugging
       console.log("Saving data:", data);
 
-      // Panggil API untuk update data
       const response = await fetch(`/api/perusahaan/${id_perusahaan}`, {
         method: "PUT",
         headers: {
@@ -59,7 +58,6 @@ export default function EditDirektoriDetail() {
       const responseText = await response.text();
       console.log("Response text:", responseText);
 
-      // Parse response jika valid JSON
       let result;
       try {
         result = JSON.parse(responseText);
@@ -72,14 +70,14 @@ export default function EditDirektoriDetail() {
       }
 
       if (result.success) {
-        alert("Data berhasil diperbarui!");
+        await SweetAlertUtils.success("Berhasil!", "Data berhasil diperbarui!");
         router.push(`/admin/direktori/${id_perusahaan}`);
       } else {
         throw new Error(result.message || "Gagal memperbarui data");
       }
     } catch (error) {
       console.error("Error saving data:", error);
-      alert("Gagal menyimpan data: " + error.message);
+      SweetAlertUtils.error("Error", `Gagal menyimpan data: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -107,7 +105,7 @@ export default function EditDirektoriDetail() {
             id_perusahaan={id_perusahaan}
             mode="edit"
             onSave={handleSave}
-            onCancel={() => router.push(`/admin/direktori/${id_perusahaan}`)}
+            onCancel={() => router.push(`/admin/direktori/${id_perusahaan}`)} // 🎯 SEDERHANA
           />
         </div>
       </div>
