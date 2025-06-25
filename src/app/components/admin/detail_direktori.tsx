@@ -13,6 +13,11 @@ interface DetailDirektoriProps {
   onCancel?: () => void; // Handler untuk tombol batalkan
 }
 
+//intrface untuk validasi input
+interface ValidationErrors {
+  [key: string]: string;
+}
+
 interface PerusahaanData {
   id_perusahaan: number;
   kip: string | number;
@@ -68,6 +73,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   const [marker, setMarker] = useState(null);
   const [isAddingYear, setIsAddingYear] = useState(false);
   const [newYear, setNewYear] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const leafletMap = useRef<any>(null);
   const leafletMarker = useRef<any>(null);
   const mapInitialized = useRef<boolean>(false);
@@ -82,6 +88,14 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   const [omsetOptions, setOmsetOptions] = useState<any[]>([]);
   const [pclOptions, setPclOptions] = useState<any[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+
+  // State untuk validasi
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
+    {}
+  );
+  const [showTooltip, setShowTooltip] = useState<{ [key: string]: boolean }>(
+    {}
+  );
 
   // Koordinat tetap BPS Kabupaten Sidoarjo
   const BPS_LAT = -7.4483396;
@@ -128,6 +142,360 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     } else {
       return "Sedang";
     }
+  };
+
+  // Fungsi validasi field
+  const validateField = (field: string, value: any): string => {
+    const errors: string[] = [];
+
+    switch (field) {
+      case "kip":
+        if (value && value !== "") {
+          const kipStr = value.toString();
+          if (!/^\d+$/.test(kipStr)) {
+            errors.push("KIP harus berupa angka saja");
+          }
+          if (kipStr.length > 10) {
+            errors.push("KIP maksimal 10 digit");
+          }
+        }
+        break;
+
+      case "kode_pos":
+        if (value && value !== "") {
+          const kodeposStr = value.toString();
+          if (!/^\d{5}$/.test(kodeposStr)) {
+            errors.push("Kode pos harus berupa 5 digit angka");
+          }
+        }
+        break;
+
+      case "KBLI":
+        if (!value || value === "") {
+          errors.push("KBLI wajib diisi");
+        } else {
+          const kbliStr = value.toString();
+          if (!/^\d{5}$/.test(kbliStr)) {
+            errors.push("KBLI harus berupa 5 digit angka");
+          }
+        }
+        break;
+
+      case "lat":
+        if (value && value !== "") {
+          const lat = parseFloat(value);
+          if (isNaN(lat)) {
+            errors.push("Latitude harus berupa angka desimal");
+          } else if (lat < -90 || lat > 90) {
+            errors.push("Latitude harus dalam rentang -90 sampai 90");
+          }
+        }
+        break;
+
+      case "lon":
+        if (value && value !== "") {
+          const lon = parseFloat(value);
+          if (isNaN(lon)) {
+            errors.push("Longitude harus berupa angka desimal");
+          } else if (lon < -180 || lon > 180) {
+            errors.push("Longitude harus dalam rentang -180 sampai 180");
+          }
+        }
+        break;
+
+      case "nama_perusahaan":
+      case "alamat":
+      case "produk":
+        if (!value || value.toString().trim() === "") {
+          const fieldNames = {
+            nama_perusahaan: "Nama perusahaan",
+            alamat: "Alamat",
+            produk: "Produk",
+          };
+          errors.push(`${fieldNames[field]} tidak boleh kosong`);
+        }
+        break;
+
+      case "kec":
+        if (!value || value === "") {
+          errors.push("Kecamatan tidak boleh kosong");
+        }
+        break;
+
+      case "des":
+        if (!value || value === "") {
+          errors.push("Desa tidak boleh kosong");
+        }
+        break;
+
+      case "badan_usaha":
+      case "lok_perusahaan":
+      case "tkerja":
+      case "investasi":
+      case "omset":
+      case "skala":
+        if (!value || value === "") {
+          const fieldNames = {
+            badan_usaha: "Badan Usaha",
+            lok_perusahaan: "Lokasi Perusahaan",
+            tkerja: "Tenaga Kerja",
+            investasi: "Investasi",
+            omset: "Omset",
+            skala: "Skala",
+          };
+          errors.push(`${fieldNames[field]} tidak boleh kosong`);
+        }
+        break;
+    }
+
+    return errors.join("; ");
+  };
+
+  // Fungsi validasi lengkap
+  const validateAllFields = (): boolean => {
+    const errors: ValidationErrors = {};
+    const requiredFields = [
+      "kip",
+      "nama_perusahaan",
+      "alamat",
+      "kec",
+      "des",
+      "badan_usaha",
+      "lok_perusahaan",
+      "KBLI",
+      "produk",
+      "lat",
+      "lon",
+      "tkerja",
+      "investasi",
+      "omset",
+      "skala",
+    ];
+
+    requiredFields.forEach((field) => {
+      const value = editedData?.[field];
+      const error = validateField(field, value);
+
+      if (error) {
+        errors[field] = error;
+      }
+    });
+
+    // Validasi tahun direktori
+    if (
+      !editedData?.tahun_direktori ||
+      editedData.tahun_direktori.length === 0
+    ) {
+      errors["tahun_direktori"] = "Minimal satu tahun direktori diperlukan";
+    } else {
+      editedData.tahun_direktori.forEach((year: number) => {
+        if (year < 2000 || year > 2100) {
+          errors["tahun_direktori"] =
+            "Tahun direktori harus dalam rentang 2000-2100";
+        }
+      });
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Fungsi tooltip
+  const showFieldTooltip = (field: string, message: string) => {
+    setValidationErrors((prev) => ({
+      ...prev,
+      [field]: message,
+    }));
+    setShowTooltip((prev) => ({
+      ...prev,
+      [field]: true,
+    }));
+
+    setTimeout(() => {
+      setShowTooltip((prev) => ({
+        ...prev,
+        [field]: false,
+      }));
+    }, 3000);
+  };
+
+  // Handler input dengan validasi
+  const handleInputChangeWithValidation = (
+    field: keyof PerusahaanData,
+    value: any
+  ) => {
+    let processedValue = value;
+
+    // Filter input berdasarkan field
+    if (field === "kip") {
+      const numericValue = value.replace(/\D/g, "");
+      if (numericValue.length > 10) {
+        showFieldTooltip("kip", "KIP maksimal 10 digit");
+        return;
+      }
+      if (value && !/^\d*$/.test(value)) {
+        showFieldTooltip("kip", "KIP harus berupa angka saja");
+        return;
+      }
+      processedValue = numericValue;
+    } else if (field === "kode_pos") {
+      const numericValue = value.replace(/\D/g, "");
+      if (numericValue.length > 5) {
+        showFieldTooltip("kode_pos", "Kode pos maksimal 5 digit");
+        return;
+      }
+      processedValue = numericValue;
+    } else if (field === "KBLI") {
+      const numericValue = value.replace(/\D/g, "");
+      if (numericValue.length > 5) {
+        showFieldTooltip("KBLI", "KBLI maksimal 5 digit");
+        return;
+      }
+      processedValue = numericValue;
+    } else if (field === "lat") {
+      const latPattern = /^-?\d*\.?\d*$/;
+      if (value && !latPattern.test(value)) {
+        showFieldTooltip(
+          "lat",
+          "Latitude harus berupa angka desimal (bisa negatif)"
+        );
+        return;
+      }
+      if (value) {
+        const lat = parseFloat(value);
+        if (!isNaN(lat) && (lat < -90 || lat > 90)) {
+          showFieldTooltip("lat", "Latitude harus dalam rentang -90 sampai 90");
+          return;
+        }
+      }
+      processedValue = value;
+    } else if (field === "lon") {
+      const lonPattern = /^-?\d*\.?\d*$/;
+      if (value && !lonPattern.test(value)) {
+        showFieldTooltip("lon", "Longitude harus berupa angka desimal");
+        return;
+      }
+      if (value) {
+        const lon = parseFloat(value);
+        if (!isNaN(lon) && (lon < -180 || lon > 180)) {
+          showFieldTooltip(
+            "lon",
+            "Longitude harus dalam rentang -180 sampai 180"
+          );
+          return;
+        }
+      }
+      processedValue = value;
+    }
+
+    // Validasi khusus untuk desa vs kecamatan
+    if (
+      field === "des" &&
+      processedValue &&
+      (!editedData?.kec || editedData.kec === "")
+    ) {
+      showFieldTooltip(
+        "des",
+        "Pilih kecamatan terlebih dahulu sebelum memilih desa"
+      );
+      return;
+    }
+
+    // Clear validation error untuk field ini
+    setValidationErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[field];
+      return newErrors;
+    });
+
+    // Panggil handler input yang asli
+    handleInputChange(field, processedValue);
+  };
+
+  // Handler tahun dengan validasi
+  const handleAddYearWithValidation = async () => {
+    if (newYear && editedData) {
+      const yearRegex = /^\d{4}$/;
+      if (!yearRegex.test(newYear)) {
+        showFieldTooltip("newYear", "Tahun harus berupa 4 digit angka");
+        return;
+      }
+
+      const yearNumber = parseInt(newYear, 10);
+
+      if (yearNumber < 2000 || yearNumber > 2100) {
+        showFieldTooltip("newYear", "Tahun harus dalam rentang 2000-2100");
+        return;
+      }
+
+      if (editedData.tahun_direktori.includes(yearNumber)) {
+        alert("Tahun tersebut sudah ada dalam daftar");
+        return;
+      }
+
+      // Lanjutkan dengan handleAddYear yang asli
+      handleAddYear();
+    }
+  };
+
+  // Handler save dengan validasi
+  const handleSaveWithValidation = () => {
+    if (editedData && validateAllFields()) {
+      if (mode === "add") {
+        const dataToSave = { ...editedData };
+        delete dataToSave.id_perusahaan;
+        onSave && onSave(dataToSave);
+      } else {
+        onSave && onSave(editedData);
+      }
+    } else {
+      const errorMessages = Object.entries(validationErrors)
+        .map(([field, error]) => {
+          const fieldNames = {
+            kip: "KIP",
+            nama_perusahaan: "Nama Perusahaan",
+            alamat: "Alamat",
+            kec: "Kecamatan",
+            des: "Desa",
+            badan_usaha: "Badan Usaha",
+            lok_perusahaan: "Lokasi Perusahaan",
+            KBLI: "KBLI",
+            produk: "Produk",
+            lat: "Latitude",
+            lon: "Longitude",
+            tkerja: "Tenaga Kerja",
+            investasi: "Investasi",
+            omset: "Omset",
+            skala: "Skala",
+            tahun_direktori: "Tahun Direktori",
+          };
+          return `• ${fieldNames[field] || field}: ${error}`;
+        })
+        .join("\n");
+
+      alert(`Mohon perbaiki kesalahan input berikut:\n\n${errorMessages}`);
+    }
+  };
+
+  // Komponen tooltip error
+  const ErrorTooltip: React.FC<{ field: string }> = ({ field }) => {
+    const error = validationErrors[field];
+    const show = showTooltip[field] || !!error;
+
+    if (!show) return null;
+
+    return (
+      <div className="absolute z-10 px-2 py-1 text-xs text-white bg-red-500 rounded shadow-lg -top-8 left-0 whitespace-nowrap max-w-xs">
+        {error}
+        <div className="absolute top-full left-2 border-4 border-transparent border-t-red-500"></div>
+      </div>
+    );
+  };
+
+  // Fungsi class name
+  const getInputClassName = (field: string, baseClassName: string) => {
+    const hasError = validationErrors[field];
+    return `${baseClassName} ${hasError ? "border-red-500 bg-red-50" : "border-gray-300"}`;
   };
 
   // Fungsi untuk menambahkan tahun baru
@@ -848,12 +1216,22 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.kip || "-"}</p>
                 </div>
               ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.kip || ""}
-                  onChange={(e) => handleInputChange("kip", e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={getInputClassName(
+                      "kip",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.kip || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation("kip", e.target.value)
+                    }
+                    placeholder="Maks 10 digit *"
+                    maxLength={10}
+                  />
+                  <ErrorTooltip field="kip" />
+                </div>
               )}
             </div>
             <div className="col-span-3">
@@ -863,14 +1241,24 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.nama_perusahaan}</p>
                 </div>
               ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.nama_perusahaan || ""}
-                  onChange={(e) =>
-                    handleInputChange("nama_perusahaan", e.target.value)
-                  }
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={getInputClassName(
+                      "nama_perusahaan",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.nama_perusahaan || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "nama_perusahaan",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Masukkan nama perusahaan *"
+                  />
+                  <ErrorTooltip field="nama_perusahaan" />
+                </div>
               )}
             </div>
           </div>
@@ -882,11 +1270,20 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                 <p>{data.alamat || "-"}</p>
               </div>
             ) : (
-              <input
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.alamat || ""}
-                onChange={(e) => handleInputChange("alamat", e.target.value)}
-              />
+              <div className="relative">
+                <input
+                  className={getInputClassName(
+                    "alamat",
+                    "border font-medium text-sm p-2 rounded-lg w-full"
+                  )}
+                  value={editedData?.alamat || ""}
+                  onChange={(e) =>
+                    handleInputChangeWithValidation("alamat", e.target.value)
+                  }
+                  placeholder="Masukkan alamat lengkap *"
+                />
+                <ErrorTooltip field="alamat" />
+              </div>
             )}
           </div>
 
@@ -898,20 +1295,32 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.kec_nama || "-"}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.kec || ""}
-                  onChange={(e) =>
-                    handleInputChange("kec", parseInt(e.target.value))
-                  }
-                >
-                  <option value="">Pilih Kecamatan</option>
-                  {kecamatanOptions.map((option) => (
-                    <option key={option.kode_kec} value={option.kode_kec}>
-                      {option.kode_kec}. {option.nama_kec}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
+                      "kec",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.kec || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "kec",
+                        parseInt(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">Pilih Kecamatan *</option>
+                    {kecamatanOptions.map((option, index) => (
+                      <option
+                        key={`kec-${option.kode_kec || index}`}
+                        value={option.kode_kec}
+                      >
+                        {option.kode_kec}. {option.nama_kec}
+                      </option>
+                    ))}
+                  </select>
+                  <ErrorTooltip field="kec" />
+                </div>
               )}
             </div>
 
@@ -922,28 +1331,40 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.des_nama || "-"}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.des || ""}
-                  onChange={(e) =>
-                    handleInputChange("des", parseInt(e.target.value))
-                  }
-                  disabled={!editedData?.kec || isLoadingOptions}
-                >
-                  <option value="">Pilih Desa</option>
-                  {isLoadingOptions ? (
-                    <option disabled>Memuat data...</option>
-                  ) : (
-                    // Urutkan desaOptions berdasarkan id_des sebelum mapping
-                    [...desaOptions]
-                      .sort((a, b) => a.id_des - b.id_des)
-                      .map((option) => (
-                        <option key={option.kode_des} value={option.kode_des}>
-                          {option.kode_des}. {option.nama_des}
-                        </option>
-                      ))
-                  )}
-                </select>
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
+                      "des",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.des || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "des",
+                        parseInt(e.target.value)
+                      )
+                    }
+                    disabled={!editedData?.kec || isLoadingOptions}
+                  >
+                    <option value="">Pilih Desa *</option>
+                    {isLoadingOptions ? (
+                      <option disabled>Memuat data...</option>
+                    ) : (
+                      // Urutkan desaOptions berdasarkan id_des sebelum mapping
+                      [...desaOptions]
+                        .sort((a, b) => a.id_des - b.id_des)
+                        .map((option, index) => (
+                          <option
+                            key={`desa-${option.kode_des || option.id_des || index}`}
+                            value={option.kode_des}
+                          >
+                            {option.kode_des}. {option.nama_des}
+                          </option>
+                        ))
+                    )}
+                  </select>
+                  <ErrorTooltip field="des" />
+                </div>
               )}
             </div>
           </div>
@@ -956,23 +1377,32 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.badan_usaha_nama}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.badan_usaha || ""}
-                  onChange={(e) =>
-                    handleInputChange("badan_usaha", parseInt(e.target.value))
-                  }
-                >
-                  {badanUsahaOptions.length > 0 ? (
-                    badanUsahaOptions.map((option) => (
-                      <option key={option.id_bu} value={option.id_bu}>
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
+                      "badan_usaha",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.badan_usaha || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "badan_usaha",
+                        parseInt(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">Pilih Badan Usaha *</option>
+                    {badanUsahaOptions.map((option, index) => (
+                      <option
+                        key={`badan-${option.id_bu || index}`}
+                        value={option.id_bu}
+                      >
                         {option.id_bu}. {option.ket_bu}
                       </option>
-                    ))
-                  ) : (
-                    <option value="">Loading...</option>
-                  )}
-                </select>
+                    ))}
+                  </select>
+                  <ErrorTooltip field="badan_usaha" />
+                </div>
               )}
             </div>
 
@@ -983,23 +1413,32 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.lok_perusahaan_nama}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.lok_perusahaan || ""}
-                  onChange={(e) =>
-                    handleInputChange(
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
                       "lok_perusahaan",
-                      parseInt(e.target.value)
-                    )
-                  }
-                >
-                  <option value="">Pilih Lokasi</option>
-                  {lokasiOptions.map((option) => (
-                    <option key={option.id_lok} value={option.id_lok}>
-                      {option.id_lok}. {option.ket_lok}
-                    </option>
-                  ))}
-                </select>
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.lok_perusahaan || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "lok_perusahaan",
+                        parseInt(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">Pilih Lokasi Perusahaan *</option>
+                    {lokasiOptions.map((option, index) => (
+                      <option
+                        key={`lokasi-${option.id_lok || index}`}
+                        value={option.id_lok}
+                      >
+                        {option.id_lok}. {option.ket_lok}
+                      </option>
+                    ))}
+                  </select>
+                  <ErrorTooltip field="lok_perusahaan" />
+                </div>
               )}
             </div>
           </div>
@@ -1030,14 +1469,25 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.kode_pos}</p>
                 </div>
               ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.kode_pos || ""}
-                  onChange={(e) =>
-                    handleInputChange("kode_pos", e.target.value)
-                  }
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={getInputClassName(
+                      "kode_pos",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.kode_pos || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "kode_pos",
+                        e.target.value
+                      )
+                    }
+                    placeholder="5 digit"
+                    maxLength={5}
+                  />
+                  <ErrorTooltip field="kode_pos" />
+                </div>
               )}
             </div>
 
@@ -1048,12 +1498,22 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.KBLI}</p>
                 </div>
               ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.KBLI || ""}
-                  onChange={(e) => handleInputChange("KBLI", e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={getInputClassName(
+                      "KBLI",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.KBLI || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation("KBLI", e.target.value)
+                    }
+                    placeholder="5 digit angka (wajib) *"
+                    maxLength={5}
+                  />
+                  <ErrorTooltip field="KBLI" />
+                </div>
               )}
             </div>
           </div>
@@ -1065,12 +1525,21 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                 <p>{data.produk || "-"}</p>
               </div>
             ) : (
-              <input
-                type="text"
-                className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.produk || ""}
-                onChange={(e) => handleInputChange("produk", e.target.value)}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  className={getInputClassName(
+                    "produk",
+                    "border font-medium text-sm p-2 rounded-lg w-full"
+                  )}
+                  value={editedData?.produk || ""}
+                  onChange={(e) =>
+                    handleInputChangeWithValidation("produk", e.target.value)
+                  }
+                  placeholder="Masukkan produk/jasa *"
+                />
+                <ErrorTooltip field="produk" />
+              </div>
             )}
           </div>
 
@@ -1143,8 +1612,8 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                 onChange={(e) => handleInputChange("pcl_utama", e.target.value)}
               >
                 <option value="">-- Pilih PCL --</option>
-                {pclOptions.map((option) => (
-                  <option key={option.uid} value={option.uid}>
+                {pclOptions.map((option, index) => (
+                  <option key={`pcl-${option.uid || index}`} value={option.uid}>
                     {option.name}
                   </option>
                 ))}
@@ -1163,12 +1632,21 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.lat || "-"}</p>
                 </div>
               ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.lat || ""}
-                  onChange={(e) => handleInputChange("lat", e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={getInputClassName(
+                      "lat",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.lat || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation("lat", e.target.value)
+                    }
+                    placeholder="-90 s/d 90 *"
+                  />
+                  <ErrorTooltip field="lat" />
+                </div>
               )}
             </div>
 
@@ -1179,12 +1657,21 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.lon || "-"}</p>
                 </div>
               ) : (
-                <input
-                  type="text"
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.lon || ""}
-                  onChange={(e) => handleInputChange("lon", e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={getInputClassName(
+                      "lon",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.lon || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation("lon", e.target.value)
+                    }
+                    placeholder="-180 s/d 180 *"
+                  />
+                  <ErrorTooltip field="lon" />
+                </div>
               )}
             </div>
 
@@ -1250,20 +1737,32 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.tkerja_nama}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.tkerja || ""}
-                  onChange={(e) =>
-                    handleInputChange("tkerja", parseInt(e.target.value))
-                  }
-                >
-                  <option value="">Pilih Tenaga Kerja</option>
-                  {tenagaKerjaOptions.map((option) => (
-                    <option key={option.id_tkerja} value={option.id_tkerja}>
-                      {option.id_tkerja}. {option.ket_tkerja}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
+                      "tkerja",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.tkerja || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "tkerja",
+                        parseInt(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">Pilih Tenaga Kerja *</option>
+                    {tenagaKerjaOptions.map((option, index) => (
+                      <option
+                        key={`tkerja-${option.id_tkerja || index}`}
+                        value={option.id_tkerja}
+                      >
+                        {option.id_tkerja}. {option.ket_tkerja}
+                      </option>
+                    ))}
+                  </select>
+                  <ErrorTooltip field="tkerja" />
+                </div>
               )}
             </div>
 
@@ -1274,23 +1773,32 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.investasi_nama}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.investasi || ""}
-                  onChange={(e) =>
-                    handleInputChange("investasi", parseInt(e.target.value))
-                  }
-                >
-                  <option value="">Pilih Investasi</option>
-                  {investasiOptions.map((option) => (
-                    <option
-                      key={option.id_investasi}
-                      value={option.id_investasi}
-                    >
-                      {option.id_investasi}. {option.ket_investasi}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
+                      "investasi",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.investasi || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "investasi",
+                        parseInt(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">Pilih Investasi *</option>
+                    {investasiOptions.map((option, index) => (
+                      <option
+                        key={`investasi-${option.id_investasi || index}`}
+                        value={option.id_investasi}
+                      >
+                        {option.id_investasi}. {option.ket_investasi}
+                      </option>
+                    ))}
+                  </select>
+                  <ErrorTooltip field="investasi" />
+                </div>
               )}
             </div>
           </div>
@@ -1303,20 +1811,32 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.omset_nama}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.omset || ""}
-                  onChange={(e) =>
-                    handleInputChange("omset", parseInt(e.target.value))
-                  }
-                >
-                  <option value="">Pilih Omset</option>
-                  {omsetOptions.map((option) => (
-                    <option key={option.id_omset} value={option.id_omset}>
-                      {option.id_omset}. {option.ket_omset}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
+                      "omset",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.omset || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation(
+                        "omset",
+                        parseInt(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">Pilih Omset *</option>
+                    {omsetOptions.map((option, index) => (
+                      <option
+                        key={`omset-${option.id_omset || index}`}
+                        value={option.id_omset}
+                      >
+                        {option.id_omset}. {option.ket_omset}
+                      </option>
+                    ))}
+                  </select>
+                  <ErrorTooltip field="omset" />
+                </div>
               )}
             </div>
 
@@ -1327,15 +1847,23 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
                   <p>{data.skala}</p>
                 </div>
               ) : (
-                <select
-                  className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.skala || ""}
-                  onChange={(e) => handleInputChange("skala", e.target.value)}
-                >
-                  <option value="">Pilih Skala</option>
-                  <option value="Besar">Besar</option>
-                  <option value="Sedang">Sedang</option>
-                </select>
+                <div className="relative">
+                  <select
+                    className={getInputClassName(
+                      "skala",
+                      "border font-medium text-sm p-2 rounded-lg w-full"
+                    )}
+                    value={editedData?.skala || ""}
+                    onChange={(e) =>
+                      handleInputChangeWithValidation("skala", e.target.value)
+                    }
+                  >
+                    <option value="">Pilih Skala *</option>
+                    <option value="Besar">Besar</option>
+                    <option value="Sedang">Sedang</option>
+                  </select>
+                  <ErrorTooltip field="skala" />
+                </div>
               )}
             </div>
           </div>
@@ -1435,9 +1963,9 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             <p className="text-sm font-semibold">Tahun Direktori:</p>
             {mode === "view" ? (
               <div className="flex gap-2">
-                {data.tahun_direktori.map((tahun) => (
+                {data.tahun_direktori.map((tahun, index) => (
                   <div
-                    key={tahun}
+                    key={`view-tahun-${tahun}-${index}`}
                     className="bg-gray-200 font-medium text-sm px-4 py-2 rounded-lg"
                   >
                     <p>{tahun}</p>
@@ -1447,9 +1975,9 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             ) : (
               <div>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {editedData?.tahun_direktori.map((tahun) => (
+                  {editedData?.tahun_direktori.map((tahun, index) => (
                     <div
-                      key={tahun} // Tambahkan prop key ini
+                      key={`tahun-${tahun}-${index}`}
                       className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded-full flex items-center"
                     >
                       <span>{tahun}</span>
@@ -1476,30 +2004,47 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
                   {isAddingYear ? (
                     <div className="flex items-center">
-                      <input
-                        type="text"
-                        className="border border-gray-300 rounded-l-lg px-3 py-1 text-sm w-20"
-                        placeholder="YYYY"
-                        maxLength={4}
-                        value={newYear}
-                        onChange={(e) =>
-                          setNewYear(e.target.value.replace(/[^0-9]/g, ""))
-                        }
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleAddYear();
-                          if (e.key === "Escape") {
-                            setIsAddingYear(false);
-                            setNewYear("");
-                          }
-                        }}
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          className={getInputClassName(
+                            "newYear",
+                            "border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
+                          )}
+                          placeholder="YYYY (2000-2100)"
+                          value={newYear}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "");
+                            if (value.length <= 4) {
+                              setNewYear(value);
+                              if (
+                                value.length === 4 &&
+                                parseInt(value) >= 2000 &&
+                                parseInt(value) <= 2100
+                              ) {
+                                setValidationErrors((prev) => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors.newYear;
+                                  return newErrors;
+                                });
+                              }
+                            } else {
+                              showFieldTooltip(
+                                "newYear",
+                                "Tahun maksimal 4 digit"
+                              );
+                            }
+                          }}
+                          maxLength={4}
+                        />
+                        <ErrorTooltip field="newYear" />
+                      </div>
                       <button
-                        type="button"
-                        className="bg-blue-500 text-white rounded-r-lg px-2 py-1 text-sm"
-                        onClick={handleAddYear}
+                        onClick={handleAddYearWithValidation}
+                        className="ml-2 px-3 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors disabled:bg-gray-400"
+                        disabled={!newYear || newYear.length !== 4}
                       >
-                        +
+                        Tambah
                       </button>
                     </div>
                   ) : (
@@ -1544,10 +2089,11 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             Batalkan
           </button>
           <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+            onClick={handleSaveWithValidation}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400"
+            disabled={isSaving}
           >
-            Simpan
+            {isSaving ? "Menyimpan..." : "Simpan"}
           </button>
         </div>
       )}
