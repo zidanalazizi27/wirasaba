@@ -1,9 +1,13 @@
 // src/app/api/perusahaan/export-excel/route.ts
+// PERBAIKAN: Query untuk mengambil data survei dengan format kolom selesai yang benar
+
 import { NextRequest, NextResponse } from "next/server";
 import mysql from "mysql2/promise";
 import * as XLSX from "xlsx";
 
 export async function GET(request: NextRequest) {
+  console.log("Starting Excel export...");
+  
   const searchParams = request.nextUrl.searchParams;
   
   // Ambil parameter filter yang sama dengan tabel direktori
@@ -11,6 +15,8 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "all";
   const pcl = searchParams.get("pcl") || "all";
+  
+  console.log("Export parameters:", { year, search, status, pcl });
   
   // Ambil parameter sorting
   const sortParams: { column: string; direction: string }[] = [];
@@ -23,17 +29,42 @@ export async function GET(request: NextRequest) {
     }
     i++;
   }
+  
+  console.log("Sort parameters:", sortParams);
 
   try {
+    // Validasi environment variables
+    if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
+      console.error("Missing database environment variables");
+      return NextResponse.json(
+        { success: false, message: "Database configuration error" },
+        { status: 500 }
+      );
+    }
+
+    console.log("Connecting to database...");
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
+      password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME,
     });
 
-    // Query sederhana tanpa join untuk tabel referensi, hanya data yang diperlukan
-    let query = `
+    console.log("Database connected successfully");
+
+    // Fungsi untuk menentukan status berdasarkan range yang benar
+    const getStatus = (totalCount: number, completedCount: number): string => {
+      if (totalCount === 0) return "kosong";
+      
+      const percentage = (completedCount / totalCount) * 100;
+      
+      if (percentage >= 80) return "tinggi";
+      if (percentage >= 50) return "sedang";
+      return "rendah";
+    };
+
+    // Query sederhana tanpa join untuk tabel referensi
+    let baseQuery = `
       SELECT 
         p.id_perusahaan,
         p.kip,
@@ -62,24 +93,17 @@ export async function GET(request: NextRequest) {
         p.email_narasumber,
         p.telp_narasumber,
         p.pcl_utama,
-        p.catatan,
-        GROUP_CONCAT(DISTINCT d2.thn_direktori ORDER BY d2.thn_direktori) AS tahun_direktori,
-        
-        -- Hitung total survei dan completed survei
-        COUNT(DISTINCT r.id_riwayat_survei) as total_survei,
-        COUNT(DISTINCT CASE WHEN r.selesai = 1 THEN r.id_riwayat_survei END) as completed_survei
-        
+        p.catatan
       FROM perusahaan p
-      LEFT JOIN direktori d2 ON p.id_perusahaan = d2.id_perusahaan
-      LEFT JOIN riwayat_survei r ON p.id_perusahaan = r.id_perusahaan
     `;
 
     const queryParams: any[] = [];
     const whereConditions: string[] = [];
 
-    // Filter berdasarkan tahun direktori
+    // Filter berdasarkan tahun direktori (jika ada)
     if (year && year !== "all") {
-      whereConditions.push("d2.thn_direktori = ?");
+      baseQuery += ` INNER JOIN direktori d ON p.id_perusahaan = d.id_perusahaan`;
+      whereConditions.push("d.thn_direktori = ?");
       queryParams.push(year);
     }
 
@@ -102,35 +126,7 @@ export async function GET(request: NextRequest) {
 
     // Tambahkan WHERE clause jika ada kondisi
     if (whereConditions.length > 0) {
-      query += ` WHERE ${whereConditions.join(" AND ")}`;
-    }
-
-    // Group BY untuk agregasi
-    query += ` GROUP BY p.id_perusahaan`;
-
-    // Fungsi untuk menentukan status berdasarkan range yang benar
-    const getStatus = (totalCount: number, completedCount: number): string => {
-      if (totalCount === 0) return "kosong";
-      
-      const percentage = (completedCount / totalCount) * 100;
-      
-      if (percentage >= 80) return "tinggi";
-      if (percentage >= 50) return "sedang";
-      return "rendah";
-    };
-
-    // Tambahkan HAVING untuk filter status setelah kalkulasi dengan range yang benar
-    if (status && status !== "all") {
-      const statusConditions: { [key: string]: string } = {
-        tinggi: "((COUNT(DISTINCT CASE WHEN r.selesai = 1 THEN r.id_riwayat_survei END) / COUNT(DISTINCT r.id_riwayat_survei)) * 100) >= 80",
-        sedang: "((COUNT(DISTINCT CASE WHEN r.selesai = 1 THEN r.id_riwayat_survei END) / COUNT(DISTINCT r.id_riwayat_survei)) * 100) >= 50 AND ((COUNT(DISTINCT CASE WHEN r.selesai = 1 THEN r.id_riwayat_survei END) / COUNT(DISTINCT r.id_riwayat_survei)) * 100) < 80", 
-        rendah: "COUNT(DISTINCT r.id_riwayat_survei) > 0 AND ((COUNT(DISTINCT CASE WHEN r.selesai = 1 THEN r.id_riwayat_survei END) / COUNT(DISTINCT r.id_riwayat_survei)) * 100) < 50",
-        kosong: "COUNT(DISTINCT r.id_riwayat_survei) = 0"
-      };
-      
-      if (statusConditions[status]) {
-        query += ` HAVING ${statusConditions[status]}`;
-      }
+      baseQuery += ` WHERE ${whereConditions.join(" AND ")}`;
     }
 
     // Tambahkan sorting jika ada
@@ -142,25 +138,94 @@ export async function GET(request: NextRequest) {
           kip: "p.kip",
           nama_perusahaan: "p.nama_perusahaan", 
           alamat: "p.alamat",
-          jarak: "CAST(REPLACE(p.jarak, ' km', '') AS DECIMAL(10,2))",
+          jarak: "CAST(REPLACE(REPLACE(p.jarak, ' km', ''), ',', '.') AS DECIMAL(10,2))",
           pcl_utama: "p.pcl_utama"
         };
-        const dbColumn = columnMap[sort.column] || sort.column;
+        const dbColumn = columnMap[sort.column] || `p.${sort.column}`;
         return `${dbColumn} ${direction}`;
       });
-      query += ` ORDER BY ${orderClauses.join(", ")}`;
+      baseQuery += ` ORDER BY ${orderClauses.join(", ")}`;
     } else {
-      query += ` ORDER BY p.nama_perusahaan ASC`;
+      baseQuery += ` ORDER BY p.nama_perusahaan ASC`;
     }
 
-    console.log("Export query:", query);
-    console.log("Export params:", queryParams);
+    console.log("Executing query:", baseQuery);
+    console.log("Query params:", queryParams);
 
-    const [rows] = await connection.execute(query, queryParams);
-    await connection.end();
+    const [rows] = await connection.execute(baseQuery, queryParams);
+    console.log("Query executed, rows found:", (rows as any[]).length);
+
+    // Jika perlu data survei, ambil secara terpisah untuk setiap perusahaan
+    const perusahaanData = rows as any[];
+    
+    // Query untuk mendapatkan data direktori dan survei dengan format selesai yang benar
+    const enrichedData = await Promise.all(
+      perusahaanData.map(async (row) => {
+        try {
+          // Get tahun direktori
+          const [direktoriRows] = await connection.execute(
+            `SELECT GROUP_CONCAT(DISTINCT thn_direktori ORDER BY thn_direktori) AS tahun_direktori 
+             FROM direktori WHERE id_perusahaan = ?`,
+            [row.id_perusahaan]
+          );
+          
+          // PERBAIKAN: Get survei data dengan format selesai yang benar (string "Iya"/"Tidak")
+          const [surveiRows] = await connection.execute(
+            `SELECT 
+               COUNT(*) as total_survei,
+               COUNT(CASE WHEN selesai = 'Iya' THEN 1 END) as completed_survei
+             FROM riwayat_survei WHERE id_perusahaan = ?`,
+            [row.id_perusahaan]
+          );
+
+          const direktoriData = (direktoriRows as any[])[0];
+          const surveiData = (surveiRows as any[])[0];
+
+          console.log(`Company ${row.id_perusahaan} - Total: ${surveiData?.total_survei}, Completed: ${surveiData?.completed_survei}`);
+
+          return {
+            ...row,
+            tahun_direktori: direktoriData?.tahun_direktori || "",
+            total_survei: surveiData?.total_survei || 0,
+            completed_survei: surveiData?.completed_survei || 0
+          };
+        } catch (err) {
+          console.error("Error enriching data for company:", row.id_perusahaan, err);
+          return {
+            ...row,
+            tahun_direktori: "",
+            total_survei: 0,
+            completed_survei: 0
+          };
+        }
+      })
+    );
+
+    console.log("Data enriched successfully");
+
+    // Filter berdasarkan status jika diperlukan
+    let filteredData = enrichedData;
+    if (status && status !== "all") {
+      filteredData = enrichedData.filter(row => {
+        const calculatedStatus = getStatus(row.total_survei, row.completed_survei);
+        return calculatedStatus === status;
+      });
+    }
+
+    console.log("Filtered data count:", filteredData.length);
+
+    // Debug: Log beberapa sample data untuk memastikan kalkulasi benar
+    if (filteredData.length > 0) {
+      console.log("Sample data for verification:");
+      filteredData.slice(0, 3).forEach((row, index) => {
+        const percentage = row.total_survei > 0 ? Math.round((row.completed_survei / row.total_survei) * 100) : 0;
+        const status = getStatus(row.total_survei, row.completed_survei);
+        console.log(`Sample ${index + 1}: ${row.nama_perusahaan} - Total: ${row.total_survei}, Completed: ${row.completed_survei}, Percentage: ${percentage}%, Status: ${status}`);
+      });
+    }
 
     // Format data untuk export dengan auto increment yang benar
-    const exportData = (rows as any[]).map((row, index) => {
+    const exportData = filteredData.map((row, index) => {
       const totalSurvei = row.total_survei || 0;
       const completedSurvei = row.completed_survei || 0;
       const completionPercentage = totalSurvei > 0 ? Math.round((completedSurvei / totalSurvei) * 100) : 0;
@@ -204,6 +269,11 @@ export async function GET(request: NextRequest) {
         "Status": statusValue
       };
     });
+
+    console.log("Export data formatted, creating Excel...");
+
+    // Tutup koneksi database
+    await connection.end();
 
     // Buat workbook Excel
     const workbook = XLSX.utils.book_new();
@@ -250,12 +320,16 @@ export async function GET(request: NextRequest) {
     // Tambahkan worksheet ke workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, "Data Direktori Perusahaan");
 
+    console.log("Excel workbook created, generating buffer...");
+
     // Generate Excel buffer
     const excelBuffer = XLSX.write(workbook, { 
       type: 'buffer', 
       bookType: 'xlsx',
       compression: true
     });
+
+    console.log("Excel buffer generated, size:", excelBuffer.length);
 
     // Generate filename dengan timestamp dan filter info
     const now = new Date();
@@ -268,6 +342,8 @@ export async function GET(request: NextRequest) {
     if (pcl && pcl !== "all") filename += `-pcl-${pcl.substring(0, 10)}`;
     filename += '.xlsx';
 
+    console.log("Sending Excel file:", filename);
+
     // Return Excel file sebagai response
     return new NextResponse(excelBuffer, {
       status: 200,
@@ -279,9 +355,15 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("Error generating Excel:", error);
+    console.error("Detailed error in Excel export:", error);
+    console.error("Error stack:", error.stack);
+    
     return NextResponse.json(
-      { success: false, message: "Error generating Excel file: " + error.message },
+      { 
+        success: false, 
+        message: "Error generating Excel file: " + error.message,
+        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
