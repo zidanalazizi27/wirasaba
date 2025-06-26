@@ -329,6 +329,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
     // Filter input berdasarkan field
     if (field === "kip") {
+      if (!value || value.toString().trim() === "") {
+        showFieldTooltip("kip", "KIP tidak boleh kosong");
+        return;
+      }
       const numericValue = value.replace(/\D/g, "");
       if (numericValue.length > 10) {
         showFieldTooltip("kip", "KIP maksimal 10 digit");
@@ -355,6 +359,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       processedValue = numericValue;
     } else if (field === "lat") {
       const latPattern = /^-?\d*\.?\d*$/;
+      if (!value || value === "") {
+        showFieldTooltip("lat", "Latitude tidak boleh kosong");
+        return;
+      }
       if (value && !latPattern.test(value)) {
         showFieldTooltip(
           "lat",
@@ -372,6 +380,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       processedValue = value;
     } else if (field === "lon") {
       const lonPattern = /^-?\d*\.?\d*$/;
+      if (!value || value === "") {
+        showFieldTooltip("lon", "Longitude tidak boleh kosong");
+        return;
+      }
       if (value && !lonPattern.test(value)) {
         showFieldTooltip("lon", "Longitude harus berupa angka desimal");
         return;
@@ -453,36 +465,12 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         onSave && onSave(editedData);
       }
     } else {
-      const errorMessages = Object.entries(validationErrors)
-        .map(([field, error]) => {
-          const fieldNames = {
-            kip: "KIP",
-            nama_perusahaan: "Nama Perusahaan",
-            alamat: "Alamat",
-            kec: "Kecamatan",
-            des: "Desa",
-            badan_usaha: "Badan Usaha",
-            lok_perusahaan: "Lokasi Perusahaan",
-            KBLI: "KBLI",
-            produk: "Produk",
-            lat: "Latitude",
-            lon: "Longitude",
-            tkerja: "Tenaga Kerja",
-            investasi: "Investasi",
-            omset: "Omset",
-            skala: "Skala",
-            tahun_direktori: "Tahun Direktori",
-          };
-          return ` ${fieldNames[field] || field}: ${error}`;
-        })
-        .join("\n");
-
       SweetAlertUtils.warning(
         "Mohon Perbaiki Input",
-        `Mohon perbaiki kesalahan input berikut:\n\n${errorMessages}`,
+        "Terdapat kesalahan pada form input. Silakan periksa kembali data yang Anda masukkan.",
         {
           customClass: {
-            content: "text-left whitespace-pre-line",
+            content: "text-left",
           },
         }
       );
@@ -990,6 +978,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   const validateData = (): boolean => {
     // Reset pesan error
     const errors: Record<string, string> = {};
+    // Validasi KIP
+    if (!editedData?.kip || editedData.kip.toString().trim() === "") {
+      errors.kip = "KIP tidak boleh kosong";
+    }
 
     // Validasi nama perusahaan
     if (!editedData?.nama_perusahaan?.trim()) {
@@ -999,6 +991,24 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     // Validasi alamat
     if (!editedData?.alamat?.trim()) {
       errors.alamat = "Alamat tidak boleh kosong";
+    }
+
+    // Validasi Latitude
+    if (
+      !editedData?.lat ||
+      editedData.lat === null ||
+      editedData.lat === undefined
+    ) {
+      errors.lat = "Latitude tidak boleh kosong";
+    }
+
+    // Validasi Longitude
+    if (
+      !editedData?.lon ||
+      editedData.lon === null ||
+      editedData.lon === undefined
+    ) {
+      errors.lon = "Longitude tidak boleh kosong";
     }
 
     // Validasi tahun direktori
@@ -1011,7 +1021,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
     // Tampilkan error jika ada
     if (Object.keys(errors).length > 0) {
-      SweetAlertUtils.validationError(Object.values(errors));
+      SweetAlertUtils.warning(
+        "Mohon Perbaiki Input",
+        "Terdapat kesalahan pada form input. Silakan periksa kembali data yang Anda masukkan."
+      );
       return false;
     }
     return true;

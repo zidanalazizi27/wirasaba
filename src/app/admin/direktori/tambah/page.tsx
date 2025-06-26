@@ -12,19 +12,16 @@ export default function TambahDirektori() {
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async (data) => {
+    if (isSaving) return; // Prevent double submission
+
     try {
       setIsSaving(true);
 
+      // Prepare data for new company
       const dataToSend = { ...data };
-      delete dataToSend.id_perusahaan;
+      delete dataToSend.id_perusahaan; // Remove ID for new entries
 
-      if (!dataToSend.kip) {
-        const currentYear = new Date().getFullYear();
-        dataToSend.kip = parseInt(
-          `351${currentYear.toString().substr(2)}${Date.now().toString().substr(-5)}`
-        );
-      }
-
+      // Ensure tahun_direktori is properly set
       if (
         !Array.isArray(dataToSend.tahun_direktori) ||
         dataToSend.tahun_direktori.length === 0
@@ -40,11 +37,22 @@ export default function TambahDirektori() {
         body: JSON.stringify(dataToSend),
       });
 
-      const result = await response.json();
-
+      // Handle response properly
       if (!response.ok) {
-        throw new Error(result.message || `Error: ${response.status}`);
+        const errorText = await response.text();
+        let errorMessage;
+
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || `Error: ${response.status}`;
+        } catch {
+          errorMessage = `Server error: ${response.status}`;
+        }
+
+        throw new Error(errorMessage);
       }
+
+      const result = await response.json();
 
       if (result.success) {
         await SweetAlertUtils.success(
@@ -61,6 +69,10 @@ export default function TambahDirektori() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCancel = () => {
+    router.push("/admin/direktori");
   };
 
   return (
@@ -81,7 +93,8 @@ export default function TambahDirektori() {
             id_perusahaan={null}
             mode="add"
             onSave={handleSave}
-            onCancel={() => router.push("/admin/direktori")} // 🎯 SEDERHANA
+            onCancel={handleCancel}
+            isSaving={isSaving}
           />
         </div>
       </div>

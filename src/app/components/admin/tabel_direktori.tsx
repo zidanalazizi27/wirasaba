@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import type { SVGProps } from "react";
 import { useRouter } from "next/navigation";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -872,32 +873,64 @@ const TabelDirektori = () => {
     router.push(`/admin/direktori/${business.id_perusahaan}/edit`);
   };
 
-  // Handle delete business
+  // Handle delete business with SweetAlert
   const handleDeleteBusiness = async (business: Business) => {
-    if (confirm(`Yakin ingin menghapus ${business.nama_perusahaan}?`)) {
-      try {
-        // Call the DELETE API endpoint
-        const response = await fetch(
-          `/api/perusahaan/${business.id_perusahaan}`,
-          {
-            method: "DELETE",
-          }
-        );
+    try {
+      // Konfirmasi penghapusan dengan SweetAlert
+      const confirmed = await SweetAlertUtils.confirmDelete(
+        "Hapus Data Perusahaan",
+        `Apakah Anda yakin ingin menghapus "${business.nama_perusahaan}"? Tindakan ini akan menghapus semua data terkait termasuk tahun direktori dan tidak dapat dibatalkan.`,
+        "Ya, Hapus",
+        "Batal"
+      );
 
-        const result = await response.json();
+      if (!confirmed) return;
 
-        if (result.success) {
-          alert(`${business.nama_perusahaan} berhasil dihapus!`);
-          // Refresh data after successful deletion
-          fetchData(); // Panggil fetchData untuk me-refresh data
-          setHasLoadedAll(false); // Reset state hasLoadedAll agar data bisa di-load ulang
-        } else {
-          alert(`Gagal menghapus: ${result.message}`);
+      // Tampilkan loading
+      SweetAlertUtils.loading("Menghapus data...", "Mohon tunggu sebentar");
+
+      // Call the DELETE API endpoint
+      const response = await fetch(
+        `/api/perusahaan/${business.id_perusahaan}`,
+        {
+          method: "DELETE",
         }
-      } catch (error) {
-        console.error("Error deleting data:", error);
-        alert("Terjadi kesalahan saat menghapus data");
+      );
+
+      const result = await response.json();
+
+      // Close loading
+      SweetAlertUtils.closeLoading();
+
+      if (result.success) {
+        // Tampilkan pesan sukses
+        await SweetAlertUtils.success(
+          "Berhasil Dihapus!",
+          `"${business.nama_perusahaan}" berhasil dihapus dari database.`
+        );
+        
+        // Refresh data after successful deletion
+        fetchData(1, false);
+        setCurrentPage(1);
+        setHasLoadedAll(false);
+      } else {
+        // Tampilkan error dari server
+        SweetAlertUtils.error(
+          "Gagal Menghapus",
+          result.message || "Terjadi kesalahan saat menghapus data"
+        );
       }
+    } catch (error) {
+      console.error("Error deleting data:", error);
+      
+      // Close loading jika masih terbuka
+      SweetAlertUtils.closeLoading();
+      
+      // Tampilkan error umum
+      SweetAlertUtils.error(
+        "Error",
+        "Terjadi kesalahan saat menghapus data. Silakan coba lagi."
+      );
     }
   };
 

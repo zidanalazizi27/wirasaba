@@ -32,7 +32,7 @@ export default function EditDirektoriDetail() {
         console.error("Error fetching company name:", error);
         setCompanyName("Detail Perusahaan");
         setIsLoading(false);
-        SweetAlertUtils.error("Error", "Gagal memuat data perusahaan");
+        // Removed duplicate SweetAlert - let DetailDirektori handle API errors
       }
     };
 
@@ -42,6 +42,8 @@ export default function EditDirektoriDetail() {
   }, [id_perusahaan]);
 
   const handleSave = async (data) => {
+    if (isSaving) return; // Prevent double submission
+
     try {
       setIsSaving(true);
 
@@ -55,19 +57,22 @@ export default function EditDirektoriDetail() {
         body: JSON.stringify(data),
       });
 
-      const responseText = await response.text();
-      console.log("Response text:", responseText);
-
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error(`Invalid JSON response: ${responseText}`);
-      }
-
+      // Handle response properly
       if (!response.ok) {
-        throw new Error(result.message || `Error: ${response.status}`);
+        const errorText = await response.text();
+        let errorMessage;
+
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || `Error: ${response.status}`;
+        } catch {
+          errorMessage = `Server error: ${response.status}`;
+        }
+
+        throw new Error(errorMessage);
       }
+
+      const result = await response.json();
 
       if (result.success) {
         await SweetAlertUtils.success("Berhasil!", "Data berhasil diperbarui!");
@@ -81,6 +86,10 @@ export default function EditDirektoriDetail() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCancel = () => {
+    router.push(`/admin/direktori/${id_perusahaan}`);
   };
 
   return (
@@ -105,7 +114,8 @@ export default function EditDirektoriDetail() {
             id_perusahaan={id_perusahaan}
             mode="edit"
             onSave={handleSave}
-            onCancel={() => router.push(`/admin/direktori/${id_perusahaan}`)} // 🎯 SEDERHANA
+            onCancel={handleCancel}
+            isSaving={isSaving}
           />
         </div>
       </div>
