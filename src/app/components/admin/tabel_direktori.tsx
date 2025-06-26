@@ -908,7 +908,7 @@ const TabelDirektori = () => {
           "Berhasil Dihapus!",
           `"${business.nama_perusahaan}" berhasil dihapus dari database.`
         );
-        
+
         // Refresh data after successful deletion
         fetchData(1, false);
         setCurrentPage(1);
@@ -922,10 +922,10 @@ const TabelDirektori = () => {
       }
     } catch (error) {
       console.error("Error deleting data:", error);
-      
+
       // Close loading jika masih terbuka
       SweetAlertUtils.closeLoading();
-      
+
       // Tampilkan error umum
       SweetAlertUtils.error(
         "Error",
@@ -938,9 +938,109 @@ const TabelDirektori = () => {
     setShowUploadModal(true);
   };
 
-  const handleExportClick = () => {
-    // Implementasi future: Export functionality
-    alert("Fitur download data sedang dalam pengembangan");
+  // Fungsi handleExportClick
+  const handleExportClick = async () => {
+    try {
+      // Tampilkan konfirmasi dengan SweetAlert
+      const result = await SweetAlertUtils.confirm(
+        "Download Data Excel",
+        `Apakah Anda yakin ingin mengunduh data direktori perusahaan? ${
+          filterValue ||
+          statusFilter !== "all" ||
+          pclFilter !== "all" ||
+          selectedYear
+            ? "Data akan diunduh sesuai dengan filter yang sedang aktif."
+            : "Semua data akan diunduh."
+        }`,
+        "Ya, Download",
+        "Batal"
+      );
+
+      if (!result) return;
+
+      // Tampilkan loading
+      SweetAlertUtils.loading(
+        "Memproses Download",
+        "Mohon tunggu, data sedang diproses..."
+      );
+
+      // Buat parameter URL yang sama dengan parameter tabel saat ini
+      const params = new URLSearchParams();
+
+      if (selectedYear) params.append("year", selectedYear);
+      if (filterValue) params.append("search", filterValue);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (pclFilter !== "all") params.append("pcl", pclFilter);
+
+      // Tambahkan parameter sorting jika ada
+      sortDescriptors.forEach((sort, index) => {
+        params.append(`sort[${index}][column]`, sort.column);
+        params.append(
+          `sort[${index}][direction]`,
+          sort.direction || "ascending"
+        );
+      });
+
+      // Buat URL untuk download
+      const downloadUrl = `/api/perusahaan/export-excel?${params.toString()}`;
+
+      // Fetch file
+      const response = await fetch(downloadUrl);
+
+      if (!response.ok) {
+        SweetAlertUtils.closeLoading();
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Ambil data blob
+      const blob = await response.blob();
+
+      // Buat link untuk download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+
+      // Ambil filename dari response header
+      const contentDisposition = response.headers.get("content-disposition");
+      let filename = "direktori-perusahaan.xlsx";
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Tutup loading dan tampilkan success
+      SweetAlertUtils.closeLoading();
+
+      // Hitung jumlah data yang didownload (opsional, untuk informasi user)
+      let downloadInfo = "Data direktori perusahaan berhasil diunduh!";
+      if (filterValue || statusFilter !== "all" || pclFilter !== "all") {
+        downloadInfo +=
+          " Data yang diunduh telah difilter sesuai pengaturan Anda.";
+      }
+
+      SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
+        timer: 4000,
+      });
+    } catch (error) {
+      SweetAlertUtils.closeLoading();
+      console.error("Error downloading Excel:", error);
+
+      SweetAlertUtils.error(
+        "Download Gagal",
+        `Terjadi kesalahan saat mengunduh data: ${error.message}. Silakan coba lagi.`
+      );
+    }
   };
 
   // Calculate pages
@@ -1396,7 +1496,7 @@ const TabelDirektori = () => {
 
             <Tooltip content="Download Data" position="bottom">
               <button
-                className="p-2 bg-gray-100 text-blue-600 rounded-lg flex items-center justify-center"
+                className="p-2 bg-gray-100 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-50 transition-colors"
                 onClick={handleExportClick}
               >
                 <DownloadIcon size={20} />

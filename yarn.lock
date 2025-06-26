@@ -5792,6 +5792,13 @@
   dependencies:
     csstype "^3.0.2"
 
+"@types/xlsx@^0.0.36":
+  version "0.0.36"
+  resolved "https://registry.yarnpkg.com/@types/xlsx/-/xlsx-0.0.36.tgz#b5062003e5c5374ab4f08fdd3bf69da4d4013af8"
+  integrity sha512-mvfrKiKKMErQzLMF8ElYEH21qxWCZtN59pHhWGmWCWFJStYdMWjkDSAy6mGowFxHXaXZWe5/TW7pBUiWclIVOw==
+  dependencies:
+    xlsx "*"
+
 "@typescript-eslint/eslint-plugin@8.11.0":
   version "8.11.0"
   resolved "https://registry.yarnpkg.com/@typescript-eslint/eslint-plugin/-/eslint-plugin-8.11.0.tgz#c3f087d20715fa94310b30666c08b3349e0ab084"
@@ -9793,7 +9800,7 @@ wrap-ansi@^8.1.0:
     string-width "^5.0.1"
     strip-ansi "^7.0.1"
 
-xlsx@^0.18.5:
+xlsx@*, xlsx@^0.18.5:
   version "0.18.5"
   resolved "https://registry.yarnpkg.com/xlsx/-/xlsx-0.18.5.tgz#16711b9113c848076b8a177022799ad356eba7d0"
   integrity sha512-dmg3LCjBPHZnQp5/F/+nnTa+miPJxUXB6vtk42YjBBKayDNagxGEeIdWApkYPOf3Z3pm3k62Knjzp7lMeTEtFQ==
