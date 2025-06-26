@@ -1,6 +1,3 @@
-// src/app/api/perusahaan/export-excel/route.ts
-// PERBAIKAN: Query untuk mengambil data survei dengan format kolom selesai yang benar
-
 import { NextRequest, NextResponse } from "next/server";
 import mysql from "mysql2/promise";
 import * as XLSX from "xlsx";

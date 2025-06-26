@@ -982,7 +982,7 @@ const TabelDirektori = () => {
       });
 
       // Buat URL untuk download
-      const downloadUrl = `/api/perusahaan/export-excel?${params.toString()}`;
+      const downloadUrl = `/api/perusahaan/export?${params.toString()}`;
 
       // Fetch file
       const response = await fetch(downloadUrl);
