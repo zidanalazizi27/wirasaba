@@ -151,7 +151,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
     switch (field) {
       case "kip":
-        if (value && value !== "") {
+        // KIP wajib diisi - perbaikan utama
+        if (!value || value === "" || value.toString().trim() === "") {
+          errors.push("KIP wajib diisi");
+        } else {
           const kipStr = value.toString();
           if (!/^\d+$/.test(kipStr)) {
             errors.push("KIP harus berupa angka saja");
@@ -183,7 +186,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         break;
 
       case "lat":
-        if (value && value !== "") {
+        // Latitude wajib diisi - perbaikan utama
+        if (!value || value === "" || value.toString().trim() === "") {
+          errors.push("Latitude wajib diisi");
+        } else {
           const lat = parseFloat(value);
           if (isNaN(lat)) {
             errors.push("Latitude harus berupa angka desimal");
@@ -194,7 +200,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         break;
 
       case "lon":
-        if (value && value !== "") {
+        // Longitude wajib diisi - perbaikan utama
+        if (!value || value === "" || value.toString().trim() === "") {
+          errors.push("Longitude wajib diisi");
+        } else {
           const lon = parseFloat(value);
           if (isNaN(lon)) {
             errors.push("Longitude harus berupa angka desimal");
@@ -456,7 +465,22 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
   // Handler save dengan validasi
   const handleSaveWithValidation = () => {
-    if (editedData && validateAllFields()) {
+    if (!editedData) {
+      SweetAlertUtils.error("Error", "Data tidak tersedia untuk disimpan");
+      return;
+    }
+
+    // Validasi semua field terlebih dahulu
+    if (!validateAllFields()) {
+      SweetAlertUtils.warning(
+        "Mohon Perbaiki Input",
+        "Terdapat kesalahan pada form input. Silakan periksa kembali data yang Anda masukkan."
+      );
+      return;
+    }
+
+    // Jika validasi lolos, lanjutkan penyimpanan
+    try {
       if (mode === "add") {
         const dataToSave = { ...editedData };
         delete dataToSave.id_perusahaan;
@@ -464,15 +488,11 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       } else {
         onSave && onSave(editedData);
       }
-    } else {
-      SweetAlertUtils.warning(
-        "Mohon Perbaiki Input",
-        "Terdapat kesalahan pada form input. Silakan periksa kembali data yang Anda masukkan.",
-        {
-          customClass: {
-            content: "text-left",
-          },
-        }
+    } catch (error) {
+      console.error("Error saving data:", error);
+      SweetAlertUtils.error(
+        "Gagal Menyimpan",
+        "Terjadi kesalahan saat menyimpan data. Silakan coba lagi."
       );
     }
   };
@@ -770,8 +790,8 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             id_perusahaan: null,
             kip: "",
             nama_perusahaan: "",
-            badan_usaha: 8, // Default: Tidak Berbadan Usaha
-            badan_usaha_nama: "Tidak Berbadan Usaha",
+            badan_usaha: "",
+            badan_usaha_nama: "",
             alamat: "",
             kec: "",
             kec_nama: "",
