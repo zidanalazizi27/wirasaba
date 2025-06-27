@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import type { SVGProps } from "react";
 import SurveyForm from "./survei_form";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -623,9 +624,11 @@ const TabelSurvei = () => {
   }, [currentPage]);
 
   // Action handlers
-  const handleViewSurvey = (survey: Survey) => {
-    // Implementasi untuk detail survey
-    alert(`Detail survei: ${survey.nama_survei} (ID: ${survey.id_survei})`);
+  const handleViewSurvey = async (survey: Survey) => {
+    await SweetAlertUtils.info(
+      `Detail Survei: ${survey.nama_survei}`,
+      `ID: ${survey.id_survei}\nFungsi: ${survey.fungsi}\nPeriode: ${survey.periode}\nTahun: ${survey.tahun}`
+    );
   };
 
   const handleEditSurvey = (survey: Survey) => {
@@ -634,24 +637,63 @@ const TabelSurvei = () => {
   };
 
   const handleDeleteSurvey = async (survey: Survey) => {
-    if (confirm(`Yakin ingin menghapus survei "${survey.nama_survei}"?`)) {
-      try {
-        const response = await fetch(`/api/survei/${survey.id_survei}`, {
-          method: "DELETE",
-        });
+    try {
+      // Konfirmasi penghapusan dengan SweetAlert
+      const confirmed = await SweetAlertUtils.confirmDelete(
+        "Hapus Data Survei",
+        `Apakah Anda yakin ingin menghapus survei "${survey.nama_survei}" (${survey.tahun})?\n\nTindakan ini tidak dapat dibatalkan dan akan menghapus semua data terkait.`,
+        "Ya, Hapus",
+        "Batal"
+      );
 
-        const result = await response.json();
+      if (!confirmed) return;
 
-        if (result.success) {
-          alert("Survei berhasil dihapus");
-          fetchData(); // Refresh the data
+      // Tampilkan loading
+      SweetAlertUtils.loading("Menghapus data...", "Mohon tunggu sebentar");
+
+      const response = await fetch(`/api/survei/${survey.id_survei}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+
+      // Close loading
+      SweetAlertUtils.closeLoading();
+
+      if (result.success) {
+        // Tampilkan pesan sukses
+        await SweetAlertUtils.success(
+          "Berhasil Dihapus!",
+          `Survei "${survey.nama_survei}" berhasil dihapus dari database.`
+        );
+
+        // Refresh data after successful deletion
+        fetchData();
+      } else {
+        // Handle different types of errors
+        if (response.status === 409) {
+          await SweetAlertUtils.warning(
+            "Tidak Dapat Dihapus",
+            result.message ||
+              "Survei tidak dapat dihapus karena masih digunakan dalam riwayat survei"
+          );
         } else {
-          alert(`Gagal menghapus: ${result.message}`);
+          await SweetAlertUtils.error(
+            "Gagal Menghapus",
+            result.message || "Terjadi kesalahan saat menghapus data"
+          );
         }
-      } catch (error) {
-        console.error("Error deleting survey:", error);
-        alert("Terjadi kesalahan saat menghapus data");
       }
+    } catch (error) {
+      console.error("Error deleting survey:", error);
+
+      // Close loading jika masih terbuka
+      SweetAlertUtils.closeLoading();
+
+      await SweetAlertUtils.error(
+        "Error",
+        "Terjadi kesalahan saat menghapus data. Silakan coba lagi."
+      );
     }
   };
 
@@ -667,13 +709,13 @@ const TabelSurvei = () => {
   // Modal success handlers
   const handleAddSuccess = () => {
     setShowAddModal(false);
-    fetchData(); // Refresh data
+    fetchData();
   };
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
     setSelectedSurvey(null);
-    fetchData(); // Refresh data
+    fetchData();
   };
 
   // Render cell content

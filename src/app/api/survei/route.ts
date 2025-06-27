@@ -53,7 +53,6 @@ function validateSurveiData(data: any) {
       errors.push("Tahun harus antara 1900-2100");
     }
   }
-
   return errors;
 }
 

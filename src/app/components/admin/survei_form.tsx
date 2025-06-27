@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 interface SurveyFormProps {
   id?: string | number;
@@ -72,13 +73,16 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
   onCancel,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<SurveyData>({
     nama_survei: "",
     fungsi: "",
     periode: "",
     tahun: new Date().getFullYear(),
   });
+
+  // State untuk melacak perubahan form
+  const [hasChanges, setHasChanges] = useState(false);
+  const [originalData, setOriginalData] = useState<SurveyData | null>(null);
 
   // State untuk validasi
   const [fieldStates, setFieldStates] = useState<FieldState>({
@@ -150,12 +154,13 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
       ...prev,
       [name]: { touched, error },
     }));
+    return error;
   };
 
   // Validasi semua field
   const validateAllFields = (): boolean => {
     const newFieldStates: FieldState = {};
-    let isValid = true;
+    let hasErrors = false;
 
     // Validasi semua field yang ada
     const fieldsToValidate = ["nama_survei", "fungsi", "periode", "tahun"];
@@ -163,14 +168,14 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
     fieldsToValidate.forEach((field) => {
       const error = validateField(field, formData[field as keyof SurveyData]);
       newFieldStates[field] = { touched: true, error };
-      if (error) isValid = false;
+      if (error) hasErrors = true;
     });
 
     // Validasi custom fields jika diperlukan
     if (showCustomFungsi) {
       const customFungsiError = validateField("fungsi", customFungsi);
       newFieldStates.customFungsi = { touched: true, error: customFungsiError };
-      if (customFungsiError) isValid = false;
+      if (customFungsiError) hasErrors = true;
     }
 
     if (showCustomPeriode) {
@@ -179,11 +184,27 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
         touched: true,
         error: customPeriodeError,
       };
-      if (customPeriodeError) isValid = false;
+      if (customPeriodeError) hasErrors = true;
     }
 
     setFieldStates((prev) => ({ ...prev, ...newFieldStates }));
-    return isValid;
+    return !hasErrors; // Return true jika TIDAK ada error
+  };
+
+  // Cek apakah ada perubahan pada form
+  const checkForChanges = (newData: SurveyData) => {
+    if (!originalData) {
+      setHasChanges(true);
+      return;
+    }
+
+    const hasDataChanged =
+      newData.nama_survei !== originalData.nama_survei ||
+      newData.fungsi !== originalData.fungsi ||
+      newData.periode !== originalData.periode ||
+      newData.tahun !== originalData.tahun;
+
+    setHasChanges(hasDataChanged);
   };
 
   // Fetch survey data if in edit mode
@@ -201,12 +222,15 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
           const result = await response.json();
           if (result.success && result.data) {
             const surveyData = result.data;
-            setFormData({
+            const initialData = {
               nama_survei: surveyData.nama_survei || "",
               fungsi: surveyData.fungsi || "",
               periode: surveyData.periode || "",
               tahun: surveyData.tahun || new Date().getFullYear(),
-            });
+            };
+
+            setFormData(initialData);
+            setOriginalData(initialData);
 
             // Check if custom options are needed
             const standardFungsi = fungsiOptions.some(
@@ -230,21 +254,35 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
           }
         } catch (err) {
           console.error("Error fetching survey:", err);
-          setError(`Gagal memuat data survei: ${(err as Error).message}`);
+          await SweetAlertUtils.error(
+            "Error",
+            `Gagal memuat data survei: ${(err as Error).message}`
+          );
         } finally {
           setIsLoading(false);
         }
       };
 
       fetchSurvey();
+    } else {
+      // Mode add - set original data
+      const initialData = {
+        nama_survei: "",
+        fungsi: "",
+        periode: "",
+        tahun: new Date().getFullYear(),
+      };
+      setOriginalData(initialData);
     }
   }, [mode, id]);
 
   // Handle input changes dengan validasi real-time
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const newFormData = { ...formData, [name]: value };
+    setFormData(newFormData);
     updateFieldState(name, value);
+    checkForChanges(newFormData);
   };
 
   // Handle dropdown changes dengan validasi
@@ -254,24 +292,34 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
     if (name === "fungsi") {
       if (value === "Lainnya") {
         setShowCustomFungsi(true);
-        setFormData((prev) => ({ ...prev, fungsi: "" }));
+        const newFormData = { ...formData, fungsi: "" };
+        setFormData(newFormData);
+        checkForChanges(newFormData);
       } else {
         setShowCustomFungsi(false);
-        setFormData((prev) => ({ ...prev, fungsi: value }));
+        const newFormData = { ...formData, fungsi: value };
+        setFormData(newFormData);
         updateFieldState("fungsi", value);
+        checkForChanges(newFormData);
       }
     } else if (name === "periode") {
       if (value === "Lainnya") {
         setShowCustomPeriode(true);
-        setFormData((prev) => ({ ...prev, periode: "" }));
+        const newFormData = { ...formData, periode: "" };
+        setFormData(newFormData);
+        checkForChanges(newFormData);
       } else {
         setShowCustomPeriode(false);
-        setFormData((prev) => ({ ...prev, periode: value }));
+        const newFormData = { ...formData, periode: value };
+        setFormData(newFormData);
         updateFieldState("periode", value);
+        checkForChanges(newFormData);
       }
     } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+      const newFormData = { ...formData, [name]: value };
+      setFormData(newFormData);
       updateFieldState(name, value);
+      checkForChanges(newFormData);
     }
   };
 
@@ -281,12 +329,16 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
 
     if (name === "customFungsi") {
       setCustomFungsi(value);
-      setFormData((prev) => ({ ...prev, fungsi: value }));
+      const newFormData = { ...formData, fungsi: value };
+      setFormData(newFormData);
       updateFieldState("fungsi", value);
+      checkForChanges(newFormData);
     } else if (name === "customPeriode") {
       setCustomPeriode(value);
-      setFormData((prev) => ({ ...prev, periode: value }));
+      const newFormData = { ...formData, periode: value };
+      setFormData(newFormData);
       updateFieldState("periode", value);
+      checkForChanges(newFormData);
     }
   };
 
@@ -295,21 +347,58 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
     updateFieldState(name, value, true);
   };
 
+  // Handle cancel dengan konfirmasi jika ada perubahan
+  const handleCancel = async () => {
+    if (hasChanges) {
+      const confirmed = await SweetAlertUtils.confirmCancel(
+        "Batalkan Perubahan",
+        "Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin membatalkan?",
+        "Ya, Batalkan",
+        "Tetap Edit"
+      );
+
+      if (!confirmed) return;
+    }
+
+    onCancel();
+  };
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validasi semua field sebelum submit
+    // Validasi semua field sebelum konfirmasi
     const isValid = validateAllFields();
 
     if (!isValid) {
-      setError("Silakan perbaiki kesalahan pada form sebelum melanjutkan");
+      await SweetAlertUtils.warning(
+        "Form Belum Lengkap",
+        "Silakan periksa dan lengkapi form dengan benar.",
+        {
+          confirmButtonText: "OK",
+        }
+      );
       return;
     }
 
+    // Konfirmasi sebelum menyimpan
+    const confirmed = await SweetAlertUtils.confirmSave(
+      mode === "edit" ? "Simpan Perubahan" : "Simpan Data Survei",
+      mode === "edit"
+        ? "Apakah Anda yakin ingin menyimpan perubahan data survei ini?"
+        : "Apakah Anda yakin ingin menyimpan data survei baru ini?",
+      "Ya, Simpan",
+      "Batal"
+    );
+
+    if (!confirmed) return;
+
     try {
-      setIsLoading(true);
-      setError(null);
+      // Tampilkan loading
+      SweetAlertUtils.loading(
+        mode === "edit" ? "Menyimpan Perubahan..." : "Menyimpan Data...",
+        "Mohon tunggu sebentar"
+      );
 
       // Prepare data untuk submit
       const dataToSubmit = {
@@ -332,21 +421,51 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
 
       const result = await response.json();
 
+      // Close loading
+      SweetAlertUtils.closeLoading();
+
       if (result.success) {
+        // Tampilkan pesan sukses
+        await SweetAlertUtils.success(
+          mode === "edit" ? "Berhasil Diperbarui!" : "Berhasil Disimpan!",
+          mode === "edit"
+            ? `Data survei "${dataToSubmit.nama_survei}" berhasil diperbarui.`
+            : `Data survei "${dataToSubmit.nama_survei}" berhasil disimpan.`
+        );
+
+        // Reset state
+        setHasChanges(false);
         onSuccess();
       } else {
-        throw new Error(
-          result.message ||
-            `Gagal ${mode === "edit" ? "memperbarui" : "menambahkan"} survei`
-        );
+        // Handle different types of errors
+        if (response.status === 409) {
+          await SweetAlertUtils.warning(
+            "Data Sudah Ada",
+            result.message || "Nama survei sudah ada untuk tahun yang sama"
+          );
+        } else if (result.errors && Array.isArray(result.errors)) {
+          await SweetAlertUtils.validationError(
+            result.errors,
+            "Validasi Gagal"
+          );
+        } else {
+          await SweetAlertUtils.error(
+            "Gagal Menyimpan",
+            result.message ||
+              `Gagal ${mode === "edit" ? "memperbarui" : "menambahkan"} survei`
+          );
+        }
       }
     } catch (err) {
       console.error("Error saving survey data:", err);
-      setError(
-        `Gagal ${mode === "edit" ? "memperbarui" : "menambahkan"} data survei: ${(err as Error).message}`
+
+      // Close loading jika masih terbuka
+      SweetAlertUtils.closeLoading();
+
+      await SweetAlertUtils.error(
+        "Error",
+        `Terjadi kesalahan saat ${mode === "edit" ? "memperbarui" : "menyimpan"} data: ${(err as Error).message}`
       );
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -356,12 +475,6 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
-
       {/* Nama Survei */}
       <div className="relative">
         <label
@@ -383,6 +496,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
               : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
           }`}
           placeholder="Masukkan nama survei"
+          disabled={isLoading}
         />
         <Tooltip
           message={fieldStates.nama_survei.error}
@@ -411,6 +525,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
               ? "border-red-500 focus:border-red-500 focus:ring-red-200"
               : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
           }`}
+          disabled={isLoading}
         >
           {fungsiOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -437,6 +552,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
                   ? "border-red-500 focus:border-red-500 focus:ring-red-200"
                   : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
               }`}
+              disabled={isLoading}
             />
           </div>
         )}
@@ -461,6 +577,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
               ? "border-red-500 focus:border-red-500 focus:ring-red-200"
               : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
           }`}
+          disabled={isLoading}
         >
           {periodeOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -487,6 +604,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
                   ? "border-red-500 focus:border-red-500 focus:ring-red-200"
                   : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
               }`}
+              disabled={isLoading}
             />
           </div>
         )}
@@ -515,6 +633,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
               : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
           }`}
           placeholder="Masukkan tahun (1900-2100)"
+          disabled={isLoading}
         />
         <p className="mt-1 text-xs text-gray-500">Format: YYYY (1900-2100)</p>
         <Tooltip
@@ -527,8 +646,9 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
       <div className="flex justify-end space-x-3 pt-4">
         <button
           type="button"
-          onClick={onCancel}
-          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+          onClick={handleCancel}
+          disabled={isLoading}
+          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Batal
         </button>
@@ -537,7 +657,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
           disabled={isLoading}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isLoading ? "Menyimpan..." : mode === "edit" ? "Perbarui" : "Simpan"}
+          {mode === "edit" ? "Perbarui" : "Simpan"}
         </button>
       </div>
     </form>
