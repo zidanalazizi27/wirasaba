@@ -382,22 +382,116 @@ const TabelPCL = () => {
   // Handler untuk tombol download
   const handleDownloadClick = async () => {
     try {
-      // Mekanisme download data PCL
-      const params = new URLSearchParams({
-        format: "excel",
-        status: statusFilter !== "all" ? statusFilter : "",
-        search: filterValue,
+      // Cek apakah ada filter, sorting, atau pencarian aktif
+      const hasActiveFilters =
+        filterValue || statusFilter !== "all" || sortDescriptors.length > 0;
+
+      // Tampilkan konfirmasi dengan SweetAlert
+      const result = await SweetAlertUtils.confirm(
+        "Download Data Excel",
+        `Apakah Anda yakin ingin mengunduh data PCL? ${
+          hasActiveFilters
+            ? "Data akan diunduh sesuai dengan filter, sorting, dan pencarian yang sedang aktif."
+            : "Semua data akan diunduh."
+        }`,
+        "Ya, Download",
+        "Batal"
+      );
+
+      if (!result) return;
+
+      // Tampilkan loading
+      SweetAlertUtils.loading(
+        "Memproses Download",
+        "Mohon tunggu, data sedang diproses..."
+      );
+
+      // Buat parameter URL yang sama dengan parameter tabel saat ini
+      const params = new URLSearchParams();
+
+      if (filterValue) params.append("search", filterValue);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+
+      // Tambahkan parameter sorting jika ada
+      sortDescriptors.forEach((sort, index) => {
+        params.append(`sort[${index}][column]`, sort.column);
+        params.append(
+          `sort[${index}][direction]`,
+          sort.direction || "ascending"
+        );
       });
 
-      // Dalam versi nyata, Anda akan mengarahkan ke endpoint API khusus untuk download
-      // Contoh:
-      // window.location.href = `/api/pcl/download?${params.toString()}`;
+      // Buat URL untuk download
+      const downloadUrl = `/api/pcl/export?${params.toString()}`;
 
-      // Untuk contoh ini, kita hanya tampilkan alert
-      alert("Fitur download data sedang dalam pengembangan");
+      // Fetch file
+      const response = await fetch(downloadUrl);
+
+      if (!response.ok) {
+        SweetAlertUtils.closeLoading();
+
+        // Handle different error responses
+        if (response.status === 404) {
+          const errorData = await response.json();
+          SweetAlertUtils.warning(
+            "Tidak Ada Data",
+            errorData.message ||
+              "Tidak ada data PCL yang ditemukan untuk diekspor"
+          );
+          return;
+        }
+
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Ambil data blob
+      const blob = await response.blob();
+
+      // Buat link untuk download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+
+      // Ambil filename dari response header
+      const contentDisposition = response.headers.get("content-disposition");
+      let filename = "data-pcl.xlsx";
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Tutup loading dan tampilkan success
+      SweetAlertUtils.closeLoading();
+
+      // Hitung informasi download
+      let downloadInfo = "Data PCL berhasil diunduh!";
+      if (hasActiveFilters) {
+        downloadInfo +=
+          " Data yang diunduh telah difilter sesuai pengaturan Anda.";
+      }
+
+      SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
+        timer: 4000,
+      });
     } catch (error) {
-      console.error("Error downloading data:", error);
-      alert("Terjadi kesalahan saat mengunduh data");
+      SweetAlertUtils.closeLoading();
+      console.error("Error downloading Excel:", error);
+
+      SweetAlertUtils.error(
+        "Download Gagal",
+        `Terjadi kesalahan saat mengunduh data: ${error instanceof Error ? error.message : "Unknown error"}. Silakan coba lagi.`
+      );
     }
   };
 
