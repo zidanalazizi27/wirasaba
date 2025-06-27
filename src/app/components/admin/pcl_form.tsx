@@ -192,8 +192,8 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
     // Validasi semua field terlebih dahulu
     if (!validateAllFields()) {
       SweetAlertUtils.warning(
-        "Periksa Kembali Form",
-        "Masih ada field yang belum diisi dengan benar. Periksa tooltip merah pada field yang bermasalah."
+        "Form Belum Lengkap",
+        "Silakan periksa dan lengkapi form dengan benar."
       );
       return;
     }
@@ -384,7 +384,6 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
           placeholder="Masukkan nomor telepon (hanya angka)"
           disabled={isLoading}
         />
-        <p className="mt-1 text-xs text-gray-500">Hanya masukkan angka saja</p>
         <Tooltip
           message={fieldStates.telp_pcl.error}
           isVisible={
