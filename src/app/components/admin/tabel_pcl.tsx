@@ -10,6 +10,7 @@ import React, {
 import type { SVGProps } from "react";
 import { useRouter } from "next/navigation";
 import PCLForm from "./pcl_form";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -443,9 +444,9 @@ const TabelPCL = () => {
         throw new Error(result.message || "Failed to fetch PCL data");
       }
     } catch (err) {
-      console.error("Error fetching data:", err);
-      setError("Gagal memuat data PCL");
-      setPclList([]);
+      console.error("Error fetching PCL data:", err);
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+      SweetAlertUtils.error("Error", "Gagal memuat data PCL");
     } finally {
       setIsLoading(false);
     }
@@ -698,38 +699,59 @@ const TabelPCL = () => {
   };
 
   const handleDeletePCL = async (pcl: PCL) => {
-    if (confirm(`Yakin ingin menghapus ${pcl.nama_pcl}?`)) {
-      try {
-        // Call DELETE API endpoint
-        const response = await fetch(`/api/pcl/${pcl.id_pcl}`, {
-          method: "DELETE",
-        });
+    // Gunakan SweetAlert untuk konfirmasi hapus
+    const confirmDelete = await SweetAlertUtils.confirmDelete(
+      "Hapus Data PCL",
+      `Apakah Anda yakin ingin menghapus data PCL "${pcl.nama_pcl}"? Tindakan ini tidak dapat dibatalkan.`,
+      "Ya, Hapus",
+      "Batal"
+    );
 
-        const result = await response.json();
+    if (!confirmDelete) return;
 
-        if (result.success) {
-          alert(`${pcl.nama_pcl} berhasil dihapus!`);
-          // Refresh data after successful deletion
-          fetchData();
-        } else {
-          alert(`Gagal menghapus: ${result.message}`);
-        }
-      } catch (error) {
-        console.error("Error deleting data:", error);
-        alert("Terjadi kesalahan saat menghapus data");
+    try {
+      // Show loading
+      SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
+
+      // Call DELETE API endpoint
+      const response = await fetch(`/api/pcl/${pcl.id_pcl}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+      SweetAlertUtils.closeLoading();
+
+      if (result.success) {
+        await SweetAlertUtils.success(
+          "Berhasil Dihapus!",
+          `Data PCL "${pcl.nama_pcl}" berhasil dihapus!`
+        );
+        // Refresh data after successful deletion
+        fetchData();
+      } else {
+        throw new Error(result.message || "Gagal menghapus data");
       }
+    } catch (error) {
+      console.error("Error deleting data:", error);
+      SweetAlertUtils.closeLoading();
+      SweetAlertUtils.error(
+        "Gagal Menghapus",
+        `Terjadi kesalahan saat menghapus data: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   };
 
   const handleAddSuccess = () => {
     setShowAddModal(false);
     fetchData(); // Refresh data
+    // SweetAlert success sudah ditangani di PCLForm
   };
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
     setSelectedPCL(null);
     fetchData(); // Refresh data
+    // SweetAlert success sudah ditangani di PCLForm
   };
 
   // Pagination handlers

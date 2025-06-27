@@ -26,13 +26,8 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit;
   
   try {
-    // Buat koneksi ke database
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'wirasaba',
-    });
+    // Create database connection
+    const connection = await createDbConnection();
 
     // Jika format=dropdown, gunakan format lama untuk dropdown di detail_direktori
     if (format === "dropdown") {
@@ -131,62 +126,122 @@ export async function GET(request: NextRequest) {
       data: rows
     });
   } catch (error) {
-    console.error("Database error:", error.message);
+    console.error("Database error:", error);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { 
+        success: false, 
+        message: "Error saat mengambil data: " + (error instanceof Error ? error.message : "Unknown error")
+      },
       { status: 500 }
     );
   }
 }
 
-// POST endpoint to add a new PCL
+// POST endpoint to add a new PCL dengan duplicate check
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
     
-    // Validate required fields
+    // Validasi input basic
     if (!data.nama_pcl || !data.status_pcl) {
       return NextResponse.json({ 
         success: false, 
-        message: "Nama PCL dan status harus diisi" 
+        message: "Nama PCL dan Status PCL wajib diisi" 
       }, { status: 400 });
     }
+
+    // Validasi karakter berbahaya pada nama PCL
+    const dangerousChars = /[<>"'&;(){}[\]]/;
+    if (dangerousChars.test(data.nama_pcl.trim())) {
+      return NextResponse.json({
+        success: false,
+        message: "Nama PCL tidak boleh mengandung karakter khusus berbahaya"
+      }, { status: 400 });
+    }
+
+    // Validasi telepon jika diisi
+    if (data.telp_pcl && data.telp_pcl.trim()) {
+      const numbersOnly = /^[0-9]+$/;
+      if (!numbersOnly.test(data.telp_pcl.trim())) {
+        return NextResponse.json({
+          success: false,
+          message: "Nomor telepon harus berupa angka"
+        }, { status: 400 });
+      }
+    }
     
-    // Buat koneksi ke database
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'wirasaba',
-    });
+    // Create database connection
+    const connection = await createDbConnection();
     
-    // Insert new PCL
-    const [result] = await connection.execute(
-      `INSERT INTO pcl (nama_pcl, status_pcl, telp_pcl) 
-       VALUES (?, ?, ?)`,
-      [data.nama_pcl, data.status_pcl, data.telp_pcl || null]
-    );
-    
-    // Get new PCL ID
-    const newPclId = (result as any).insertId;
-    
-    await connection.end();
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: "Data PCL berhasil ditambahkan",
-      id: newPclId
-    });
+    try {
+      // Begin transaction
+      await connection.beginTransaction();
+
+      // ===== DUPLICATE CHECK SEPERTI DI SURVEI_FORM.TSX =====
+      const [duplicateRows] = await connection.execute(
+        `SELECT id_pcl, nama_pcl, status_pcl FROM pcl 
+         WHERE LOWER(TRIM(nama_pcl)) = LOWER(?) 
+         AND LOWER(TRIM(status_pcl)) = LOWER(?)`,
+        [data.nama_pcl.trim(), data.status_pcl.trim()]
+      );
+
+      if ((duplicateRows as any[]).length > 0) {
+        await connection.rollback();
+        await connection.end();
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Kombinasi Nama PCL "${data.nama_pcl.trim()}" dengan Status "${data.status_pcl.trim()}" sudah terdaftar dalam sistem.`,
+          },
+          { status: 409 } // 409 = Conflict
+        );
+      }
+
+      // Insert new PCL jika tidak duplikat
+      const [result] = await connection.execute(
+        `INSERT INTO pcl (nama_pcl, status_pcl, telp_pcl) 
+         VALUES (?, ?, ?)`,
+        [
+          data.nama_pcl.trim(), 
+          data.status_pcl.trim(), 
+          data.telp_pcl ? data.telp_pcl.trim() : null
+        ]
+      );
+      
+      // Get new PCL ID
+      const newPclId = (result as any).insertId;
+      
+      await connection.commit();
+      await connection.end();
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: "Data PCL berhasil ditambahkan",
+        id: newPclId,
+        data: {
+          id_pcl: newPclId,
+          nama_pcl: data.nama_pcl.trim(),
+          status_pcl: data.status_pcl.trim(),
+          telp_pcl: data.telp_pcl ? data.telp_pcl.trim() : null,
+        }
+      });
+
+    } catch (dbError) {
+      await connection.rollback();
+      await connection.end();
+      throw dbError;
+    }
+
   } catch (error) {
-    console.error("Database error:", error.message);
+    console.error("Database error:", error);
     return NextResponse.json({ 
       success: false, 
-      message: "Error saat menyimpan data: " + error.message 
+      message: "Error saat menyimpan data: " + (error instanceof Error ? error.message : "Unknown error")
     }, { status: 500 });
   }
 }
 
-// Add PUT endpoint to update existing PCL
+// PUT endpoint to update existing PCL (keep existing functionality - tidak digunakan dari form)
 export async function PUT(request: NextRequest) {
   try {
     const data = await request.json();
@@ -216,9 +271,9 @@ export async function PUT(request: NextRequest) {
       updateParams.push(data.status_pcl);
     }
     
-    if (data.telp_pcl) {
+    if (data.telp_pcl !== undefined) {
       updateFields.push("telp_pcl = ?");
-      updateParams.push(data.telp_pcl);
+      updateParams.push(data.telp_pcl || null);
     }
     
     // If no fields to update
@@ -267,7 +322,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// Add DELETE endpoint to remove PCL
+// DELETE endpoint to remove PCL
 export async function DELETE(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
