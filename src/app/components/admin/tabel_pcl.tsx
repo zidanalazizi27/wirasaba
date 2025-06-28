@@ -312,6 +312,399 @@ const Tooltip = ({
   );
 };
 
+// Upload Modal interfaces
+interface UploadModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+interface ValidationError {
+  row: number;
+  field: string;
+  message: string;
+  value?: any;
+}
+
+interface DuplicateData {
+  row: number;
+  nama_pcl: string;
+  status_pcl: string;
+  existing_id?: number;
+}
+
+// Upload Modal Component
+const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState<"append" | "replace">("append");
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      // Validate file type
+      const allowedTypes = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+        "application/vnd.ms-excel", // .xls
+        "text/csv", // .csv
+      ];
+
+      if (!allowedTypes.includes(selectedFile.type)) {
+        SweetAlertUtils.warning(
+          "Format File Tidak Valid",
+          "Silakan pilih file dengan format .xlsx, .xls, atau .csv"
+        );
+        e.target.value = "";
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (selectedFile.size > maxSize) {
+        SweetAlertUtils.warning(
+          "File Terlalu Besar",
+          "Ukuran file maksimal 10MB"
+        );
+        e.target.value = "";
+        return;
+      }
+
+      setFile(selectedFile);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      SweetAlertUtils.loading("Mengunduh Template", "Mohon tunggu sebentar...");
+
+      const response = await fetch("/api/pcl/template", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+
+        // Get filename from response header
+        const contentDisposition = response.headers.get("content-disposition");
+        let filename = "template-pcl.xlsx";
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+          if (filenameMatch) {
+            filename = filenameMatch[1];
+          }
+        }
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        SweetAlertUtils.closeLoading();
+        SweetAlertUtils.success(
+          "Template Berhasil Diunduh",
+          "Silakan isi template sesuai format yang disediakan"
+        );
+      } else {
+        throw new Error("Gagal mengunduh template");
+      }
+    } catch (error) {
+      SweetAlertUtils.closeLoading();
+      SweetAlertUtils.error(
+        "Gagal Mengunduh Template",
+        "Terjadi kesalahan saat mengunduh template"
+      );
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      SweetAlertUtils.warning(
+        "File Belum Dipilih",
+        "Silakan pilih file terlebih dahulu"
+      );
+      return;
+    }
+
+    // Confirm upload action
+    const confirmMessage =
+      uploadMode === "replace"
+        ? 'Mode "Ganti Semua Data" akan menghapus semua data PCL yang ada dan menggantinya dengan data dari file Excel. Tindakan ini tidak dapat dibatalkan.'
+        : 'Mode "Tambah Data" akan menambahkan data baru dan memperbarui data yang sudah ada jika ditemukan duplikasi.';
+
+    const confirmed = await SweetAlertUtils.confirm(
+      "Konfirmasi Upload",
+      confirmMessage,
+      "Ya, Lanjutkan",
+      "Batal"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsUploading(true);
+      SweetAlertUtils.loading(
+        "Memproses File",
+        "Menganalisis dan memvalidasi data..."
+      );
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("mode", uploadMode);
+
+      const response = await fetch("/api/pcl/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+      SweetAlertUtils.closeLoading();
+
+      if (result.success) {
+        // Handle different success scenarios
+        if (result.duplicates && result.duplicates.length > 0) {
+          // Show duplicate confirmation dialog
+          await handleDuplicateConfirmation(
+            result.duplicates,
+            result.processedData,
+            result.summary
+          );
+        } else {
+          // No duplicates, show success
+          await SweetAlertUtils.success(
+            "Upload Berhasil!",
+            `${result.summary?.processed || 0} data PCL berhasil diproses.`
+          );
+          onSuccess();
+          onClose();
+        }
+      } else {
+        // Handle validation errors
+        if (result.errors && result.errors.length > 0) {
+          await showValidationErrors(result.errors);
+        } else {
+          await SweetAlertUtils.error(
+            "Upload Gagal",
+            result.message || "Terjadi kesalahan saat memproses file"
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      SweetAlertUtils.closeLoading();
+      SweetAlertUtils.error("Error", "Terjadi kesalahan saat mengupload file");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDuplicateConfirmation = async (
+    duplicates: DuplicateData[],
+    processedData: any,
+    summary: any
+  ) => {
+    const duplicateList = duplicates
+      .map((dup) => `• Baris ${dup.row}: ${dup.nama_pcl} (${dup.status_pcl})`)
+      .join("\n");
+
+    const confirmed = await SweetAlertUtils.confirm(
+      "Data Duplikat Ditemukan",
+      `Ditemukan ${duplicates.length} data yang sudah ada:\n\n${duplicateList}\n\nApakah Anda ingin mengganti data yang sudah ada dengan data baru?`,
+      "Ya, Ganti Data",
+      "Lewati Data Duplikat"
+    );
+
+    try {
+      SweetAlertUtils.loading("Memproses Data", "Menyimpan perubahan...");
+
+      const formData = new FormData();
+      formData.append("duplicateAction", confirmed ? "replace" : "skip");
+      formData.append(
+        "duplicateData",
+        JSON.stringify({
+          processedData,
+          duplicates,
+        })
+      );
+
+      const response = await fetch("/api/pcl/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+      SweetAlertUtils.closeLoading();
+
+      if (result.success) {
+        await SweetAlertUtils.success(
+          "Proses Selesai!",
+          `${result.summary?.processed || 0} data berhasil diproses.`
+        );
+        onSuccess();
+        onClose();
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      SweetAlertUtils.closeLoading();
+      SweetAlertUtils.error("Error", "Gagal memproses data duplikat");
+    }
+  };
+
+  const showValidationErrors = async (errors: ValidationError[]) => {
+    const errorGroups: { [key: string]: ValidationError[] } = {};
+
+    errors.forEach((error) => {
+      if (!errorGroups[error.field]) {
+        errorGroups[error.field] = [];
+      }
+      errorGroups[error.field].push(error);
+    });
+
+    let errorMessage = "Ditemukan kesalahan pada file:\n\n";
+
+    Object.entries(errorGroups).forEach(([field, fieldErrors]) => {
+      errorMessage += `${field.toUpperCase()}:\n`;
+      fieldErrors.slice(0, 5).forEach((error) => {
+        errorMessage += `• Baris ${error.row}: ${error.message}\n`;
+      });
+      if (fieldErrors.length > 5) {
+        errorMessage += `• ... dan ${fieldErrors.length - 5} kesalahan lainnya\n`;
+      }
+      errorMessage += "\n";
+    });
+
+    await SweetAlertUtils.warning("Validasi Gagal", errorMessage);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-xl font-medium mb-4">Upload Data PCL</h2>
+
+        <div className="space-y-4">
+          {/* Download Template Button */}
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Unduh Template
+          </button>
+
+          {/* File Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pilih File Excel (.xlsx, .xls, .csv)
+            </label>
+            <input
+              type="file"
+              onChange={handleFileChange}
+              accept=".xlsx,.xls,.csv"
+              className="w-full p-2 border border-gray-300 rounded-md text-sm"
+              disabled={isUploading}
+            />
+            {file && (
+              <p className="mt-2 text-sm text-gray-600">
+                File terpilih: {file.name} ({(file.size / 1024).toFixed(1)} KB)
+              </p>
+            )}
+          </div>
+
+          {/* Upload Mode */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Mode Upload
+            </label>
+            <div className="space-y-2">
+              <div className="flex items-start">
+                <input
+                  type="radio"
+                  id="append"
+                  name="uploadMode"
+                  value="append"
+                  checked={uploadMode === "append"}
+                  onChange={() => setUploadMode("append")}
+                  className="h-4 w-4 text-blue-600 mt-0.5"
+                  disabled={isUploading}
+                />
+                <label htmlFor="append" className="ml-2 text-sm text-gray-700">
+                  <span className="font-medium">Tambah Data</span> — Menambahkan
+                  data baru, memperbarui data yang sudah ada jika ditemukan
+                  duplikasi
+                </label>
+              </div>
+              <div className="flex items-start">
+                <input
+                  type="radio"
+                  id="replace"
+                  name="uploadMode"
+                  value="replace"
+                  checked={uploadMode === "replace"}
+                  onChange={() => setUploadMode("replace")}
+                  className="h-4 w-4 text-red-600 mt-0.5"
+                  disabled={isUploading}
+                />
+                <label htmlFor="replace" className="ml-2 text-sm text-gray-700">
+                  <span className="font-medium text-red-600">
+                    Ganti Semua Data
+                  </span>{" "}
+                  — Menghapus semua data PCL dan menggantinya dengan data dari
+                  file
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Format Requirements */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <h4 className="text-sm font-medium text-gray-800 mb-2">
+              Format File:
+            </h4>
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li>
+                • <strong>Nama PCL:</strong> Wajib diisi, tidak boleh kosong
+              </li>
+              <li>
+                • <strong>Status:</strong> Harus "Mitra" atau "Staff"
+              </li>
+              <li>
+                • <strong>Telepon:</strong> Opsional, hanya angka jika diisi
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-end space-x-3 pt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isUploading}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={isUploading || !file}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isUploading ? "Memproses..." : "Upload"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Table column definitions untuk PCL
 export const columns = [
   { name: "No", uid: "no", sortable: false },
@@ -956,7 +1349,15 @@ const TabelPCL = () => {
       )}
 
       {/* Upload Modal */}
-      {showUploadModal && <UploadModal />}
+      {showUploadModal && (
+        <UploadModal
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={() => {
+            setShowUploadModal(false);
+            fetchData(); // Refresh data after successful upload
+          }}
+        />
+      )}
 
       {/* Top section with search and filters */}
       <div className="p-4 flex flex-col gap-4">
