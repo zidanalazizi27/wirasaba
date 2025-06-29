@@ -105,8 +105,7 @@ export async function GET(request: NextRequest) {
 
     // Query yang disederhanakan untuk menghindari masalah ROW_NUMBER
     const query = `
-      SELECT 
-        s.id_survei,
+      SELECT
         s.nama_survei,
         s.fungsi,
         s.periode,
@@ -128,7 +127,6 @@ export async function GET(request: NextRequest) {
     const exportData = surveiData.map((survei, index) => {
       return {
         "No": index + 1,
-        "ID Survei": survei.id_survei,
         "Nama Survei": survei.nama_survei || '',
         "Fungsi": survei.fungsi || '',
         "Periode": survei.periode || '',
@@ -156,7 +154,6 @@ export async function GET(request: NextRequest) {
     // Set column widths
     const columnWidths = [
       { wch: 5 },   // No
-      { wch: 12 },  // ID Survei
       { wch: 40 },  // Nama Survei
       { wch: 20 },  // Fungsi
       { wch: 15 },  // Periode

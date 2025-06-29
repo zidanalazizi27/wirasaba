@@ -586,7 +586,9 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-medium mb-4">Upload Data PCL</h2>
+        <h2 className="text-xl font-medium mb-4 text-center">
+          Upload Data PCL
+        </h2>
 
         <div className="space-y-4">
           {/* Download Template Button */}
@@ -636,8 +638,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                 />
                 <label htmlFor="append" className="ml-2 text-sm text-gray-700">
                   <span className="font-medium">Tambah Data</span> — Menambahkan
-                  data baru, memperbarui data yang sudah ada jika ditemukan
-                  duplikasi
+                  data baru, memperbarui data yang sudah ada
                 </label>
               </div>
               <div className="flex items-start">
@@ -655,8 +656,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                   <span className="font-medium text-red-600">
                     Ganti Semua Data
                   </span>{" "}
-                  — Menghapus semua data PCL dan menggantinya dengan data dari
-                  file
+                  — Menghapus semua data lama dan mengganti dengan data baru
                 </label>
               </div>
             </div>
@@ -665,7 +665,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
           {/* Format Requirements */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
             <h4 className="text-sm font-medium text-gray-800 mb-2">
-              Format File:
+              Informasi Penting :
             </h4>
             <ul className="text-xs text-gray-600 space-y-1">
               <li>

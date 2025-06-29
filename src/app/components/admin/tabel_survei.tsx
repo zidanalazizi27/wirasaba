@@ -10,6 +10,7 @@ import React, {
 import type { SVGProps } from "react";
 import SurveyForm from "./survei_form";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
+import * as XLSX from "xlsx";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -246,7 +247,7 @@ export const DownloadIcon = ({ size = 20, ...props }: IconSvgProps) => (
     />
   </svg>
 );
-z
+
 // Tooltip component
 const Tooltip = ({
   children,
@@ -377,9 +378,146 @@ const TabelSurvei = () => {
   // Data state
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+
+  // State Sorting
+  const [allSurveyData, setAllSurveyData] = useState<Survey[]>([]);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [hasLoadedAll, setHasLoadedAll] = useState(false);
+
+  const fetchAllData = useCallback(async () => {
+    if (isLoadingAll || hasLoadedAll) return;
+
+    try {
+      setIsLoadingAll(true);
+
+      // Build query parameters tanpa pagination
+      const params = new URLSearchParams({
+        search: filterValue,
+        fungsi: fungsiFilter,
+        periode: periodeFilter,
+        tahun: tahunFilter,
+        limit: "999999", // Ambil semua data
+      });
+
+      const response = await fetch(`/api/survei?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setAllSurveyData(result.data);
+        setHasLoadedAll(true);
+      } else {
+        throw new Error(result.message || "Failed to fetch all survey data");
+      }
+    } catch (err) {
+      console.error("Error fetching all data:", err);
+    } finally {
+      setIsLoadingAll(false);
+    }
+  }, [filterValue, fungsiFilter, periodeFilter, tahunFilter, hasLoadedAll]);
+
+  useEffect(() => {
+    if (sortDescriptors.length > 0 && !hasLoadedAll) {
+      fetchAllData();
+    }
+  }, [sortDescriptors, fetchAllData]);
+
+  // Reset hasLoadedAll when filters change
+  useEffect(() => {
+    setHasLoadedAll(false);
+  }, [filterValue, fungsiFilter, periodeFilter, tahunFilter]);
+
+  const sortedItems = useMemo(() => {
+    // Use all data if loaded and sorting is active, otherwise use paginated data
+    const dataToSort =
+      hasLoadedAll && sortDescriptors.length > 0
+        ? [...allSurveyData]
+        : [...surveys];
+
+    if (sortDescriptors.length === 0) return dataToSort;
+
+    return dataToSort.sort((a, b) => {
+      for (const sort of sortDescriptors) {
+        if (!sort.direction) continue;
+
+        const column = sort.column as keyof Survey;
+
+        // Handle null/undefined values
+        const valueA = a[column] ?? "";
+        const valueB = b[column] ?? "";
+
+        // Handle different column types
+        if (
+          column === "nama_survei" ||
+          column === "fungsi" ||
+          column === "periode"
+        ) {
+          const strA = String(valueA).toLowerCase();
+          const strB = String(valueB).toLowerCase();
+
+          const compareResult = strA.localeCompare(strB);
+
+          if (compareResult !== 0) {
+            return sort.direction === "ascending"
+              ? compareResult
+              : -compareResult;
+          }
+        } else if (column === "tahun") {
+          const numA =
+            typeof valueA === "number" ? valueA : parseInt(String(valueA)) || 0;
+          const numB =
+            typeof valueB === "number" ? valueB : parseInt(String(valueB)) || 0;
+
+          if (numA !== numB) {
+            return sort.direction === "ascending" ? numA - numB : numB - numA;
+          }
+        }
+      }
+
+      return 0;
+    });
+  }, [surveys, allSurveyData, sortDescriptors, hasLoadedAll]);
+
+  // 5. TAMBAHKAN PAGINATED ITEMS LOGIC
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+
+    // If sorting is active and all data is loaded, paginate from sorted data
+    if (hasLoadedAll && sortDescriptors.length > 0) {
+      const newTotalPages = Math.ceil(sortedItems.length / rowsPerPage);
+
+      // Update total pages and items
+      if (totalPages !== newTotalPages) {
+        setTotalPages(newTotalPages);
+        setTotalItems(sortedItems.length);
+      }
+
+      return sortedItems.slice(start, end).map((item, index) => ({
+        ...item,
+        no: start + index + 1,
+      }));
+    }
+
+    // Otherwise use the server-paginated data
+    return surveys;
+  }, [
+    sortedItems,
+    currentPage,
+    rowsPerPage,
+    surveys,
+    hasLoadedAll,
+    sortDescriptors,
+    totalPages,
+  ]);
 
   // Filter options
   const [fungsiOptions, setFungsiOptions] = useState<
@@ -742,11 +880,10 @@ const TabelSurvei = () => {
 
       // Tambahkan parameter sorting jika ada
       sortDescriptors.forEach((sort, index) => {
-        params.append(`sort[${index}][column]`, sort.column);
-        params.append(
-          `sort[${index}][direction]`,
-          sort.direction || "ascending"
-        );
+        if (sort.direction) {
+          params.append(`sort[${index}][column]`, sort.column);
+          params.append(`sort[${index}][direction]`, sort.direction);
+        }
       });
 
       // Buat URL untuk download
@@ -797,16 +934,16 @@ const TabelSurvei = () => {
           " Data yang diunduh telah difilter sesuai pengaturan Anda.";
       }
 
-      SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
+      await SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
         timer: 4000,
       });
     } catch (error) {
       SweetAlertUtils.closeLoading();
       console.error("Error downloading Excel:", error);
 
-      SweetAlertUtils.error(
+      await SweetAlertUtils.error(
         "Download Gagal",
-        `Terjadi kesalahan saat mengunduh data: ${error.message}. Silakan coba lagi.`
+        `Terjadi kesalahan saat mengunduh data: ${(error as Error).message}. Silakan coba lagi.`
       );
     }
   };
@@ -814,13 +951,17 @@ const TabelSurvei = () => {
   // Modal success handlers
   const handleAddSuccess = () => {
     setShowAddModal(false);
+    setHasLoadedAll(false); // Reset untuk refresh data
     fetchData();
+    fetchFilterOptions();
   };
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
     setSelectedSurvey(null);
+    setHasLoadedAll(false); // Reset untuk refresh data
     fetchData();
+    fetchFilterOptions();
   };
 
   // Render cell content
@@ -878,26 +1019,422 @@ const TabelSurvei = () => {
       }
     };
 
-    const handleSubmit = () => {
+    const handleDownloadTemplate = async () => {
+      try {
+        SweetAlertUtils.loading(
+          "Mengunduh Template",
+          "Mohon tunggu sebentar..."
+        );
+
+        const response = await fetch("/api/survei/template");
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+
+        const currentDate = new Date().toISOString().split("T")[0];
+        link.download = `template_data_survei_${currentDate}.xlsx`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        SweetAlertUtils.closeLoading();
+        await SweetAlertUtils.success(
+          "Template Berhasil Diunduh!",
+          "Silakan isi template dan upload kembali."
+        );
+      } catch (error) {
+        SweetAlertUtils.closeLoading();
+        console.error("Error downloading template:", error);
+        await SweetAlertUtils.error(
+          "Error",
+          `Gagal mengunduh template: ${(error as Error).message}`
+        );
+      }
+    };
+
+    // Validation functions (sama seperti di form_survei.tsx)
+    const validateSurveiData = (data: any): string[] => {
+      const errors: string[] = [];
+
+      if (!data.nama_survei || typeof data.nama_survei !== "string") {
+        errors.push("Nama survei wajib diisi");
+      } else {
+        const namaSurvei = data.nama_survei.trim();
+        if (namaSurvei.length < 3) {
+          errors.push("Nama survei minimal 3 karakter");
+        }
+        if (namaSurvei.length > 100) {
+          errors.push("Nama survei maksimal 100 karakter");
+        }
+      }
+
+      if (
+        !data.fungsi ||
+        typeof data.fungsi !== "string" ||
+        data.fungsi.trim() === ""
+      ) {
+        errors.push("Fungsi wajib diisi");
+      }
+
+      if (
+        !data.periode ||
+        typeof data.periode !== "string" ||
+        data.periode.trim() === ""
+      ) {
+        errors.push("Periode wajib diisi");
+      }
+
+      if (!data.tahun) {
+        errors.push("Tahun wajib diisi");
+      } else {
+        const tahun =
+          typeof data.tahun === "string" ? parseInt(data.tahun) : data.tahun;
+        if (isNaN(tahun)) {
+          errors.push("Tahun harus berupa angka");
+        } else if (tahun < 1900 || tahun > 2100) {
+          errors.push("Tahun harus antara 1900-2100");
+        }
+      }
+
+      return errors;
+    };
+
+    const sanitizeSurveiData = (data: any) => {
+      return {
+        nama_survei: data.nama_survei ? data.nama_survei.toString().trim() : "",
+        fungsi: data.fungsi ? data.fungsi.toString().trim() : "",
+        periode: data.periode ? data.periode.toString().trim() : "",
+        tahun:
+          typeof data.tahun === "string"
+            ? parseInt(data.tahun)
+            : data.tahun || 0,
+      };
+    };
+
+    const handleSubmit = async () => {
       if (!file) {
-        alert("Silakan pilih file terlebih dahulu");
+        await SweetAlertUtils.warning(
+          "File Belum Dipilih",
+          "Silakan pilih file Excel terlebih dahulu"
+        );
         return;
       }
 
-      alert(
-        `File ${file.name} berhasil diupload dengan mode: ${
-          uploadMode === "append" ? "Tambah Data" : "Ganti Semua Data"
-        }`
+      // Validasi file type
+      const allowedTypes = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+        "text/csv",
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        await SweetAlertUtils.error(
+          "File Tidak Valid",
+          "Harap pilih file dengan format .xlsx, .xls, atau .csv"
+        );
+        return;
+      }
+
+      // Konfirmasi upload
+      const confirmText =
+        uploadMode === "replace"
+          ? "MENGGANTI SEMUA data survei yang ada dengan data dari file Excel ini"
+          : "MENAMBAHKAN data dari file Excel ke data survei yang sudah ada";
+
+      const confirmUpload = await SweetAlertUtils.confirm(
+        "Konfirmasi Upload",
+        `Apakah Anda yakin ingin ${confirmText}?`,
+        "Ya, Lanjutkan",
+        "Batal"
       );
+
+      if (!confirmUpload) return;
+
+      try {
+        setIsUploading(true);
+        SweetAlertUtils.loading(
+          "Memproses File",
+          "Membaca dan memvalidasi data..."
+        );
+
+        // Read and validate Excel file
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "buffer" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (jsonData.length < 2) {
+          throw new Error(
+            "File Excel harus memiliki minimal 1 baris data (selain header)"
+          );
+        }
+
+        // Get headers and data
+        const headers = jsonData[0] as string[];
+        const rows = jsonData.slice(1) as any[][];
+
+        // Validate headers
+        const requiredHeaders = ["nama_survei", "fungsi", "periode", "tahun"];
+        const missingHeaders = requiredHeaders.filter(
+          (header) =>
+            !headers.some(
+              (h) => h && h.toLowerCase().trim() === header.toLowerCase()
+            )
+        );
+
+        if (missingHeaders.length > 0) {
+          throw new Error(
+            `Header yang diperlukan tidak ditemukan: ${missingHeaders.join(", ")}`
+          );
+        }
+
+        // Map headers to indices
+        const headerMap: { [key: string]: number } = {};
+        requiredHeaders.forEach((header) => {
+          const index = headers.findIndex(
+            (h) => h && h.toLowerCase().trim() === header.toLowerCase()
+          );
+          headerMap[header] = index;
+        });
+
+        // Process and validate data
+        const validData: any[] = [];
+        const errors: any[] = [];
+        let validRowCount = 0;
+
+        rows.forEach((row, index) => {
+          const rowNumber = index + 2;
+
+          if (
+            !row ||
+            row.every((cell) => !cell || cell.toString().trim() === "")
+          ) {
+            return;
+          }
+
+          const rowData = {
+            nama_survei: row[headerMap.nama_survei] || "",
+            fungsi: row[headerMap.fungsi] || "",
+            periode: row[headerMap.periode] || "",
+            tahun: row[headerMap.tahun] || "",
+          };
+
+          const sanitizedData = sanitizeSurveiData(rowData);
+          const rowErrors = validateSurveiData(sanitizedData);
+
+          if (rowErrors.length > 0) {
+            rowErrors.forEach((error) => {
+              errors.push({
+                row: rowNumber,
+                field: "validation",
+                message: error,
+                value: sanitizedData,
+              });
+            });
+          } else {
+            validData.push(sanitizedData);
+            validRowCount++;
+          }
+        });
+
+        // Show validation results
+        if (errors.length > 0) {
+          const errorMessage = errors
+            .slice(0, 10)
+            .map((err) => `Baris ${err.row}: ${err.message}`)
+            .join("\n");
+
+          const showAllErrors =
+            errors.length <= 10
+              ? ""
+              : `\n... dan ${errors.length - 10} error lainnya`;
+
+          SweetAlertUtils.closeLoading();
+          await SweetAlertUtils.error(
+            "Validasi Gagal",
+            `Ditemukan ${errors.length} error dalam file:\n\n${errorMessage}${showAllErrors}\n\nSilakan perbaiki file dan coba lagi.`
+          );
+          return;
+        }
+
+        if (validData.length === 0) {
+          SweetAlertUtils.closeLoading();
+          await SweetAlertUtils.warning(
+            "Tidak Ada Data Valid",
+            "Tidak ditemukan data valid untuk diimport"
+          );
+          return;
+        }
+
+        // PERBAIKAN: Check for duplicates if in append mode
+        let duplicates: any[] = []; // DEKLARASI duplicates DI SINI
+        if (uploadMode === "append") {
+          SweetAlertUtils.loading(
+            "Memeriksa Duplikat",
+            "Memeriksa data yang sudah ada..."
+          );
+
+          // Check duplicates using the import API
+          try {
+            const response = await fetch("/api/survei/import", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                data: validData,
+                mode: "check_duplicates",
+              }),
+            });
+
+            const result = await response.json();
+            if (result.duplicates && result.duplicates.length > 0) {
+              duplicates = result.duplicates;
+            }
+          } catch (error) {
+            console.error("Error checking duplicates:", error);
+          }
+        }
+
+        // Handle duplicates - MENGGUNAKAN duplicates YANG SUDAH DIDEKLARASI
+        let replaceExisting = false;
+        if (duplicates.length > 0) {
+          SweetAlertUtils.closeLoading();
+
+          const duplicateMessage = duplicates
+            .slice(0, 5)
+            .map((dup) => {
+              // PERBAIKAN: Pastikan dup memiliki struktur yang benar
+              const dupData = dup.data || dup; // Fallback jika struktur berbeda
+              return `"${dupData.nama_survei}" (${dupData.fungsi}, ${dupData.periode}, ${dupData.tahun})`;
+            })
+            .join("\n");
+
+          const showMore =
+            duplicates.length > 5
+              ? `\n... dan ${duplicates.length - 5} data lainnya`
+              : "";
+
+          const handleDuplicates = await SweetAlertUtils.confirm(
+            "Data Duplikat Ditemukan",
+            `Ditemukan ${duplicates.length} data yang sudah ada:\n\n${duplicateMessage}${showMore}\n\nApakah Anda ingin mengganti data yang sudah ada?`,
+            "Ganti Data Existing",
+            "Lewati Data Duplikat"
+          );
+
+          if (handleDuplicates) {
+            replaceExisting = true;
+          } else {
+            // Remove duplicates from validData - PERBAIKAN INDEX
+            const duplicateIndices = new Set(
+              duplicates
+                .map((d) => {
+                  // Gunakan findIndex untuk mencari data yang sama di validData
+                  const dupData = d.data || d; // Fallback jika struktur berbeda
+                  return validData.findIndex(
+                    (item) =>
+                      item.nama_survei === dupData.nama_survei &&
+                      item.fungsi === dupData.fungsi &&
+                      item.periode === dupData.periode &&
+                      item.tahun === dupData.tahun
+                  );
+                })
+                .filter((index) => index !== -1)
+            );
+
+            const filteredData = validData.filter(
+              (_, index) => !duplicateIndices.has(index)
+            );
+
+            if (filteredData.length === 0) {
+              await SweetAlertUtils.warning(
+                "Tidak Ada Data Baru",
+                "Semua data sudah ada di database"
+              );
+              return;
+            }
+            validData.length = 0;
+            validData.push(...filteredData);
+          }
+        }
+
+        // Send data to server
+        SweetAlertUtils.loading(
+          "Mengupload Data",
+          `Memproses ${validData.length} data...`
+        );
+
+        const response = await fetch("/api/survei/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            data: validData,
+            mode: uploadMode,
+            replaceExisting: replaceExisting,
+          }),
+        });
+
+        const result = await response.json();
+        SweetAlertUtils.closeLoading();
+
+        if (result.success) {
+          const message =
+            uploadMode === "replace"
+              ? `Berhasil mengganti semua data dengan ${result.inserted || 0} data baru`
+              : `Berhasil memproses ${(result.inserted || 0) + (result.updated || 0)} data`;
+
+          await SweetAlertUtils.success("Upload Berhasil!", message);
+          setShowUploadModal(false);
+          setHasLoadedAll(false); // Reset untuk refresh data
+          fetchData();
+          fetchFilterOptions(); // Refresh filter options
+        } else {
+          throw new Error(result.message || "Upload gagal");
+        }
+      } catch (error) {
+        setIsUploading(false);
+        SweetAlertUtils.closeLoading();
+        console.error("Error uploading file:", error);
+        await SweetAlertUtils.error(
+          "Upload Gagal",
+          `Terjadi kesalahan: ${(error as Error).message}`
+        );
+      } finally {
+        setIsUploading(false);
+      }
+    };
+
+    const handleCancel = () => {
       setShowUploadModal(false);
+      setFile(null);
+      setUploadMode("append");
     };
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
-          <h2 className="text-xl font-medium mb-4">Upload Data Survei</h2>
+        <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <h2 className="text-xl font-medium mb-4 text-center">
+            Upload Data Survei
+          </h2>
 
           <div className="space-y-4">
+            {/* Download Template Button */}
+            <button
+              onClick={handleDownloadTemplate}
+              className="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50"
+              disabled={isUploading}
+            >
+              Unduh Template
+            </button>
+
+            {/* File Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Pilih File Excel (.xlsx, .xls, .csv)
@@ -906,7 +1443,8 @@ const TabelSurvei = () => {
                 type="file"
                 onChange={handleFileChange}
                 accept=".xlsx, .xls, .csv"
-                className="w-full p-2 border border-gray-300 rounded-md"
+                className="w-full p-2 border border-gray-300 rounded-md disabled:opacity-50"
+                disabled={isUploading}
               />
               {file && (
                 <p className="mt-2 text-sm text-gray-600">
@@ -915,6 +1453,7 @@ const TabelSurvei = () => {
               )}
             </div>
 
+            {/* Upload Mode */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Mode Upload
@@ -929,13 +1468,14 @@ const TabelSurvei = () => {
                     checked={uploadMode === "append"}
                     onChange={() => setUploadMode("append")}
                     className="h-4 w-4 text-blue-600"
+                    disabled={isUploading}
                   />
                   <label
                     htmlFor="append"
                     className="ml-2 text-sm text-gray-700"
                   >
-                    Tambah Data — Menambahkan data baru, memperbarui data yang
-                    sudah ada
+                    <span className="font-medium">Tambah Data</span> —
+                    Menambahkan data baru, memperbarui data yang sudah ada
                   </label>
                 </div>
                 <div className="flex items-center">
@@ -947,48 +1487,70 @@ const TabelSurvei = () => {
                     checked={uploadMode === "replace"}
                     onChange={() => setUploadMode("replace")}
                     className="h-4 w-4 text-blue-600"
+                    disabled={isUploading}
                   />
                   <label
                     htmlFor="replace"
                     className="ml-2 text-sm text-gray-700"
                   >
-                    Ganti Semua Data — Menghapus semua data yang ada dan
-                    menggantinya dengan data baru
+                    <span className="font-medium text-red-600">
+                      Ganti Semua Data
+                    </span>{" "}
+                    — Menghapus semua data lama dan mengganti dengan data baru
                   </label>
                 </div>
               </div>
             </div>
 
-            <div className="text-sm text-gray-600">
-              <p>Catatan:</p>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Format file harus sesuai dengan template</li>
-                <li>Ukuran file maksimal 5MB</li>
-                {uploadMode === "replace" && (
-                  <li className="text-red-600 font-medium">
-                    Semua data akan dihapus dan diganti dengan data baru!
-                  </li>
-                )}
+            {/* Warning for Replace Mode */}
+            {uploadMode === "replace" && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-800">
+                  ⚠️ <strong>Peringatan:</strong> Mode "Ganti Semua Data" akan
+                  menghapus semua data survei yang ada dan menggantinya dengan
+                  data dari file Excel.
+                </p>
+              </div>
+            )}
+
+            {/* Info Box */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <h4 className="text-sm font-medium text-gray-800 mb-2">
+                Informasi Penting :
+              </h4>
+              <ul className="text-xs text-gray-600 space-y-1">
+                <li>• Semua field wajib diisi sesuai validasi yang berlaku</li>
+                <li>• Nama survei: 3-100 karakter</li>
+                <li>• Tahun: antara 1900-2100</li>
               </ul>
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
+          {/* Action Buttons */}
+          <div className="flex gap-3 mt-6">
             <button
-              onClick={() => setShowUploadModal(false)}
-              className="px-2 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+              onClick={handleCancel}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              disabled={isUploading}
             >
               Batal
             </button>
             <button
               onClick={handleSubmit}
-              className={`px-2 py-2 text-white rounded-md transition-colors ${
-                uploadMode === "replace"
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-blue-600 hover:bg-blue-700"
+              disabled={!file || isUploading}
+              className={`flex-1 px-4 py-2 text-white rounded-md ${
+                !file || isUploading
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : uploadMode === "replace"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-blue-600 hover:bg-blue-700"
               }`}
             >
-              {uploadMode === "replace" ? "Ganti Semua" : "Upload"}
+              {isUploading
+                ? "Memproses..."
+                : uploadMode === "replace"
+                  ? "Ganti Semua"
+                  : "Upload"}
             </button>
           </div>
         </div>
@@ -1289,7 +1851,7 @@ const TabelSurvei = () => {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
+            {isLoading || (isLoadingAll && !hasLoadedAll) ? (
               <tr>
                 <td colSpan={columns.length} className="p-4 text-center">
                   <div className="flex justify-center items-center space-x-2">
@@ -1308,8 +1870,8 @@ const TabelSurvei = () => {
                   {error}
                 </td>
               </tr>
-            ) : surveys.length > 0 ? (
-              surveys.map((item) => (
+            ) : paginatedItems.length > 0 ? (
+              paginatedItems.map((item) => (
                 <tr
                   key={item.id_survei}
                   className="border-t border-gray-200 hover:bg-gray-50"
