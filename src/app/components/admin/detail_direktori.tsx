@@ -19,6 +19,18 @@ interface ValidationErrors {
   [key: string]: string;
 }
 
+// Interface untuk hasil validasi duplikasi
+interface DuplicateCheckResult {
+  isDuplicate: boolean;
+  existingCompany?: {
+    id_perusahaan: number;
+    nama_perusahaan: string;
+    kip: string;
+    tahun_direktori: number[];
+  };
+  duplicateYears?: number[];
+}
+
 interface PerusahaanData {
   id_perusahaan: number;
   kip: string | number;
@@ -310,6 +322,66 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
     return Object.keys(errors).length === 0;
   };
 
+  //Fungsi cek duplikasi KIP dan tahun direktori
+  const checkKipAndYearDuplicate = async (
+    kip: string | number,
+    years: number[],
+    currentCompanyId?: number
+  ): Promise<DuplicateCheckResult> => {
+    try {
+      // Pastikan KIP dalam format yang benar
+      const kipString = kip.toString().trim();
+
+      if (!kipString || years.length === 0) {
+        return { isDuplicate: false };
+      }
+
+      // Panggil API untuk cek duplikasi
+      const response = await fetch("/api/perusahaan/check-duplicate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          kip: kipString,
+          years: years,
+          excludeCompanyId: currentCompanyId, // Untuk mode edit, exclude company yang sedang diedit
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal melakukan pengecekan duplikasi");
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error("Error checking duplicate:", error);
+      throw new Error("Terjadi kesalahan saat mengecek duplikasi data");
+    }
+  };
+
+  const showDuplicateError = (duplicateInfo: DuplicateCheckResult): void => {
+    const duplicateYearsText = duplicateInfo.duplicateYears?.join(", ") || "";
+    const existingCompany = duplicateInfo.existingCompany;
+
+    const errorMessage = `
+    
+Kombinasi KIP ${existingCompany?.kip} dengan tahun ${duplicateYearsText} sudah digunakan perusahaan lain.
+Detail data: ID Perusahaan: ${existingCompany?.id_perusahaan}
+, KIP: ${existingCompany?.kip}
+, Nama Perusahaan: ${existingCompany?.nama_perusahaan}
+, Tahun: ${duplicateYearsText}.
+
+Sistem tidak mengizinkan duplikasi data ini. Silakan:
+1. Gunakan KIP yang berbeda, atau
+2. Gunakan tahun direktori yang berbeda, atau
+3. Periksa kembali data yang akan diinput`;
+
+    // Tampilkan error dengan SweetAlert
+    SweetAlertUtils.error("Terdapat Duplikasi Data", errorMessage);
+  };
+
   // Fungsi tooltip
   const showFieldTooltip = (field: string, message: string) => {
     setValidationErrors((prev) => ({
@@ -458,13 +530,40 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         return;
       }
 
-      // Lanjutkan dengan handleAddYear yang asli
+      // === VALIDASI DUPLIKASI UNTUK TAHUN BARU ===
+      if (editedData.kip) {
+        try {
+          const currentCompanyId =
+            mode === "edit" ? editedData.id_perusahaan : undefined;
+
+          const duplicateCheck = await checkKipAndYearDuplicate(
+            editedData.kip,
+            [yearNumber],
+            currentCompanyId
+          );
+
+          if (duplicateCheck.isDuplicate) {
+            // TOLAK DUPLIKASI - Tampilkan error dan hentikan proses
+            showDuplicateError(duplicateCheck);
+            return; // Stop proses penambahan tahun
+          }
+        } catch (error) {
+          console.error("Error checking duplicate for new year:", error);
+          SweetAlertUtils.error(
+            "Gagal Validasi",
+            "Terjadi kesalahan saat melakukan validasi tahun. Silakan coba lagi."
+          );
+          return;
+        }
+      }
+
+      // Jika tidak ada duplikasi, lanjutkan dengan handleAddYear
       handleAddYear();
     }
   };
 
   // Handler save dengan validasi
-  const handleSaveWithValidation = () => {
+  const handleSaveWithValidation = async () => {
     if (!editedData) {
       SweetAlertUtils.error("Error", "Data tidak tersedia untuk disimpan");
       return;
@@ -479,8 +578,30 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       return;
     }
 
-    // Jika validasi lolos, lanjutkan penyimpanan
     try {
+      // === VALIDASI DUPLIKASI KIP DAN TAHUN DIREKTORI ===
+      if (
+        editedData.kip &&
+        editedData.tahun_direktori &&
+        editedData.tahun_direktori.length > 0
+      ) {
+        const currentCompanyId =
+          mode === "edit" ? editedData.id_perusahaan : undefined;
+
+        const duplicateCheck = await checkKipAndYearDuplicate(
+          editedData.kip,
+          editedData.tahun_direktori,
+          currentCompanyId
+        );
+
+        if (duplicateCheck.isDuplicate) {
+          // TOLAK DUPLIKASI - Tampilkan error dan hentikan proses
+          showDuplicateError(duplicateCheck);
+          return; // Stop proses penyimpanan
+        }
+      }
+
+      // Jika tidak ada duplikasi, lanjutkan penyimpanan
       if (mode === "add") {
         const dataToSave = { ...editedData };
         delete dataToSave.id_perusahaan;
@@ -489,10 +610,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         onSave && onSave(editedData);
       }
     } catch (error) {
-      console.error("Error saving data:", error);
+      console.error("Error during validation:", error);
       SweetAlertUtils.error(
-        "Gagal Menyimpan",
-        "Terjadi kesalahan saat menyimpan data. Silakan coba lagi."
+        "Gagal Validasi",
+        "Terjadi kesalahan saat melakukan validasi data. Silakan coba lagi."
       );
     }
   };
