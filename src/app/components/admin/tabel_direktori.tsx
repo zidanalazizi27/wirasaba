@@ -398,6 +398,354 @@ interface SortDescriptor {
   direction: "ascending" | "descending" | null;
 }
 
+// Tambahkan interface untuk upload modal
+interface UploadModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+interface ValidationError {
+  row: number;
+  field: string;
+  message: string;
+  value?: any;
+}
+
+interface DuplicateData {
+  row: number;
+  kip: string;
+  tahun_direktori: number[];
+  existing_company?: {
+    id_perusahaan: number;
+    nama_perusahaan: string;
+  };
+}
+
+// Upload Modal Component yang sudah lengkap
+const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState<"append" | "replace">("append");
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      // Validate file type
+      const allowedTypes = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+        "application/vnd.ms-excel", // .xls
+        "text/csv", // .csv
+      ];
+
+      if (!allowedTypes.includes(selectedFile.type)) {
+        SweetAlertUtils.warning(
+          "Format File Tidak Valid",
+          "Silakan pilih file dengan format .xlsx, .xls, atau .csv"
+        );
+        e.target.value = "";
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (selectedFile.size > maxSize) {
+        SweetAlertUtils.warning(
+          "File Terlalu Besar",
+          "Ukuran file maksimal 10MB"
+        );
+        e.target.value = "";
+        return;
+      }
+
+      setFile(selectedFile);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      SweetAlertUtils.loading("Mengunduh Template", "Mohon tunggu sebentar...");
+
+      const response = await fetch("/api/perusahaan/template", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+
+        // Get filename from response header
+        const contentDisposition = response.headers.get("content-disposition");
+        let filename = "template-direktori.xlsx";
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+          if (filenameMatch) {
+            filename = filenameMatch[1];
+          }
+        }
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        SweetAlertUtils.closeLoading();
+        SweetAlertUtils.success(
+          "Template Berhasil Diunduh",
+          "Silakan isi template sesuai format yang disediakan. Template memiliki 3 sheet: Data Direktori, Petunjuk Kolom, dan Informasi Upload."
+        );
+      } else {
+        throw new Error("Gagal mengunduh template");
+      }
+    } catch (error) {
+      SweetAlertUtils.closeLoading();
+      SweetAlertUtils.error(
+        "Gagal Mengunduh Template",
+        "Terjadi kesalahan saat mengunduh template. Silakan coba lagi."
+      );
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      SweetAlertUtils.warning(
+        "File Belum Dipilih",
+        "Silakan pilih file terlebih dahulu"
+      );
+      return;
+    }
+
+    // Confirm upload action
+    const confirmMessage =
+      uploadMode === "replace"
+        ? "Mode 'Ganti Semua Data' akan menghapus SEMUA data direktori yang ada dan menggantinya dengan data dari file Excel. Apakah Anda yakin?"
+        : "Mode 'Tambah Data' akan menambahkan data baru dan memperbarui data yang sudah ada. Duplikasi KIP + tahun direktori akan ditolak. Apakah Anda yakin?";
+
+    const confirmResult = await SweetAlertUtils.confirm(
+      "Konfirmasi Upload",
+      confirmMessage,
+      uploadMode === "replace" ? "danger" : "warning"
+    );
+
+    if (!confirmResult.isConfirmed) {
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      SweetAlertUtils.loading(
+        "Memproses File",
+        uploadMode === "replace"
+          ? "Mengganti semua data direktori..."
+          : "Memproses dan memvalidasi data..."
+      );
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("mode", uploadMode);
+
+      const response = await fetch("/api/perusahaan/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        SweetAlertUtils.closeLoading();
+
+        const message =
+          uploadMode === "replace"
+            ? `Berhasil mengganti semua data dengan ${result.inserted || 0} data baru`
+            : `Berhasil memproses ${(result.inserted || 0) + (result.updated || 0)} data (${result.inserted || 0} baru, ${result.updated || 0} diperbarui)`;
+
+        await SweetAlertUtils.success("Upload Berhasil!", message);
+        onSuccess();
+        onClose();
+      } else {
+        SweetAlertUtils.closeLoading();
+
+        // Handle different types of errors
+        if (result.errors || result.duplicates) {
+          // Validation or duplicate errors
+          const title = result.errors
+            ? "Error Validasi Data"
+            : "Data Duplikat Ditemukan";
+          const details = result.details || result.message;
+
+          await SweetAlertUtils.error(title, details, {
+            width: "600px",
+            customClass: {
+              popup: "text-left",
+            },
+          });
+        } else {
+          // General error
+          await SweetAlertUtils.error("Upload Gagal", result.message);
+        }
+      }
+    } catch (error) {
+      setIsUploading(false);
+      SweetAlertUtils.closeLoading();
+      console.error("Error uploading file:", error);
+      await SweetAlertUtils.error(
+        "Upload Gagal",
+        `Terjadi kesalahan: ${(error as Error).message}`
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    onClose();
+    setFile(null);
+    setUploadMode("append");
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-medium mb-4 text-center">
+          Upload Data Perusahaan
+        </h2>
+
+        <div className="space-y-4">
+          {/* Download Template Button */}
+          <button
+            onClick={handleDownloadTemplate}
+            className="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50 transition-colors"
+            disabled={isUploading}
+          >
+            Unduh Template
+          </button>
+
+          {/* File Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Pilih File Excel (.xlsx, .xls, .csv)
+            </label>
+            <input
+              type="file"
+              onChange={handleFileChange}
+              accept=".xlsx,.xls,.csv"
+              className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isUploading}
+            />
+            {file && (
+              <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                <p className="text-sm text-green-700">
+                  ✅ File terpilih:{" "}
+                  <span className="font-medium">{file.name}</span>
+                </p>
+                <p className="text-xs text-green-600">
+                  Ukuran: {(file.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Upload Mode Selection */}
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Mode Upload
+          </label>
+          <div className="space-y-1">
+            <div className="flex items-start">
+              <input
+                type="radio"
+                id="append"
+                name="uploadMode"
+                value="append"
+                checked={uploadMode === "append"}
+                onChange={() => setUploadMode("append")}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mt-0.5"
+                disabled={isUploading}
+              />
+              <div className="ml-3">
+                <label htmlFor="append" className=" text-sm text-gray-700">
+                  <span className="font-medium">Tambah Data</span> — Menambahkan
+                  data baru, memperbarui data yang sudah ada.
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-start">
+              <input
+                type="radio"
+                id="replace"
+                name="uploadMode"
+                value="replace"
+                checked={uploadMode === "replace"}
+                onChange={() => setUploadMode("replace")}
+                className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 mt-0.5"
+                disabled={isUploading}
+              />
+              <div className="ml-3">
+                <label htmlFor="replace" className="text-sm text-gray-700">
+                  <span className="font-medium text-red-600">
+                    Ganti Semua Data
+                  </span>{" "}
+                  — Menghapus semua data lama dan mengganti dengan data baru
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Important Notes */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-amber-800 mb-2">
+              Informasi Penting :
+            </h3>
+            <ul className="text-xs text-amber-700 space-y-1">
+              <li>• Semua field wajib harus diisi sesuai validasi</li>
+              <li>• Pastikan tidak ada duplikasi data KIP & tahun direktori.</li>
+              <li>
+                • Data lookup (Kecamatan, Desa, dll) harus sesuai data
+                master
+              </li>
+            </ul>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleCancel}
+              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 text-sm disabled:opacity-50 transition-colors"
+              disabled={isUploading}
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleUpload}
+              className={`flex-1 px-4 py-2 text-white rounded-md text-sm disabled:opacity-50 transition-colors ${
+                uploadMode === "replace"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
+              disabled={!file || isUploading}
+            >
+              {isUploading ? (
+                <div className="flex items-center justify-center">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Memproses...
+                </div>
+              ) : (
+                <>{uploadMode === "replace" ? "Ganti Semua" : "Upload"}</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const TabelDirektori = () => {
   const router = useRouter();
 
@@ -436,6 +784,20 @@ const TabelDirektori = () => {
   const [selectedYear, setSelectedYear] = useState("");
   const [yearDropdownOpen, setYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Handler untuk tombol upload yang sudah ada
+  const handleUploadClick = () => {
+    setShowUploadModal(true);
+  };
+
+  // Handler success untuk refresh data setelah upload
+  const handleUploadSuccess = () => {
+    setShowUploadModal(false);
+    setHasLoadedAll(false); // Reset untuk refresh data
+    fetchData(); // Refresh data tabel
+    // Reset filters jika diperlukan
+    setCurrentPage(1);
+  };
 
   // Fungsi untuk mengambil data direktori dan ekstrak tahun unik
   const fetchDirectoryYears = useCallback(async () => {
@@ -877,14 +1239,13 @@ const TabelDirektori = () => {
   const handleDeleteBusiness = async (business: Business) => {
     try {
       // Konfirmasi penghapusan dengan SweetAlert
-      const confirmed = await SweetAlertUtils.confirmDelete(
+      const confirmResult = await SweetAlertUtils.confirm(
         "Hapus Data Perusahaan",
         `Apakah Anda yakin ingin menghapus "${business.nama_perusahaan}"? Tindakan ini akan menghapus semua data terkait termasuk tahun direktori dan tidak dapat dibatalkan.`,
-        "Ya, Hapus",
-        "Batal"
+        "danger"
       );
 
-      if (!confirmed) return;
+      if (!confirmResult.isConfirmed) return;
 
       // Tampilkan loading
       SweetAlertUtils.loading("Menghapus data...", "Mohon tunggu sebentar");
@@ -897,12 +1258,12 @@ const TabelDirektori = () => {
         }
       );
 
-      const result = await response.json();
+      const deleteResult = await response.json();
 
       // Close loading
       SweetAlertUtils.closeLoading();
 
-      if (result.success) {
+      if (deleteResult.success) {
         // Tampilkan pesan sukses
         await SweetAlertUtils.success(
           "Berhasil Dihapus!",
@@ -910,14 +1271,14 @@ const TabelDirektori = () => {
         );
 
         // Refresh data after successful deletion
-        fetchData(1, false);
+        fetchData();
         setCurrentPage(1);
         setHasLoadedAll(false);
       } else {
         // Tampilkan error dari server
         SweetAlertUtils.error(
           "Gagal Menghapus",
-          result.message || "Terjadi kesalahan saat menghapus data"
+          deleteResult.message || "Terjadi kesalahan saat menghapus data"
         );
       }
     } catch (error) {
@@ -942,7 +1303,7 @@ const TabelDirektori = () => {
   const handleExportClick = async () => {
     try {
       // Tampilkan konfirmasi dengan SweetAlert
-      const result = await SweetAlertUtils.confirm(
+      const confirmResult = await SweetAlertUtils.confirm(
         "Download Data Excel",
         `Apakah Anda yakin ingin mengunduh data direktori perusahaan? ${
           filterValue ||
@@ -952,11 +1313,10 @@ const TabelDirektori = () => {
             ? "Data akan diunduh sesuai dengan filter yang sedang aktif."
             : "Semua data akan diunduh."
         }`,
-        "Ya, Download",
-        "Batal"
+        "info" // ✅ Parameter yang benar
       );
 
-      if (!result) return;
+      if (!confirmResult.isConfirmed) return;
 
       // Tampilkan loading
       SweetAlertUtils.loading(
@@ -1168,147 +1528,8 @@ const TabelDirektori = () => {
     []
   );
 
-  // Modifikasi komponen UploadModal
-  const UploadModal = () => {
-    const [file, setFile] = useState<File | null>(null);
-    const [uploadMode, setUploadMode] = useState("append"); // append atau replace
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-        setFile(e.target.files[0]);
-      }
-    };
-
-    const handleSubmit = () => {
-      if (!file) {
-        alert("Silakan pilih file terlebih dahulu");
-        return;
-      }
-
-      // In a real app, you would process the file here
-      alert(
-        `File ${file.name} berhasil diupload dengan mode: ${
-          uploadMode === "append" ? "Tambah Data" : "Ganti Semua Data"
-        }`
-      );
-      setShowUploadModal(false);
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
-          <h2 className="text-xl font-medium mb-4">Upload Data</h2>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pilih File Excel (.xlsx, .xls, .csv)
-              </label>
-              <input
-                type="file"
-                onChange={handleFileChange}
-                accept=".xlsx, .xls, .csv"
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
-              {file && (
-                <p className="mt-2 text-sm text-gray-600">
-                  File terpilih: {file.name}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mode Upload
-              </label>
-              <div className="space-y-2">
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="append"
-                    name="uploadMode"
-                    value="append"
-                    checked={uploadMode === "append"}
-                    onChange={() => setUploadMode("append")}
-                    className="h-4 w-4 text-blue-600"
-                  />
-                  <label
-                    htmlFor="append"
-                    className="ml-2 text-sm text-gray-700"
-                  >
-                    Tambah Data — Menambahkan data baru, memperbarui data yang
-                    sudah ada
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="replace"
-                    name="uploadMode"
-                    value="replace"
-                    checked={uploadMode === "replace"}
-                    onChange={() => setUploadMode("replace")}
-                    className="h-4 w-4 text-blue-600"
-                  />
-                  <label
-                    htmlFor="replace"
-                    className="ml-2 text-sm text-gray-700"
-                  >
-                    Ganti Semua Data — Menghapus semua data yang ada dan
-                    menggantinya dengan data baru
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              <p>Catatan:</p>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Format file harus sesuai dengan template</li>
-                <li>Ukuran file maksimal 5MB</li>
-                {uploadMode === "append" && (
-                  <li>
-                    Data yang sudah ada akan diperbarui jika terdapat KIP yang
-                    sama
-                  </li>
-                )}
-                {uploadMode === "replace" && (
-                  <li className="text-red-600 font-medium">
-                    Semua data akan dihapus dan diganti dengan data baru!
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-6 flex justify-end space-x-3">
-            <button
-              onClick={() => setShowUploadModal(false)}
-              className="px-2 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleSubmit}
-              className={`px-2 py-2 text-white rounded-md transition-colors ${
-                uploadMode === "replace"
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              {uploadMode === "replace" ? "Ganti Semua" : "Upload"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="w-full mx-auto bg-white rounded-lg shadow-sm overflow-hidden">
-      {/* Upload Modal */}
-      {showUploadModal && <UploadModal />}
-
       {/* Top section with search and filters */}
       <div className="p-4 flex flex-col gap-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1840,6 +2061,14 @@ const TabelDirektori = () => {
           </nav>
         </div>
       </div>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <UploadModal
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={handleUploadSuccess}
+        />
+      )}
     </div>
   );
 };
