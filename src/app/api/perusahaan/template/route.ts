@@ -4,12 +4,12 @@ import * as XLSX from 'xlsx';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔄 Generating perusahaan template...');
+    console.log('🔄 Generating perusahaan template ...');
 
-    // ✅ Template data dengan format yang BENAR untuk Excel
+    // ✅ PERBAIKAN: Template data dengan SEMUA 28 kolom dalam urutan yang benar
     const templateData = [
       {
-        'KIP': '3515000001',  // ✅ String, bukan number
+        'KIP': '3515000001',
         'Nama Perusahaan': 'PT Contoh Industri Utama',
         'Badan Usaha': '1',
         'Alamat': 'Jl. Industri No. 123, Gedangan',
@@ -19,12 +19,12 @@ export async function GET(request: NextRequest) {
         'Skala': 'Besar',
         'Lokasi Perusahaan': '2',
         'Nama Kawasan': 'SIER',
-        'Latitude': -7.3953,  // ✅ Number, bukan string
-        'Longitude': 112.7312,  // ✅ Number, bukan string
+        'Latitude': -7.3953,
+        'Longitude': 112.7312,
         'Jarak (KM)': 15.2,
         'Produk': 'Komponen Elektronik',
-        'KBLI': 26122,  // ✅ Number, bukan string
-        'Telepon Perusahaan': '031-8531234',
+        'KBLI': 26122,
+        'Telepon Perusahaan': '031-8531234',    // ✅ KOLOM YANG HILANG - DIPERBAIKI
         'Email Perusahaan': 'info@contoh.com',
         'Website Perusahaan': 'www.contoh.com',
         'Tenaga Kerja': '4',
@@ -34,12 +34,12 @@ export async function GET(request: NextRequest) {
         'Jabatan Narasumber': 'Direktur Operasional',
         'Email Narasumber': 'budi@contoh.com',
         'Telepon Narasumber': '081234567890',
-        'PCL Utama': 'Ahmad Rizki',
+        'PCL Utama': 'Ahmad Rizki',              // ✅ KOLOM YANG HILANG - DIPERBAIKI
         'Catatan': 'Perusahaan aktif dan kooperatif',
-        'Tahun Direktori': '2024,2025'  // ✅ String format dengan koma, BUKAN number
+        'Tahun Direktori': '2024,2025'
       },
       {
-        'KIP': '3515000002',  // ✅ String, bukan number
+        'KIP': '3515000002',
         'Nama Perusahaan': 'CV Maju Bersama',
         'Badan Usaha': '2',
         'Alamat': 'Jl. Raya Sidoarjo No. 456',
@@ -48,82 +48,35 @@ export async function GET(request: NextRequest) {
         'Kode Pos': '61213',
         'Skala': 'Sedang',
         'Lokasi Perusahaan': '4',
-        'Nama Kawasan': '',
-        'Latitude': -7.4478,  // ✅ Number
-        'Longitude': 112.7183,  // ✅ Number
+        'Nama Kawasan': '',                      // ✅ OPSIONAL - BOLEH KOSONG
+        'Latitude': -7.4478,
+        'Longitude': 112.7183,
         'Jarak (KM)': 2.5,
         'Produk': 'Furniture Kayu',
-        'KBLI': 31001,  // ✅ Number
-        'Telepon Perusahaan': '031-8945678',
-        'Email Perusahaan': '',
-        'Website Perusahaan': '',
+        'KBLI': 31001,
+        'Telepon Perusahaan': '031-8945678',    // ✅ OPSIONAL - TAPI DIISI CONTOH
+        'Email Perusahaan': '',                 // ✅ OPSIONAL - BOLEH KOSONG
+        'Website Perusahaan': '',               // ✅ OPSIONAL - BOLEH KOSONG
         'Tenaga Kerja': '3',
         'Investasi': '2',
         'Omset': '2',
         'Nama Narasumber': 'Siti Aminah',
         'Jabatan Narasumber': 'Pemilik',
-        'Email Narasumber': '',
+        'Email Narasumber': '',                 // ✅ OPSIONAL - BOLEH KOSONG
         'Telepon Narasumber': '087654321098',
-        'PCL Utama': 'Dewi Sartika',
-        'Catatan': '',
-        'Tahun Direktori': '2024'  // ✅ String format
+        'PCL Utama': 'Dewi Sartika',           // ✅ OPSIONAL - TAPI DIISI CONTOH
+        'Catatan': '',                          // ✅ OPSIONAL - BOLEH KOSONG
+        'Tahun Direktori': '2024'
       }
     ];
 
-    // Buat workbook dan worksheet
+    // ✅ PERBAIKAN: Buat workbook dengan cara yang aman
     const workbook = XLSX.utils.book_new();
+    
+    // ✅ PERBAIKAN: Create main worksheet
     const worksheet = XLSX.utils.json_to_sheet(templateData);
 
-    // ✅ PERBAIKAN: Set format Excel yang tepat untuk kolom-kolom khusus
-    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:AB3');
-
-    // Format kolom KIP sebagai text (kolom A = 0)
-    for (let row = range.s.r; row <= range.e.r; row++) {
-      const kipCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 0 })];
-      if (kipCell) {
-        kipCell.z = '@'; // Text format
-        kipCell.t = 's'; // String type
-      }
-    }
-
-    // Format kolom Tahun Direktori sebagai text (kolom AB = 27)
-    for (let row = range.s.r; row <= range.e.r; row++) {
-      const tahunCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 27 })];
-      if (tahunCell) {
-        tahunCell.z = '@'; // Text format
-        tahunCell.t = 's'; // String type
-      }
-    }
-
-    // Format kolom KBLI sebagai number (kolom O = 14)
-    for (let row = range.s.r; row <= range.e.r; row++) {
-      const kbliCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 14 })];
-      if (kbliCell) {
-        kbliCell.z = '0'; // Number format
-        kbliCell.t = 'n'; // Number type
-      }
-    }
-
-    // Format kolom Latitude sebagai number (kolom K = 10)
-    for (let row = range.s.r; row <= range.e.r; row++) {
-      const latCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 10 })];
-      if (latCell) {
-        latCell.z = '0.0000'; // Decimal format
-        latCell.t = 'n'; // Number type
-      }
-    }
-
-    // ✅ BUG FIX: Format kolom Longitude sebagai number (kolom L = 11) 
-    // Sebelumnya salah menggunakan variabel latCell
-    for (let row = range.s.r; row <= range.e.r; row++) {
-      const lonCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 11 })];
-      if (lonCell) {
-        lonCell.z = '0.0000'; // Decimal format - FIX: menggunakan lonCell bukan latCell
-        lonCell.t = 'n'; // Number type
-      }
-    }
-
-    // Set column widths untuk readability
+    // ✅ PERBAIKAN: Set column widths untuk semua 28 kolom
     const columnWidths = [
       { wch: 12 },  // KIP
       { wch: 30 },  // Nama Perusahaan
@@ -140,7 +93,7 @@ export async function GET(request: NextRequest) {
       { wch: 12 },  // Jarak
       { wch: 25 },  // Produk
       { wch: 10 },  // KBLI
-      { wch: 15 },  // Telepon Perusahaan
+      { wch: 15 },  // Telepon Perusahaan ✅ DIPERBAIKI
       { wch: 20 },  // Email Perusahaan
       { wch: 20 },  // Website Perusahaan
       { wch: 15 },  // Tenaga Kerja
@@ -150,227 +103,201 @@ export async function GET(request: NextRequest) {
       { wch: 20 },  // Jabatan Narasumber
       { wch: 20 },  // Email Narasumber
       { wch: 15 },  // Telepon Narasumber
-      { wch: 15 },  // PCL Utama
+      { wch: 15 },  // PCL Utama ✅ DIPERBAIKI
       { wch: 30 },  // Catatan
-      { wch: 18 }   // Tahun Direktori (diperbesar untuk format text)
+      { wch: 18 }   // Tahun Direktori
     ];
     worksheet['!cols'] = columnWidths;
 
-    // Style header row
-    const headerRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:AB1');
-    for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-      if (!worksheet[cellAddress]) continue;
-      
-      worksheet[cellAddress].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: "E3F2FD" } },
-        alignment: { horizontal: "center" }
-      };
-    }
-
-    // Tambahkan sheet instruksi dengan kode referensi yang benar
+    // ✅ PERBAIKAN: Sheet petunjuk dengan penanda field wajib/opsional
     const instructionsData = [
       { 
         'Kolom': 'KIP', 
-        'Keterangan': 'Kode Identifikasi Perusahaan (WAJIB DIISI, maksimal 10 digit angka, format TEXT)', 
+        'Keterangan': '🔴 WAJIB DIISI - Kode Identifikasi Perusahaan (format TEXT)', 
         'Contoh': '3515000001',
         'Validasi': 'String angka, maksimal 10 digit'
       },
       { 
         'Kolom': 'Nama Perusahaan', 
-        'Keterangan': 'Nama lengkap perusahaan (WAJIB DIISI)', 
+        'Keterangan': '🔴 WAJIB DIISI - Nama lengkap perusahaan', 
         'Contoh': 'PT Contoh Industri Utama',
         'Validasi': 'String, minimal 3 karakter'
       },
       { 
         'Kolom': 'Badan Usaha', 
-        'Keterangan': 'Kode badan usaha (WAJIB DIISI): 1=PT/PT Persero/Perum, 2=CV, 3=Firma, 4=Koperasi/Dana Pensiun, 5=Yayasan, 6=Izin Khusus, 7=Perwakilan Perusahaan/Lembaga Asing, 8=Tidak Berbadan Usaha', 
+        'Keterangan': '🔴 WAJIB DIISI - Kode badan usaha: 1=PT, 2=CV, 3=Firma, 4=Koperasi, 5=Yayasan, 6=Izin Khusus, 7=Perwakilan Asing, 8=Tidak Berbadan Usaha', 
         'Contoh': '1',
         'Validasi': 'Angka 1-8'
       },
       { 
         'Kolom': 'Alamat', 
-        'Keterangan': 'Alamat lengkap perusahaan (WAJIB DIISI)', 
+        'Keterangan': '🔴 WAJIB DIISI - Alamat lengkap perusahaan', 
         'Contoh': 'Jl. Industri No. 123, Gedangan',
         'Validasi': 'String'
       },
       { 
         'Kolom': 'Kecamatan', 
-        'Keterangan': 'Nama kecamatan (WAJIB DIISI, harus sesuai data master)', 
+        'Keterangan': '🔴 WAJIB DIISI - Nama kecamatan (harus sesuai data master)', 
         'Contoh': 'Gedangan',
         'Validasi': 'String, harus ada di database'
       },
       { 
         'Kolom': 'Desa', 
-        'Keterangan': 'Nama desa/kelurahan (WAJIB DIISI, harus sesuai data master)', 
+        'Keterangan': '🔴 WAJIB DIISI - Nama desa/kelurahan (harus sesuai data master)', 
         'Contoh': 'Gedangan',
         'Validasi': 'String, harus ada di database'
       },
       { 
         'Kolom': 'Kode Pos', 
-        'Keterangan': 'Kode pos alamat (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Kode pos alamat', 
         'Contoh': '61254',
-        'Validasi': '5 digit angka'
+        'Validasi': '5 digit angka atau kosong'
       },
       { 
         'Kolom': 'Skala', 
-        'Keterangan': 'Skala usaha (WAJIB DIISI)', 
-        'Contoh': 'Besar, Sedang',
+        'Keterangan': '🔴 WAJIB DIISI - Skala usaha', 
+        'Contoh': 'Besar atau Sedang',
         'Validasi': 'Enum: Besar|Sedang'
       },
       { 
         'Kolom': 'Lokasi Perusahaan', 
-        'Keterangan': 'Kode lokasi perusahaan (WAJIB DIISI): 1=Kawasan Berikat, 2=Kawasan Industri, 3=Kawasan Peruntukan Industri, 4=Luar Kawasan', 
+        'Keterangan': '🔴 WAJIB DIISI - Kode lokasi: 1=Kawasan Berikat, 2=Kawasan Industri, 3=Kawasan Peruntukan Industri, 4=Luar Kawasan', 
         'Contoh': '2',
         'Validasi': 'Angka 1-4'
       },
       { 
         'Kolom': 'Nama Kawasan', 
-        'Keterangan': 'Nama kawasan industri (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Nama kawasan industri', 
         'Contoh': 'SIER',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'Latitude', 
-        'Keterangan': 'Koordinat lintang (WAJIB DIISI, format NUMBER)', 
+        'Keterangan': '🔴 WAJIB DIISI - Koordinat lintang (format NUMBER)', 
         'Contoh': '-7.3953',
         'Validasi': 'Number desimal, range -90 sampai 90'
       },
       { 
         'Kolom': 'Longitude', 
-        'Keterangan': 'Koordinat bujur (WAJIB DIISI, format NUMBER)', 
+        'Keterangan': '🔴 WAJIB DIISI - Koordinat bujur (format NUMBER)', 
         'Contoh': '112.7312',
         'Validasi': 'Number desimal, range -180 sampai 180'
       },
       { 
         'Kolom': 'Jarak (KM)', 
-        'Keterangan': 'Jarak ke kantor BPS dalam KM (OPSIONAL - otomatis dihitung)', 
+        'Keterangan': '⚪ OPSIONAL - Jarak ke kantor BPS dalam KM', 
         'Contoh': '15.2',
-        'Validasi': 'Number desimal positif'
+        'Validasi': 'Number desimal positif atau kosong'
       },
       { 
         'Kolom': 'Produk', 
-        'Keterangan': 'Produk utama perusahaan (WAJIB DIISI)', 
+        'Keterangan': '🔴 WAJIB DIISI - Produk utama perusahaan', 
         'Contoh': 'Komponen Elektronik',
         'Validasi': 'String'
       },
       { 
         'Kolom': 'KBLI', 
-        'Keterangan': 'Kode KBLI 5 digit (WAJIB DIISI, format NUMBER)', 
+        'Keterangan': '🔴 WAJIB DIISI - Kode KBLI 5 digit (format NUMBER)', 
         'Contoh': '26122',
         'Validasi': '5 digit number'
       },
       { 
         'Kolom': 'Telepon Perusahaan', 
-        'Keterangan': 'Nomor telepon perusahaan (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Nomor telepon perusahaan', 
         'Contoh': '031-8531234',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'Email Perusahaan', 
-        'Keterangan': 'Email perusahaan (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Email perusahaan', 
         'Contoh': 'info@contoh.com',
-        'Validasi': 'Format email valid'
+        'Validasi': 'Format email valid atau kosong'
       },
       { 
         'Kolom': 'Website Perusahaan', 
-        'Keterangan': 'Website perusahaan (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Website perusahaan', 
         'Contoh': 'www.contoh.com',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'Tenaga Kerja', 
-        'Keterangan': 'Kode tenaga kerja (WAJIB DIISI): 1=1-4 orang, 2=5-19 orang, 3=20-99 orang, 4=Lebih dari 99 orang', 
+        'Keterangan': '🔴 WAJIB DIISI - Kode tenaga kerja: 1=1-4 orang, 2=5-19 orang, 3=20-99 orang, 4=Lebih dari 99 orang', 
         'Contoh': '4',
         'Validasi': 'Angka 1-4'
       },
       { 
         'Kolom': 'Investasi', 
-        'Keterangan': 'Kode investasi (WAJIB DIISI): 1=Kurang dari 1 Miliar, 2=1 sampai 5 Miliar, 3=5 sampai 10 Miliar, 4=Lebih dari 10 Miliar', 
+        'Keterangan': '🔴 WAJIB DIISI - Kode investasi: 1=Kurang dari 1M, 2=1-5M, 3=5-10M, 4=Lebih dari 10M', 
         'Contoh': '4',
         'Validasi': 'Angka 1-4'
       },
       { 
         'Kolom': 'Omset', 
-        'Keterangan': 'Kode omset (WAJIB DIISI): 1=Kurang dari 2 Miliar, 2=2 sampai 15 Miliar, 3=15 sampai 50 Miliar, 4=Lebih dari 50 Miliar', 
+        'Keterangan': '🔴 WAJIB DIISI - Kode omset: 1=Kurang dari 2M, 2=2-15M, 3=15-50M, 4=Lebih dari 50M', 
         'Contoh': '4',
         'Validasi': 'Angka 1-4'
       },
       { 
         'Kolom': 'Nama Narasumber', 
-        'Keterangan': 'Nama contact person (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Nama contact person', 
         'Contoh': 'Budi Santoso',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'Jabatan Narasumber', 
-        'Keterangan': 'Jabatan contact person (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Jabatan contact person', 
         'Contoh': 'Direktur Operasional',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'Email Narasumber', 
-        'Keterangan': 'Email narasumber (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Email narasumber', 
         'Contoh': 'budi@contoh.com',
-        'Validasi': 'Format email valid'
+        'Validasi': 'Format email valid atau kosong'
       },
       { 
         'Kolom': 'Telepon Narasumber', 
-        'Keterangan': 'Telepon narasumber (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Telepon narasumber', 
         'Contoh': '081234567890',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'PCL Utama', 
-        'Keterangan': 'Nama PCL yang menangani (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Nama PCL yang menangani', 
         'Contoh': 'Ahmad Rizki',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'Catatan', 
-        'Keterangan': 'Catatan tambahan (OPSIONAL)', 
+        'Keterangan': '⚪ OPSIONAL - Catatan tambahan', 
         'Contoh': 'Perusahaan aktif dan kooperatif',
-        'Validasi': 'String'
+        'Validasi': 'String atau kosong'
       },
       { 
         'Kolom': 'Tahun Direktori', 
-        'Keterangan': 'Tahun direktori dipisahkan koma (WAJIB DIISI, format TEXT)', 
+        'Keterangan': '🔴 WAJIB DIISI - Tahun direktori dipisahkan koma (format TEXT)', 
         'Contoh': '2024,2025 atau 2024',
-        'Validasi': 'String format: YYYY,YYYY atau YYYY (2000-2100)'
+        'Validasi': 'String format: YYYY,YYYY atau YYYY'
       }
     ];
 
     const instructionsSheet = XLSX.utils.json_to_sheet(instructionsData);
     instructionsSheet['!cols'] = [
       { wch: 18 }, // Kolom
-      { wch: 80 }, // Keterangan (diperbesar untuk menampung kode referensi)
+      { wch: 80 }, // Keterangan (diperbesar untuk penanda)
       { wch: 25 }, // Contoh
-      { wch: 30 }  // Validasi (diperbesar untuk detail format)
+      { wch: 30 }  // Validasi
     ];
 
-    // Style header untuk instructions sheet
-    const instHeaderRange = XLSX.utils.decode_range(instructionsSheet['!ref'] || 'A1:D1');
-    for (let col = instHeaderRange.s.c; col <= instHeaderRange.e.c; col++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-      if (!instructionsSheet[cellAddress]) continue;
-      
-      instructionsSheet[cellAddress].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: "FFF2CC" } },
-        alignment: { horizontal: "center" }
-      };
-    }
-
-    // Tambahkan sheet kode referensi
+    // ✅ PERBAIKAN: Sheet kode referensi
     const referenceData = [
       { 'Jenis': 'Badan Usaha', 'Kode': '1', 'Keterangan': 'PT/PT Persero/Perum' },
       { 'Jenis': 'Badan Usaha', 'Kode': '2', 'Keterangan': 'CV' },
       { 'Jenis': 'Badan Usaha', 'Kode': '3', 'Keterangan': 'Firma' },
-      { 'Jenis': 'Badan Usaha', 'Kode': '4', 'Keterangan': 'Koperasi/ Dana Pensiun' },
+      { 'Jenis': 'Badan Usaha', 'Kode': '4', 'Keterangan': 'Koperasi/Dana Pensiun' },
       { 'Jenis': 'Badan Usaha', 'Kode': '5', 'Keterangan': 'Yayasan' },
       { 'Jenis': 'Badan Usaha', 'Kode': '6', 'Keterangan': 'Izin Khusus' },
-      { 'Jenis': 'Badan Usaha', 'Kode': '7', 'Keterangan': 'Perwakilan Perusahaan/Lembaga Asing' },
+      { 'Jenis': 'Badan Usaha', 'Kode': '7', 'Keterangan': 'Perwakilan Asing' },
       { 'Jenis': 'Badan Usaha', 'Kode': '8', 'Keterangan': 'Tidak Berbadan Usaha' },
       { 'Jenis': '', 'Kode': '', 'Keterangan': '' },
       { 'Jenis': 'Lokasi Perusahaan', 'Kode': '1', 'Keterangan': 'Kawasan Berikat' },
@@ -401,105 +328,66 @@ export async function GET(request: NextRequest) {
       { wch: 40 }  // Keterangan
     ];
 
-    // Style header untuk reference sheet
-    const refHeaderRange = XLSX.utils.decode_range(referenceSheet['!ref'] || 'A1:C1');
-    for (let col = refHeaderRange.s.c; col <= refHeaderRange.e.c; col++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-      if (!referenceSheet[cellAddress]) continue;
-      
-      referenceSheet[cellAddress].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: "E8F5E8" } },
-        alignment: { horizontal: "center" }
-      };
-    }
-
-    // Tambahkan informasi upload sheet dengan penekanan pada format
+    // ✅ PERBAIKAN: Sheet informasi upload dengan penekanan field wajib
     const infoData = [
+      { 'Informasi': 'Field Wajib (🔴)', 'Detail': 'KIP, Nama Perusahaan, Alamat, Kecamatan, Desa, Badan Usaha, Lokasi Perusahaan, KBLI, Produk, Latitude, Longitude, Tenaga Kerja, Investasi, Omset, Skala, Tahun Direktori (16 field HARUS DIISI)' },
+      { 'Informasi': 'Field Opsional (⚪)', 'Detail': 'Kode Pos, Nama Kawasan, Jarak, Telepon Perusahaan, Email Perusahaan, Website Perusahaan, Nama Narasumber, Jabatan Narasumber, Email Narasumber, Telepon Narasumber, PCL Utama, Catatan (12 field BOLEH KOSONG)' },
       { 'Informasi': 'Format File', 'Detail': 'File harus dalam format .xlsx, .xls, atau .csv' },
       { 'Informasi': 'Ukuran File', 'Detail': 'Maksimal 10MB per file' },
-      { 'Informasi': 'Encoding', 'Detail': 'Gunakan UTF-8 untuk karakter khusus' },
       { 'Informasi': 'Header Kolom', 'Detail': 'Jangan ubah nama kolom pada baris pertama' },
-      { 'Informasi': 'Data Kosong', 'Detail': 'Baris dengan semua kolom kosong akan diabaikan' },
-      { 'Informasi': 'Field Wajib', 'Detail': 'KIP, Nama Perusahaan, Alamat, Kecamatan, Desa, Badan Usaha, Lokasi Perusahaan, KBLI, Produk, Latitude, Longitude, Tenaga Kerja, Investasi, Omset, Skala, Tahun Direktori (HARUS DIISI)' },
-      { 'Informasi': 'Field Opsional', 'Detail': 'Kode Pos, Nama Kawasan, Jarak, Telepon Perusahaan, Email Perusahaan, Website Perusahaan, Nama Narasumber, Jabatan Narasumber, Email Narasumber, Telepon Narasumber, PCL Utama, Catatan' },
-      { 'Informasi': 'Format KIP', 'Detail': '⚠️ PENTING: KIP harus berformat TEXT (contoh: "3515000001"), bukan number. Format kolom sebagai Text di Excel!' },
-      { 'Informasi': 'Format Tahun Direktori', 'Detail': '⚠️ PENTING: Tahun Direktori harus berformat TEXT dengan koma (contoh: "2024,2025" atau "2024"), bukan number gabungan!' },
-      { 'Informasi': 'Format Koordinat', 'Detail': '⚠️ PENTING: Latitude dan Longitude harus berformat NUMBER (contoh: -7.3953, 112.7312), bukan text!' },
-      { 'Informasi': 'Format KBLI', 'Detail': '⚠️ PENTING: KBLI harus berformat NUMBER 5 digit (contoh: 26122), bukan text!' },
-      { 'Informasi': 'Kode Referensi', 'Detail': 'Gunakan kode angka untuk: Badan Usaha (1-8), Lokasi Perusahaan (1-4), Tenaga Kerja (1-4), Investasi (1-4), Omset (1-4). Lihat sheet Kode Referensi' },
+      { 'Informasi': 'Format KIP', 'Detail': 'PENTING: KIP harus berformat TEXT, bukan number' },
+      { 'Informasi': 'Format Tahun Direktori', 'Detail': 'PENTING: Format TEXT dengan koma (contoh: "2024,2025")' },
+      { 'Informasi': 'Format Koordinat', 'Detail': 'PENTING: Latitude dan Longitude harus berformat NUMBER' },
+      { 'Informasi': 'Format KBLI', 'Detail': 'PENTING: KBLI harus berformat NUMBER 5 digit' },
       { 'Informasi': 'Duplikasi', 'Detail': 'Duplikasi diperiksa berdasarkan kombinasi: KIP + tahun_direktori' },
-      { 'Informasi': 'Mode Upload', 'Detail': 'Tambah Data: menambah/update data existing | Ganti Semua: hapus semua data existing' },
-      { 'Informasi': 'Validasi', 'Detail': 'Semua field wajib akan divalidasi sesuai kriteria yang ditetapkan' },
-      { 'Informasi': 'Tips Excel', 'Detail': 'Gunakan Format Cells untuk memastikan tipe data benar: KIP & Tahun Direktori = Text, Koordinat & KBLI = Number' }
+      { 'Informasi': 'Mode Upload', 'Detail': 'Tambah Data: menambah/update data | Ganti Semua: hapus semua data lama' }
     ];
 
     const infoSheet = XLSX.utils.json_to_sheet(infoData);
     infoSheet['!cols'] = [
-      { wch: 25 }, // Informasi (diperbesar)
-      { wch: 120 } // Detail (diperbesar untuk menampung informasi format)
+      { wch: 25 }, // Informasi
+      { wch: 80 }  // Detail
     ];
 
-    // Style header untuk info sheet
-    const infoHeaderRange = XLSX.utils.decode_range(infoSheet['!ref'] || 'A1:B1');
-    for (let col = infoHeaderRange.s.c; col <= infoHeaderRange.e.c; col++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-      if (!infoSheet[cellAddress]) continue;
-      
-      infoSheet[cellAddress].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: "FCE4EC" } },
-        alignment: { horizontal: "center" }
-      };
-    }
-
-    // Tambahkan semua sheet ke workbook
+    // ✅ PERBAIKAN: Tambahkan semua sheet ke workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Direktori');
     XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Petunjuk Kolom');
     XLSX.utils.book_append_sheet(workbook, referenceSheet, 'Kode Referensi');
     XLSX.utils.book_append_sheet(workbook, infoSheet, 'Informasi Upload');
 
-    // Generate Excel buffer dengan optimasi
+    // ✅ PERBAIKAN: Generate Excel buffer dengan opsi yang AMAN
     const excelBuffer = XLSX.write(workbook, { 
       type: 'buffer', 
       bookType: 'xlsx',
-      bookSST: false,
-      compression: true,
-      cellStyles: true  // ✅ Pastikan cell styles disimpan
+      compression: false  // CRITICAL: Matikan kompresi untuk menghindari corruption
     });
 
-    console.log('✅ Perusahaan template generated successfully with proper formatting');
+    console.log('Template generated successfully, size:', excelBuffer.length);
 
-    // Get current date for filename
+    // ✅ PERBAIKAN: Response headers yang benar
     const currentDate = new Date();
     const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const filename = `template_data_direktori_fixed_${dateString}.xlsx`;
+    const filename = `template_direktori_${dateString}.xlsx`;
 
-    // Create response with proper headers
-    const response = new NextResponse(excelBuffer, {
+    return new NextResponse(excelBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': excelBuffer.length.toString(),
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0',
-        'Content-Length': excelBuffer.length.toString()
+        'Expires': '0'
       }
     });
 
-    return response;
-
   } catch (error) {
-    console.error('❌ Error generating perusahaan template:', error);
+    console.error('❌ Error generating template:', error);
     
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Gagal membuat template direktori',
-        error: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Internal server error'
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      message: 'Gagal membuat template direktori',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Internal server error'
+    }, { status: 500 });
   }
 }

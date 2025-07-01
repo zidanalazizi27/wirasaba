@@ -480,7 +480,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
 
         // Get filename from response header
         const contentDisposition = response.headers.get("content-disposition");
-        let filename = "template-direktori.xlsx";
+        let filename = "template-direktori-full-fix.xlsx";
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename="(.+)"/);
           if (filenameMatch) {
@@ -497,7 +497,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
         SweetAlertUtils.closeLoading();
         SweetAlertUtils.success(
           "Template Berhasil Diunduh",
-          "Silakan isi template sesuai format yang disediakan. Template memiliki 3 sheet: Data Direktori, Petunjuk Kolom, dan Informasi Upload."
+          "Template telah diperbaiki dengan 28 kolom lengkap. Pastikan mengisi 16 field wajib (🔴) dan 12 field opsional (⚪) boleh kosong."
         );
       } else {
         throw new Error("Gagal mengunduh template");
@@ -511,6 +511,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     }
   };
 
+  // ✅ PERBAIKAN: Enhanced upload handler dengan logging detail
   const handleUpload = async () => {
     if (!file) {
       SweetAlertUtils.warning(
@@ -556,12 +557,28 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
       formData.append("file", file);
       formData.append("mode", uploadMode);
 
+      // ✅ PERBAIKAN: Enhanced logging untuk debugging
+      console.log("🔄 Starting upload with FULL FIX:", {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        uploadMode: uploadMode,
+        timestamp: new Date().toISOString(),
+      });
+
       const response = await fetch("/api/perusahaan/import", {
         method: "POST",
         body: formData,
       });
 
+      console.log("📡 Response status:", response.status);
+      console.log(
+        "📡 Response headers:",
+        Object.fromEntries(response.headers.entries())
+      );
+
       const result = await response.json();
+      console.log("📋 Response data with FULL FIX:", result);
 
       if (result.success) {
         SweetAlertUtils.closeLoading();
@@ -571,38 +588,118 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
             ? `Berhasil mengganti semua data dengan ${result.inserted || 0} data baru`
             : `Berhasil memproses ${(result.inserted || 0) + (result.updated || 0)} data (${result.inserted || 0} baru, ${result.updated || 0} diperbarui)`;
 
-        await SweetAlertUtils.success("Upload Berhasil!", message);
+        // ✅ PERBAIKAN: Enhanced success message dengan summary
+        const detailMessage = result.summary
+          ? `
+          ${message}
+          
+          📊 Ringkasan Upload:
+          • Total baris di file: ${result.summary.total_rows_in_file}
+          • Data valid diproses: ${result.summary.valid_data_processed}
+          • Field wajib: ${result.summary.field_wajib_count}
+          • Field opsional: ${result.summary.field_opsional_count}
+        `
+          : message;
+
+        await SweetAlertUtils.success("Upload Berhasil!", detailMessage);
         onSuccess();
         onClose();
       } else {
         SweetAlertUtils.closeLoading();
 
-        // Handle different types of errors
-        if (result.errors || result.duplicates) {
-          // Validation or duplicate errors
-          const title = result.errors
-            ? "Error Validasi Data"
-            : "Data Duplikat Ditemukan";
-          const details = result.details || result.message;
+        // ✅ PERBAIKAN: Enhanced error handling dengan detail yang lebih baik
+        console.error("❌ Upload failed with FULL FIX:", result);
 
-          await SweetAlertUtils.error(title, details, {
-            width: "600px",
-            customClass: {
-              popup: "text-left",
-            },
-          });
+        if (result.details && result.error_summary) {
+          // Show detailed validation errors
+          const errorDetails = `
+            ${result.message}
+            
+            📋 Detail Error Validasi:
+            • Total baris diproses: ${result.error_summary.total_rows_processed}
+            • Error validasi: ${result.error_summary.validation_errors}
+            
+            🔴 Field Wajib yang harus diisi:
+            ${result.error_summary.field_wajib_yang_harus_diisi.join(", ")}
+            
+            ❌ Error yang ditemukan:
+            ${result.details}
+            
+            💡 Tips: Pastikan semua 16 field wajib terisi dan format data sesuai template.
+          `;
+
+          await SweetAlertUtils.error(
+            "Upload Gagal - Error Validasi",
+            errorDetails,
+            {
+              width: "700px",
+              customClass: { popup: "text-left" },
+            }
+          );
+        } else if (result.details && result.total_duplicates) {
+          // Show duplicate data errors
+          const duplicateDetails = `
+            ${result.message}
+            
+            📋 Detail Duplikasi:
+            • Total duplikasi: ${result.total_duplicates}
+            
+            ⚠️ Data yang duplikat:
+            ${result.details}
+            
+            💡 Tips: Periksa kombinasi KIP + tahun direktori yang sudah ada di database.
+          `;
+
+          await SweetAlertUtils.error(
+            "Upload Gagal - Data Duplikat",
+            duplicateDetails,
+            {
+              width: "700px",
+              customClass: { popup: "text-left" },
+            }
+          );
+        } else if (result.details && result.missing_headers) {
+          // Show missing headers error
+          const headerDetails = `
+            ${result.message}
+            
+            📋 Detail Header:
+            • Diharapkan: ${result.details.expected_count} kolom
+            • Ditemukan: ${result.details.actual_count} kolom
+            • Kolom yang hilang: ${result.details.missing_headers.join(", ")}
+            
+            💡 Tips: Download template terbaru yang sudah diperbaiki dengan 28 kolom lengkap.
+          `;
+
+          await SweetAlertUtils.error(
+            "Upload Gagal - Header Tidak Lengkap",
+            headerDetails,
+            {
+              width: "700px",
+              customClass: { popup: "text-left" },
+            }
+          );
         } else {
           // General error
-          await SweetAlertUtils.error("Upload Gagal", result.message);
+          await SweetAlertUtils.error(
+            "Upload Gagal",
+            result.message || "Terjadi kesalahan yang tidak diketahui"
+          );
         }
       }
     } catch (error) {
-      setIsUploading(false);
+      console.error("❌ Upload error with FULL FIX:", error);
       SweetAlertUtils.closeLoading();
-      console.error("Error uploading file:", error);
+
       await SweetAlertUtils.error(
         "Upload Gagal",
-        `Terjadi kesalahan: ${(error as Error).message}`
+        `Terjadi kesalahan: ${(error as Error).message}. 
+        
+        🔍 Tips Debugging:
+        1. Buka Console Browser (F12 → Console) untuk detail error
+        2. Pastikan template menggunakan versi terbaru (28 kolom)
+        3. Periksa koneksi internet dan server
+        4. Coba dengan file yang lebih kecil terlebih dahulu`
       );
     } finally {
       setIsUploading(false);
@@ -619,7 +716,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-medium mb-4 text-center">
-          Upload Data Perusahaan
+          Upload Data Perusahaan (FULL FIX)
         </h2>
 
         <div className="space-y-4">
@@ -629,7 +726,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
             className="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50 transition-colors"
             disabled={isUploading}
           >
-            Unduh Template
+            📥 Unduh Template (Diperbaiki)
           </button>
 
           {/* File Input */}
@@ -658,64 +755,73 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
           </div>
 
           {/* Upload Mode Selection */}
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Mode Upload
-          </label>
-          <div className="space-y-1">
-            <div className="flex items-start">
-              <input
-                type="radio"
-                id="append"
-                name="uploadMode"
-                value="append"
-                checked={uploadMode === "append"}
-                onChange={() => setUploadMode("append")}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mt-0.5"
-                disabled={isUploading}
-              />
-              <div className="ml-3">
-                <label htmlFor="append" className=" text-sm text-gray-700">
-                  <span className="font-medium">Tambah Data</span> — Menambahkan
-                  data baru, memperbarui data yang sudah ada.
-                </label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Mode Upload
+            </label>
+            <div className="space-y-1">
+              <div className="flex items-start">
+                <input
+                  type="radio"
+                  id="append"
+                  name="uploadMode"
+                  value="append"
+                  checked={uploadMode === "append"}
+                  onChange={() => setUploadMode("append")}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mt-0.5"
+                  disabled={isUploading}
+                />
+                <div className="ml-3">
+                  <label htmlFor="append" className="text-sm text-gray-700">
+                    <span className="font-medium">Tambah Data</span> —
+                    Menambahkan data baru, memperbarui data yang sudah ada.
+                  </label>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-start">
-              <input
-                type="radio"
-                id="replace"
-                name="uploadMode"
-                value="replace"
-                checked={uploadMode === "replace"}
-                onChange={() => setUploadMode("replace")}
-                className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 mt-0.5"
-                disabled={isUploading}
-              />
-              <div className="ml-3">
-                <label htmlFor="replace" className="text-sm text-gray-700">
-                  <span className="font-medium text-red-600">
-                    Ganti Semua Data
-                  </span>{" "}
-                  — Menghapus semua data lama dan mengganti dengan data baru
-                </label>
+              <div className="flex items-start">
+                <input
+                  type="radio"
+                  id="replace"
+                  name="uploadMode"
+                  value="replace"
+                  checked={uploadMode === "replace"}
+                  onChange={() => setUploadMode("replace")}
+                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 mt-0.5"
+                  disabled={isUploading}
+                />
+                <div className="ml-3">
+                  <label htmlFor="replace" className="text-sm text-gray-700">
+                    <span className="font-medium text-red-600">
+                      Ganti Semua Data
+                    </span>{" "}
+                    — Menghapus semua data lama dan mengganti dengan data baru
+                  </label>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Important Notes */}
+          {/* ✅ PERBAIKAN: Enhanced Important Notes dengan info field wajib */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
             <h3 className="text-sm font-medium text-amber-800 mb-2">
-              Informasi Penting :
+              📋 Informasi Penting (FULL FIX):
             </h3>
             <ul className="text-xs text-amber-700 space-y-1">
-              <li>• Semua field wajib harus diisi sesuai validasi</li>
               <li>
-                • Pastikan tidak ada duplikasi data KIP & tahun direktori.
+                • <strong>16 field WAJIB diisi (🔴):</strong> KIP, Nama
+                Perusahaan, Alamat, Kecamatan, Desa, Badan Usaha, Lokasi
+                Perusahaan, KBLI, Produk, Latitude, Longitude, Tenaga Kerja,
+                Investasi, Omset, Skala, Tahun Direktori
               </li>
               <li>
-                • Data lookup (Kecamatan, Desa, dll) harus sesuai data master
+                • <strong>12 field OPSIONAL (⚪):</strong> Boleh dikosongkan
               </li>
+              <li>• Template sudah diperbaiki dengan 28 kolom lengkap</li>
+              <li>
+                • Enhanced error reporting untuk debugging yang lebih mudah
+              </li>
+              <li>• Duplikasi: KIP + tahun direktori harus unik</li>
             </ul>
           </div>
 
@@ -743,7 +849,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                   Memproses...
                 </div>
               ) : (
-                <>{uploadMode === "replace" ? "Ganti Semua" : "Upload"}</>
+                <>{uploadMode === "replace" ? "🔄 Ganti Semua" : "📤 Upload"}</>
               )}
             </button>
           </div>

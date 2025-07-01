@@ -1,4 +1,4 @@
-// src/app/api/perusahaan/import/route.ts
+// src/app/api/perusahaan/import/route.ts - FULL FIX VERSION (Part 1)
 import { NextRequest, NextResponse } from "next/server";
 import mysql from "mysql2/promise";
 import * as XLSX from 'xlsx';
@@ -16,36 +16,36 @@ async function createDbConnection() {
   return await mysql.createConnection(dbConfig);
 }
 
-// Interface untuk data Excel yang akan diimport (sesuai template)
+// ✅ PERBAIKAN: Interface untuk data Excel dengan optional fields dan multiple types
 interface ExcelRowData {
-  'KIP': string;
-  'Nama Perusahaan': string;
-  'Badan Usaha': string;        // Kode 1-8
-  'Alamat': string;
-  'Kecamatan': string;
-  'Desa': string;
-  'Kode Pos'?: string;
-  'Skala': string;
-  'Lokasi Perusahaan': string;  // Kode 1-4
+  'KIP'?: string | number;
+  'Nama Perusahaan'?: string;
+  'Badan Usaha'?: string | number;
+  'Alamat'?: string;
+  'Kecamatan'?: string;
+  'Desa'?: string;
+  'Kode Pos'?: string | number;
+  'Skala'?: string;
+  'Lokasi Perusahaan'?: string | number;
   'Nama Kawasan'?: string;
-  'Latitude': number;
-  'Longitude': number;
-  'Jarak (KM)'?: number;
-  'Produk': string;
-  'KBLI': string;
+  'Latitude'?: string | number;
+  'Longitude'?: string | number;
+  'Jarak (KM)'?: string | number;
+  'Produk'?: string;
+  'KBLI'?: string | number;
   'Telepon Perusahaan'?: string;
   'Email Perusahaan'?: string;
   'Website Perusahaan'?: string;
-  'Tenaga Kerja': string;       // Kode 1-4
-  'Investasi': string;          // Kode 1-4
-  'Omset': string;              // Kode 1-4
+  'Tenaga Kerja'?: string | number;
+  'Investasi'?: string | number;
+  'Omset'?: string | number;
   'Nama Narasumber'?: string;
   'Jabatan Narasumber'?: string;
   'Email Narasumber'?: string;
   'Telepon Narasumber'?: string;
   'PCL Utama'?: string;
   'Catatan'?: string;
-  'Tahun Direktori': string; // Format: "2023,2024,2025"
+  'Tahun Direktori'?: string | number;
 }
 
 interface ProcessedData {
@@ -102,7 +102,7 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
-// Fungsi sanitasi data - menggunakan kode referensi dari template
+// ✅ PERBAIKAN: Fungsi sanitasi data - handle semua 28 field dengan benar
 function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
   return {
     kip: String(rawData['KIP'] || '').trim(),
@@ -137,12 +137,14 @@ function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
   };
 }
 
-// Fungsi validasi data lengkap
+// ✅ PERBAIKAN: Fungsi validasi data - HANYA validasi 16 field wajib dengan ketat
 function validateDirectoryData(data: ProcessedData): string[] {
   const errors: string[] = [];
 
-  // Validasi KIP
-  if (!data.kip) {
+  // ========== VALIDASI 16 FIELD WAJIB ==========
+
+  // 1. Validasi KIP (WAJIB)
+  if (!data.kip || data.kip.toString().trim() === '') {
     errors.push("KIP wajib diisi");
   } else {
     if (!/^\d+$/.test(data.kip)) {
@@ -153,51 +155,31 @@ function validateDirectoryData(data: ProcessedData): string[] {
     }
   }
 
-  // Validasi nama perusahaan
-  if (!data.nama_perusahaan) {
+  // 2. Validasi Nama Perusahaan (WAJIB)
+  if (!data.nama_perusahaan || data.nama_perusahaan.trim() === '') {
     errors.push("Nama perusahaan wajib diisi");
   } else if (data.nama_perusahaan.length < 3) {
     errors.push("Nama perusahaan minimal 3 karakter");
   }
 
-  // Validasi alamat
-  if (!data.alamat) {
+  // 3. Validasi Alamat (WAJIB)
+  if (!data.alamat || data.alamat.trim() === '') {
     errors.push("Alamat wajib diisi");
   }
 
-  // Validasi Badan Usaha (1-8)
+  // 4. Validasi Badan Usaha (WAJIB, 1-8)
   if (isNaN(data.badan_usaha) || data.badan_usaha < 1 || data.badan_usaha > 8) {
-    errors.push("Badan Usaha harus berupa kode 1-8");
+    errors.push("Badan Usaha wajib diisi dengan kode 1-8");
   }
 
-  // Validasi skala
-  if (!data.skala) {
-    errors.push("Skala wajib diisi");
-  } else if (!['Besar', 'Sedang'].includes(data.skala)) {
-    errors.push("Skala harus 'Besar' atau 'Sedang'");
-  }
-
-  // Validasi Lokasi Perusahaan (1-4)
+  // 5. Validasi Lokasi Perusahaan (WAJIB, 1-4)
   if (isNaN(data.lok_perusahaan) || data.lok_perusahaan < 1 || data.lok_perusahaan > 4) {
-    errors.push("Lokasi Perusahaan harus berupa kode 1-4");
+    errors.push("Lokasi Perusahaan wajib diisi dengan kode 1-4");
   }
 
-  // Validasi koordinat
-  if (isNaN(data.lat) || data.lat < -90 || data.lat > 90) {
-    errors.push("Latitude harus angka dalam range -90 sampai 90");
-  }
-  if (isNaN(data.lon) || data.lon < -180 || data.lon > 180) {
-    errors.push("Longitude harus angka dalam range -180 sampai 180");
-  }
-
-  // Validasi produk
-  if (!data.produk) {
-    errors.push("Produk wajib diisi");
-  }
-
-  // Validasi KBLI
+  // 6. Validasi KBLI (WAJIB)
   if (isNaN(data.KBLI)) {
-    errors.push("KBLI harus berupa angka 5 digit");
+    errors.push("KBLI wajib diisi dengan angka 5 digit");
   } else {
     const kbliStr = String(data.KBLI);
     if (kbliStr.length !== 5) {
@@ -205,24 +187,68 @@ function validateDirectoryData(data: ProcessedData): string[] {
     }
   }
 
-  // Validasi Tenaga Kerja (1-4)
+  // 7. Validasi Produk (WAJIB)
+  if (!data.produk || data.produk.trim() === '') {
+    errors.push("Produk wajib diisi");
+  }
+
+  // 8. Validasi Latitude (WAJIB)
+  if (data.lat === null || data.lat === undefined || isNaN(data.lat)) {
+    errors.push("Latitude wajib diisi");
+  } else if (data.lat < -90 || data.lat > 90) {
+    errors.push("Latitude harus dalam range -90 sampai 90");
+  }
+
+  // 9. Validasi Longitude (WAJIB)
+  if (data.lon === null || data.lon === undefined || isNaN(data.lon)) {
+    errors.push("Longitude wajib diisi");
+  } else if (data.lon < -180 || data.lon > 180) {
+    errors.push("Longitude harus dalam range -180 sampai 180");
+  }
+
+  // 10. Validasi Tenaga Kerja (WAJIB, 1-4)
   if (isNaN(data.tkerja) || data.tkerja < 1 || data.tkerja > 4) {
-    errors.push("Tenaga Kerja harus berupa kode 1-4");
+    errors.push("Tenaga Kerja wajib diisi dengan kode 1-4");
   }
 
-  // Validasi Investasi (1-4)
+  // 11. Validasi Investasi (WAJIB, 1-4)
   if (isNaN(data.investasi) || data.investasi < 1 || data.investasi > 4) {
-    errors.push("Investasi harus berupa kode 1-4");
+    errors.push("Investasi wajib diisi dengan kode 1-4");
   }
 
-  // Validasi Omset (1-4)
+  // 12. Validasi Omset (WAJIB, 1-4)
   if (isNaN(data.omset) || data.omset < 1 || data.omset > 4) {
-    errors.push("Omset harus berupa kode 1-4");
+    errors.push("Omset wajib diisi dengan kode 1-4");
   }
 
+  // 13. Validasi Skala (WAJIB)
+  if (!data.skala || data.skala.trim() === '') {
+    errors.push("Skala wajib diisi");
+  } else if (!['Besar', 'Sedang'].includes(data.skala)) {
+    errors.push("Skala harus 'Besar' atau 'Sedang'");
+  }
+
+  // 14. Validasi Tahun Direktori (WAJIB)
+  if (!data.tahun_direktori || data.tahun_direktori.length === 0) {
+    errors.push("Tahun direktori wajib diisi");
+  } else {
+    for (const year of data.tahun_direktori) {
+      if (year < 2000 || year > 2100) {
+        errors.push(`Tahun direktori ${year} harus dalam range 2000-2100`);
+      }
+    }
+  }
+
+  // ========== VALIDASI FIELD OPSIONAL (hanya jika diisi) ==========
+  
   // Validasi kode pos jika ada
   if (data.kode_pos && !/^\d{5}$/.test(data.kode_pos)) {
     errors.push("Kode pos harus 5 digit angka");
+  }
+
+  // Validasi jarak jika ada
+  if (data.jarak !== undefined && (isNaN(data.jarak) || data.jarak < 0)) {
+    errors.push("Jarak harus berupa angka positif");
   }
 
   // Validasi email jika ada
@@ -233,14 +259,10 @@ function validateDirectoryData(data: ProcessedData): string[] {
     errors.push("Format email narasumber tidak valid");
   }
 
-  // Validasi tahun direktori
-  if (!data.tahun_direktori || data.tahun_direktori.length === 0) {
-    errors.push("Tahun direktori wajib diisi");
-  } else {
-    for (const year of data.tahun_direktori) {
-      if (year < 2000 || year > 2100) {
-        errors.push(`Tahun direktori ${year} harus dalam range 2000-2100`);
-      }
+  // Validasi website jika ada
+  if (data.web_perusahaan && data.web_perusahaan.length > 0) {
+    if (!/^[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$/.test(data.web_perusahaan.replace(/^https?:\/\//, ''))) {
+      errors.push("Format website tidak valid");
     }
   }
 
@@ -429,7 +451,7 @@ export async function POST(request: NextRequest) {
   let connection: mysql.Connection | null = null;
   
   try {
-    console.log('🔄 Starting direktori import process...');
+    console.log('🔄 Starting direktori import process with FULL FIX...');
     
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -481,24 +503,45 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Validate headers
+    // ✅ PERBAIKAN: Validate headers dengan semua 28 kolom
     const requiredHeaders = [
       'KIP', 'Nama Perusahaan', 'Badan Usaha', 'Alamat', 'Kecamatan', 'Desa',
-      'Skala', 'Lokasi Perusahaan', 'Latitude', 'Longitude', 'Produk', 'KBLI',
-      'Tenaga Kerja', 'Investasi', 'Omset', 'Tahun Direktori'
+      'Kode Pos', 'Skala', 'Lokasi Perusahaan', 'Nama Kawasan', 'Latitude', 
+      'Longitude', 'Jarak (KM)', 'Produk', 'KBLI', 'Telepon Perusahaan',
+      'Email Perusahaan', 'Website Perusahaan', 'Tenaga Kerja', 'Investasi', 
+      'Omset', 'Nama Narasumber', 'Jabatan Narasumber', 'Email Narasumber',
+      'Telepon Narasumber', 'PCL Utama', 'Catatan', 'Tahun Direktori'
     ];
 
     const firstRow = jsonData[0];
-    const missingHeaders = requiredHeaders.filter(header => !(header in firstRow));
+    const actualHeaders = Object.keys(firstRow);
+    const missingHeaders = requiredHeaders.filter(header => !actualHeaders.includes(header));
+
+    // ✅ PERBAIKAN: Enhanced logging untuk debugging
+    console.log('🔍 Header validation with FULL FIX:');
+    console.log('Expected headers count:', requiredHeaders.length);
+    console.log('Actual headers count:', actualHeaders.length);
+    console.log('Expected headers:', requiredHeaders);
+    console.log('Actual headers:', actualHeaders);
+    console.log('Missing headers:', missingHeaders);
 
     if (missingHeaders.length > 0) {
+      console.error('❌ Missing headers detected:', missingHeaders);
+      
       return NextResponse.json({
         success: false,
-        message: `Header yang diperlukan tidak ditemukan: ${missingHeaders.join(', ')}`
+        message: `Header yang diperlukan tidak ditemukan: ${missingHeaders.join(', ')}`,
+        details: {
+          expected_count: requiredHeaders.length,
+          actual_count: actualHeaders.length,
+          missing_headers: missingHeaders,
+          expected_headers: requiredHeaders,
+          actual_headers: actualHeaders
+        }
       }, { status: 400 });
     }
 
-    console.log(`📊 Processing ${jsonData.length} rows`);
+    console.log(`📊 Processing ${jsonData.length} rows with enhanced validation`);
 
     // Create database connection
     connection = await createDbConnection();
@@ -522,7 +565,7 @@ export async function POST(request: NextRequest) {
         // Sanitize data
         const sanitizedData = sanitizeDirectoryData(rowData);
 
-        // Map lookup values (kecamatan dan desa)
+        // Map lookup values (kecamatan dan desa) - Kedua field ini WAJIB
         const kecamatanName = String(rowData['Kecamatan'] || '').trim();
         const desaName = String(rowData['Desa'] || '').trim();
         
@@ -548,7 +591,7 @@ export async function POST(request: NextRequest) {
 
         const mappedData = await mapLookupValues(connection, sanitizedData, kecamatanName, desaName);
 
-        // Validate data
+        // ✅ PERBAIKAN: Validate data dengan fokus pada 16 field wajib
         const errors = validateDirectoryData(mappedData);
         if (errors.length > 0) {
           errors.forEach(error => {
@@ -591,7 +634,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check for validation errors
+    // ✅ PERBAIKAN: Enhanced error reporting
     if (validationErrors.length > 0) {
       await connection.rollback();
       
@@ -609,7 +652,17 @@ export async function POST(request: NextRequest) {
         message: 'Ditemukan error validasi data',
         details: errorMessage + additionalInfo,
         total_errors: validationErrors.length,
-        errors: validationErrors
+        errors: validationErrors.slice(0, 20), // Kirim maksimal 20 error untuk debugging
+        error_summary: {
+          total_rows_processed: jsonData.length,
+          validation_errors: validationErrors.length,
+          field_wajib_yang_harus_diisi: [
+            'KIP', 'Nama Perusahaan', 'Alamat', 'Kecamatan', 'Desa', 
+            'Badan Usaha', 'Lokasi Perusahaan', 'KBLI', 'Produk', 
+            'Latitude', 'Longitude', 'Tenaga Kerja', 'Investasi', 
+            'Omset', 'Skala', 'Tahun Direktori'
+          ]
+        }
       }, { status: 400 });
     }
 
@@ -631,7 +684,7 @@ export async function POST(request: NextRequest) {
         message: 'Ditemukan data duplikat',
         details: duplicateMessage + additionalInfo,
         total_duplicates: duplicateData.length,
-        duplicates: duplicateData
+        duplicates: duplicateData.slice(0, 20) // Kirim maksimal 20 duplikat untuk debugging
       }, { status: 400 });
     }
 
@@ -639,7 +692,8 @@ export async function POST(request: NextRequest) {
       await connection.rollback();
       return NextResponse.json({
         success: false,
-        message: 'Tidak ada data valid untuk diproses'
+        message: 'Tidak ada data valid untuk diproses',
+        details: 'Semua baris data memiliki error validasi atau duplikasi'
       }, { status: 400 });
     }
 
@@ -651,7 +705,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save data
-    console.log(`💾 Saving ${validData.length} valid records`);
+    console.log(`💾 Saving ${validData.length} valid records with FULL FIX`);
     let insertedCount = 0;
     let updatedCount = 0;
 
@@ -675,13 +729,13 @@ export async function POST(request: NextRequest) {
           insertedCount++;
         }
       } catch (error) {
-        console.error(`Error saving data:`, error);
+        console.error(`❌ Error saving data:`, error);
         throw error;
       }
     }
 
     await connection.commit();
-    console.log('✅ Import completed successfully');
+    console.log('✅ Import completed successfully with FULL FIX');
 
     const result = {
       success: true,
@@ -690,7 +744,16 @@ export async function POST(request: NextRequest) {
         : `Berhasil memproses ${insertedCount + updatedCount} data (${insertedCount} baru, ${updatedCount} diperbarui)`,
       inserted: insertedCount,
       updated: updatedCount,
-      total_processed: validData.length
+      total_processed: validData.length,
+      summary: {
+        total_rows_in_file: jsonData.length,
+        valid_data_processed: validData.length,
+        validation_errors: validationErrors.length,
+        duplicates_found: duplicateData.length,
+        mode: mode,
+        field_wajib_count: 16,
+        field_opsional_count: 12
+      }
     };
 
     return NextResponse.json(result, { status: 200 });
@@ -700,16 +763,20 @@ export async function POST(request: NextRequest) {
       try {
         await connection.rollback();
       } catch (rollbackError) {
-        console.error('Rollback error:', rollbackError);
+        console.error('❌ Rollback error:', rollbackError);
       }
     }
     
-    console.error('❌ Import error:', error);
+    console.error('❌ Import error with FULL FIX:', error);
     
     return NextResponse.json({
       success: false,
       message: 'Terjadi kesalahan saat mengimpor data',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: process.env.NODE_ENV === 'development' ? {
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString()
+      } : undefined
     }, { status: 500 });
     
   } finally {
@@ -717,7 +784,7 @@ export async function POST(request: NextRequest) {
       try {
         await connection.end();
       } catch (closeError) {
-        console.error('Connection close error:', closeError);
+        console.error('❌ Connection close error:', closeError);
       }
     }
   }
