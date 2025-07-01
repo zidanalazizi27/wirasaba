@@ -15,9 +15,61 @@ async function createDbConnection() {
   return await mysql.createConnection(dbConfig);
 }
 
+// Function untuk check duplicate
+async function handleCheckDuplicate(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const idSurvei = searchParams.get("id_survei");
+  const idPerusahaan = searchParams.get("id_perusahaan");
+  const excludeId = searchParams.get("exclude_id");
+
+  if (!idSurvei || !idPerusahaan) {
+    return NextResponse.json({
+      success: false,
+      message: "Parameter id_survei dan id_perusahaan diperlukan"
+    }, { status: 400 });
+  }
+
+  try {
+    const connection = await createDbConnection();
+
+    let query = `
+      SELECT COUNT(*) as count 
+      FROM riwayat_survei 
+      WHERE id_survei = ? AND id_perusahaan = ?
+    `;
+    let params = [idSurvei, idPerusahaan];
+
+    // Exclude current record if editing
+    if (excludeId && excludeId !== "") {
+      query += " AND id_riwayat != ?";
+      params.push(excludeId);
+    }
+
+    const [rows] = await connection.execute(query, params);
+    await connection.end();
+
+    const count = (rows as any[])[0].count;
+    
+    return NextResponse.json({
+      success: true,
+      isDuplicate: count > 0
+    });
+  } catch (error) {
+    console.error("Error checking duplicate:", error);
+    return NextResponse.json({
+      success: false,
+      message: "Error saat mengecek duplikasi data"
+    }, { status: 500 });
+  }
+}
+
 // GET endpoint with advanced filtering, sorting, and pagination
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
+  // Check duplicate endpoint
+  if (searchParams.has("check_duplicate")) {
+    return handleCheckDuplicate(request);
+  }
   const searchTerm = searchParams.get("search") || "";
   const surveiFilter = searchParams.get("survei") || "all";
   const pclFilter = searchParams.get("pcl") || "all";
@@ -210,6 +262,28 @@ export async function POST(request: NextRequest) {
     // Create database connection
     const connection = await createDbConnection();
 
+    // Check for duplicate combination with detailed info
+    const [duplicateCheck] = await connection.execute(
+      `SELECT r.id_riwayat, s.nama_survei, p.nama_perusahaan, p.kip
+       FROM riwayat_survei r
+       JOIN survei s ON r.id_survei = s.id_survei
+       JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
+       WHERE r.id_survei = ? AND r.id_perusahaan = ?`,
+      [data.id_survei, data.id_perusahaan]
+    );
+
+    if ((duplicateCheck as any[]).length > 0) {
+      const duplicate = (duplicateCheck as any[])[0];
+      await connection.end();
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Kombinasi survei "${duplicate.nama_survei}" dan perusahaan "${duplicate.nama_perusahaan}" (KIP: ${duplicate.kip}) sudah terdaftar dalam sistem.`,
+        },
+        { status: 409 }
+      );
+    }
+
     // Insert new riwayat survei
     const [result] = await connection.execute(
       `INSERT INTO riwayat_survei (id_survei, id_perusahaan, id_pcl, selesai, ket_survei) 
@@ -244,3 +318,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

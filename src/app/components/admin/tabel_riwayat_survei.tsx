@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import type { SVGProps } from "react";
 import RiwayatSurveiForm from "./riwayat_survei_form";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -318,6 +319,7 @@ export const columns = [
   { name: "Nama Perusahaan", uid: "nama_perusahaan", sortable: true },
   { name: "PCL", uid: "nama_pcl", sortable: true },
   { name: "Tahun", uid: "tahun", sortable: true },
+  { name: "Selesai", uid: "selesai", sortable: true },
   { name: "Aksi", uid: "actions", sortable: false },
 ];
 
@@ -436,62 +438,49 @@ const TabelRiwayatSurvei = () => {
     }
   }, []);
 
-  // Fetch riwayat data
-  const fetchData = useCallback(async () => {
+  const fetchRiwayatSurvei = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
 
-      // Build query parameters
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: rowsPerPage.toString(),
-        search: filterValue,
-        survei: surveiFilter,
-        pcl: pclFilter,
-        selesai: selesaiFilter,
-        tahun: tahunFilter,
-      });
-
-      // Add sort parameters
-      sortDescriptors.forEach((sort, index) => {
-        if (sort.direction) {
-          params.append(`sort[${index}][column]`, sort.column);
-          params.append(`sort[${index}][direction]`, sort.direction);
-        }
-      });
-
-      const response = await fetch(`/api/riwayat-survei?${params.toString()}`);
-
+      const response = await fetch("/api/riwayat-survei");
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
-
       if (result.success) {
-        setRiwayatList(result.data);
-        setTotalItems(result.pagination.total);
-        setTotalPages(result.pagination.totalPages);
-        setError(null);
+        const data = result.data || [];
+        setRiwayatList(data);
+
+        // Extract unique options for filters
+        const uniqueSurvei = [
+          ...new Set(data.map((item: RiwayatSurvei) => item.nama_survei)),
+        ];
+        const uniquePcl = [
+          ...new Set(data.map((item: RiwayatSurvei) => item.nama_pcl)),
+        ];
+        const uniqueTahun = [
+          ...new Set(data.map((item: RiwayatSurvei) => item.tahun)),
+        ].sort((a, b) => b - a);
+
+        setSurveiOptions(uniqueSurvei);
+        setPclOptions(uniquePcl);
+        setTahunOptions(uniqueTahun);
       } else {
-        throw new Error(result.message || "Failed to fetch data");
+        throw new Error(result.message || "Gagal memuat data");
       }
     } catch (error) {
-      console.error("Error fetching riwayat data:", error);
+      console.error("Error fetching data:", error);
       setError("Gagal memuat data riwayat survei");
+      await SweetAlertUtils.error(
+        "Error",
+        "Gagal memuat data riwayat survei. Silakan refresh halaman."
+      );
     } finally {
       setIsLoading(false);
     }
-  }, [
-    currentPage,
-    rowsPerPage,
-    filterValue,
-    surveiFilter,
-    pclFilter,
-    selesaiFilter,
-    tahunFilter,
-    sortDescriptors,
-  ]);
+  }, []);
 
   // Initial data load
   useEffect(() => {
@@ -500,8 +489,8 @@ const TabelRiwayatSurvei = () => {
 
   // Fetch data when filters or pagination change
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchRiwayatSurvei();
+  }, [fetchRiwayatSurvei]);
 
   // Handle outside clicks for dropdowns
   useEffect(() => {
@@ -648,28 +637,46 @@ const TabelRiwayatSurvei = () => {
     setShowEditModal(true);
   };
 
-  const handleDeleteRiwayat = async (riwayat: RiwayatSurvei) => {
-    if (confirm(`Yakin ingin menghapus riwayat survei ini?`)) {
-      try {
-        const response = await fetch(
-          `/api/riwayat-survei/${riwayat.id_riwayat}`,
-          {
-            method: "DELETE",
-          }
-        );
+  // Handle delete with sweet alert confirmation
+  const handleDelete = async (riwayat: RiwayatSurvei) => {
+    const confirmed = await SweetAlertUtils.confirmDelete(
+      "Hapus Data Riwayat Survei",
+      `Apakah Anda yakin ingin menghapus riwayat survei "${riwayat.nama_survei}" untuk perusahaan "${riwayat.nama_perusahaan}"?`,
+      "Ya, Hapus",
+      "Batal"
+    );
 
-        const result = await response.json();
+    if (!confirmed) return;
 
-        if (result.success) {
-          alert("Riwayat survei berhasil dihapus");
-          fetchData(); // Refresh the data
-        } else {
-          alert(`Gagal menghapus: ${result.message}`);
+    try {
+      SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
+
+      const response = await fetch(
+        `/api/riwayat-survei/${riwayat.id_riwayat}`,
+        {
+          method: "DELETE",
         }
-      } catch (error) {
-        console.error("Error deleting riwayat survei:", error);
-        alert("Terjadi kesalahan saat menghapus data");
+      );
+
+      const result = await response.json();
+      SweetAlertUtils.closeLoading();
+
+      if (result.success) {
+        await SweetAlertUtils.success(
+          "Berhasil Dihapus!",
+          `Data riwayat survei "${riwayat.nama_survei}" berhasil dihapus.`
+        );
+        await fetchRiwayatSurvei(); // Refresh data
+      } else {
+        throw new Error(result.message || "Gagal menghapus data");
       }
+    } catch (error) {
+      console.error("Error deleting data:", error);
+      SweetAlertUtils.closeLoading();
+      await SweetAlertUtils.error(
+        "Gagal Menghapus",
+        "Terjadi kesalahan saat menghapus data. Silakan coba lagi."
+      );
     }
   };
 
@@ -685,13 +692,13 @@ const TabelRiwayatSurvei = () => {
   // Modal success handlers
   const handleAddSuccess = () => {
     setShowAddModal(false);
-    fetchData(); // Refresh data
+    fetchRiwayatSurvei(); // Refresh data
   };
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
     setSelectedRiwayat(null);
-    fetchData(); // Refresh data
+    fetchRiwayatSurvei(); // Refresh data
   };
 
   // Render cell content
@@ -725,7 +732,7 @@ const TabelRiwayatSurvei = () => {
               </Tooltip>
               <Tooltip color="danger" content="Hapus">
                 <span
-                  onClick={() => handleDeleteRiwayat(riwayat)}
+                  onClick={() => handleDelete(riwayat)}
                   className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-red-500"
                 >
                   <DeleteIcon />
