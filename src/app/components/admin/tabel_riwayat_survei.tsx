@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import type { SVGProps } from "react";
 import RiwayatSurveiForm from "./riwayat_survei_form";
+import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -649,29 +650,40 @@ const TabelRiwayatSurvei = () => {
   };
 
   const handleDeleteRiwayat = async (riwayat: RiwayatSurvei) => {
-    if (confirm(`Yakin ingin menghapus riwayat survei ini?`)) {
-      try {
-        const response = await fetch(
-          `/api/riwayat-survei/${riwayat.id_riwayat}`,
-          {
-            method: "DELETE",
-          }
-        );
+    const confirmDelete = await SweetAlertUtils.confirmDelete(
+      "Hapus Riwayat Survei",
+      `Apakah Anda yakin ingin menghapus riwayat survei "${riwayat.nama_survei}" untuk perusahaan "${riwayat.nama_perusahaan}"?`
+    );
 
-        const result = await response.json();
+    if (!confirmDelete) return;
 
-        if (result.success) {
-          alert("Riwayat survei berhasil dihapus");
-          fetchData(); // Refresh the data
-        } else {
-          alert(`Gagal menghapus: ${result.message}`);
+    try {
+      SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
+
+      const response = await fetch(
+        `/api/riwayat-survei/${riwayat.id_riwayat}`,
+        {
+          method: "DELETE",
         }
-      } catch (error) {
-        console.error("Error deleting riwayat survei:", error);
-        alert("Terjadi kesalahan saat menghapus data");
+      );
+
+      const result = await response.json();
+      SweetAlertUtils.closeLoading();
+
+      if (result.success) {
+        await SweetAlertUtils.success("Berhasil!", "Data berhasil dihapus!");
+        fetchData(); // Refresh data
+      } else {
+        throw new Error(result.message || "Gagal menghapus data");
       }
+    } catch (error) {
+      SweetAlertUtils.closeLoading();
+      SweetAlertUtils.error(
+        "Gagal Menghapus",
+        `Terjadi kesalahan: ${error.message}`
+      );
     }
-  };
+  };y
 
   // Handle upload and download
   const handleUploadClick = () => {

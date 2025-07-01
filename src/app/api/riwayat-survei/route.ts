@@ -27,6 +27,59 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "10");
   const offset = (page - 1) * limit;
 
+  const surveiResponse = await fetch("/api/riwayat-survei/filters?type=survei");
+  const pclResponse = await fetch("/api/riwayat-survei/filters?type=pcl");
+  const tahunResponse = await fetch("/api/riwayat-survei/filters?type=tahun");
+
+  // Handle special endpoints
+  const pathname = request.nextUrl.pathname;
+  
+  // Check duplicate endpoint
+  if (searchParams.has("check_duplicate")) {
+    return handleCheckDuplicate(request);
+  }
+  if (searchParams.has("filters")) {
+    return handleGetFilters(request);
+  }
+
+  // Tambahkan function ini
+  async function handleGetFilters(request: NextRequest) {
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get("type");
+    
+    try {
+      const connection = await createDbConnection();
+      let query = "";
+      
+      switch (type) {
+        case "survei":
+          query = "SELECT DISTINCT s.id_survei as uid, s.nama_survei as name FROM survei s ORDER BY s.nama_survei";
+          break;
+        case "pcl":
+          query = "SELECT DISTINCT p.id_pcl as uid, p.nama_pcl as name FROM pcl p ORDER BY p.nama_pcl";
+          break;
+        case "tahun":
+          query = "SELECT DISTINCT s.tahun as uid, s.tahun as name FROM survei s ORDER BY s.tahun DESC";
+          break;
+        default:
+          return NextResponse.json({ success: false, message: "Invalid filter type" }, { status: 400 });
+      }
+      
+      const [rows] = await connection.execute(query);
+      await connection.end();
+      
+      return NextResponse.json({
+        success: true,
+        data: rows
+      });
+    } catch (error) {
+      return NextResponse.json({
+        success: false,
+        message: "Error fetching filter options"
+      }, { status: 500 });
+    }
+  }
+
   try {
     // Create database connection
     const connection = await createDbConnection();
@@ -210,6 +263,28 @@ export async function POST(request: NextRequest) {
     // Create database connection
     const connection = await createDbConnection();
 
+    // Check for duplicate combination
+    const [duplicateCheck] = await connection.execute(
+      `SELECT r.id_riwayat, s.nama_survei, p.nama_perusahaan, p.kip
+       FROM riwayat_survei r
+       JOIN survei s ON r.id_survei = s.id_survei
+       JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
+       WHERE r.id_survei = ? AND r.id_perusahaan = ?`,
+      [data.id_survei, data.id_perusahaan]
+    );
+
+    if ((duplicateCheck as any[]).length > 0) {
+      const duplicate = (duplicateCheck as any[])[0];
+      await connection.end();
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Kombinasi survei "${duplicate.nama_survei}" dan perusahaan "${duplicate.nama_perusahaan}" (KIP: ${duplicate.kip}) sudah terdaftar dalam sistem.`,
+        },
+        { status: 409 }
+      );
+    }
+
     // Insert new riwayat survei
     const [result] = await connection.execute(
       `INSERT INTO riwayat_survei (id_survei, id_perusahaan, id_pcl, selesai, ket_survei) 
@@ -242,5 +317,160 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  }
+}
+
+// DELETE endpoint for bulk delete
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { ids } = body;
+
+    // Validasi input
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "IDs array is required and cannot be empty",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validasi bahwa semua IDs adalah number
+    const validIds = ids.filter(id => Number.isInteger(Number(id)));
+    if (validIds.length !== ids.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "All IDs must be valid integers",
+        },
+        { status: 400 }
+      );
+    }
+
+    const connection = await createDbConnection();
+
+    // Buat placeholders untuk query
+    const placeholders = validIds.map(() => '?').join(',');
+    
+    // Query untuk menghapus multiple records
+    const deleteQuery = `
+      DELETE FROM riwayat_survei 
+      WHERE id_riwayat IN (${placeholders})
+    `;
+
+    const [result] = await connection.execute(deleteQuery, validIds);
+    const deleteResult = result as any;
+
+    await connection.end();
+
+    if (deleteResult.affectedRows === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Tidak ada data yang dihapus. Mungkin data sudah tidak ada.",
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `${deleteResult.affectedRows} data riwayat survei berhasil dihapus`,
+      deletedCount: deleteResult.affectedRows,
+    });
+
+  } catch (error) {
+    console.error("Error bulk deleting riwayat survei:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Terjadi kesalahan saat menghapus data",
+        error: (error as Error).message,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// Helper function untuk check duplicate
+async function handleCheckDuplicate(request: NextRequest) {
+  let connection;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id_survei = searchParams.get("id_survei");
+    const id_perusahaan = searchParams.get("id_perusahaan");
+    const exclude_id = searchParams.get("exclude_id");
+
+    // Validasi parameter wajib
+    if (!id_survei || !id_perusahaan) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Parameter id_survei dan id_perusahaan wajib diisi",
+        },
+        { status: 400 }
+      );
+    }
+
+    connection = await createDbConnection();
+
+    // Query untuk cek duplikasi
+    let query = `
+      SELECT rs.id_riwayat, s.nama_survei, p.nama_perusahaan, p.kip
+      FROM riwayat_survei rs
+      JOIN survei s ON rs.id_survei = s.id_survei
+      JOIN perusahaan p ON rs.id_perusahaan = p.id_perusahaan
+      WHERE rs.id_survei = ? AND rs.id_perusahaan = ?
+    `;
+    
+    const queryParams = [id_survei, id_perusahaan];
+
+    // Exclude current record jika dalam mode edit
+    if (exclude_id) {
+      query += " AND rs.id_riwayat != ?";
+      queryParams.push(exclude_id);
+    }
+
+    const [rows] = await connection.execute(query, queryParams);
+    const results = rows as any[];
+
+    const isDuplicate = results.length > 0;
+    let duplicateInfo = null;
+
+    if (isDuplicate) {
+      duplicateInfo = {
+        id_riwayat: results[0].id_riwayat,
+        nama_survei: results[0].nama_survei,
+        nama_perusahaan: results[0].nama_perusahaan,
+        kip: results[0].kip,
+      };
+    }
+
+    return NextResponse.json({
+      success: true,
+      isDuplicate,
+      duplicateInfo,
+      message: isDuplicate 
+        ? `Kombinasi survei "${duplicateInfo.nama_survei}" dan perusahaan "${duplicateInfo.nama_perusahaan}" (KIP: ${duplicateInfo.kip}) sudah terdaftar dalam sistem.`
+        : "Data tidak duplikat",
+    });
+
+  } catch (error) {
+    console.error("Error checking duplicate:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Terjadi kesalahan saat melakukan validasi duplikasi",
+        error: (error as Error).message,
+      },
+      { status: 500 }
+    );
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
   }
 }
