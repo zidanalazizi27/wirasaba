@@ -16,17 +16,17 @@ async function createDbConnection() {
   return await mysql.createConnection(dbConfig);
 }
 
-// Interface untuk data Excel yang akan diimport
+// Interface untuk data Excel yang akan diimport (sesuai template)
 interface ExcelRowData {
   'KIP': string;
   'Nama Perusahaan': string;
-  'Badan Usaha': string;
+  'Badan Usaha': string;        // Kode 1-8
   'Alamat': string;
   'Kecamatan': string;
   'Desa': string;
   'Kode Pos'?: string;
   'Skala': string;
-  'Lokasi Perusahaan': string;
+  'Lokasi Perusahaan': string;  // Kode 1-4
   'Nama Kawasan'?: string;
   'Latitude': number;
   'Longitude': number;
@@ -36,14 +36,14 @@ interface ExcelRowData {
   'Telepon Perusahaan'?: string;
   'Email Perusahaan'?: string;
   'Website Perusahaan'?: string;
-  'Tenaga Kerja': string;
-  'Investasi': string;
-  'Omset': string;
-  'Nama Narasumber': string;
-  'Jabatan Narasumber': string;
+  'Tenaga Kerja': string;       // Kode 1-4
+  'Investasi': string;          // Kode 1-4
+  'Omset': string;              // Kode 1-4
+  'Nama Narasumber'?: string;
+  'Jabatan Narasumber'?: string;
   'Email Narasumber'?: string;
   'Telepon Narasumber'?: string;
-  'PCL Utama': string;
+  'PCL Utama'?: string;
   'Catatan'?: string;
   'Tahun Direktori': string; // Format: "2023,2024,2025"
 }
@@ -70,11 +70,11 @@ interface ProcessedData {
   tkerja: number;
   investasi: number;
   omset: number;
-  nama_narasumber: string;
-  jbtn_narasumber: string;
+  nama_narasumber?: string;
+  jbtn_narasumber?: string;
   email_narasumber?: string;
   telp_narasumber?: string;
-  pcl_utama: string;
+  pcl_utama?: string;
   catatan?: string;
   tahun_direktori: number[];
 }
@@ -102,18 +102,18 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
-// Fungsi sanitasi data
+// Fungsi sanitasi data - menggunakan kode referensi dari template
 function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
   return {
     kip: String(rawData['KIP'] || '').trim(),
     nama_perusahaan: String(rawData['Nama Perusahaan'] || '').trim(),
-    badan_usaha: 1, // Will be mapped later
+    badan_usaha: parseInt(String(rawData['Badan Usaha'] || '1')),
     alamat: String(rawData['Alamat'] || '').trim(),
-    kec: 1, // Will be mapped later
-    des: 1, // Will be mapped later
+    kec: 1, // Will be mapped later based on kecamatan name
+    des: 1, // Will be mapped later based on desa name
     kode_pos: rawData['Kode Pos'] ? String(rawData['Kode Pos']).trim() : undefined,
     skala: String(rawData['Skala'] || '').trim(),
-    lok_perusahaan: 1, // Will be mapped later
+    lok_perusahaan: parseInt(String(rawData['Lokasi Perusahaan'] || '1')),
     nama_kawasan: rawData['Nama Kawasan'] ? String(rawData['Nama Kawasan']).trim() : undefined,
     lat: Number(rawData['Latitude']),
     lon: Number(rawData['Longitude']),
@@ -123,21 +123,21 @@ function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
     telp_perusahaan: rawData['Telepon Perusahaan'] ? String(rawData['Telepon Perusahaan']).trim() : undefined,
     email_perusahaan: rawData['Email Perusahaan'] ? String(rawData['Email Perusahaan']).trim() : undefined,
     web_perusahaan: rawData['Website Perusahaan'] ? String(rawData['Website Perusahaan']).trim() : undefined,
-    tkerja: 1, // Will be mapped later
-    investasi: 1, // Will be mapped later
-    omset: 1, // Will be mapped later
-    nama_narasumber: String(rawData['Nama Narasumber'] || '').trim(),
-    jbtn_narasumber: String(rawData['Jabatan Narasumber'] || '').trim(),
+    tkerja: parseInt(String(rawData['Tenaga Kerja'] || '1')),
+    investasi: parseInt(String(rawData['Investasi'] || '1')),
+    omset: parseInt(String(rawData['Omset'] || '1')),
+    nama_narasumber: rawData['Nama Narasumber'] ? String(rawData['Nama Narasumber']).trim() : undefined,
+    jbtn_narasumber: rawData['Jabatan Narasumber'] ? String(rawData['Jabatan Narasumber']).trim() : undefined,
     email_narasumber: rawData['Email Narasumber'] ? String(rawData['Email Narasumber']).trim() : undefined,
     telp_narasumber: rawData['Telepon Narasumber'] ? String(rawData['Telepon Narasumber']).trim() : undefined,
-    pcl_utama: String(rawData['PCL Utama'] || '').trim(),
+    pcl_utama: rawData['PCL Utama'] ? String(rawData['PCL Utama']).trim() : undefined,
     catatan: rawData['Catatan'] ? String(rawData['Catatan']).trim() : undefined,
     tahun_direktori: rawData['Tahun Direktori'] ? 
       String(rawData['Tahun Direktori']).split(',').map(year => parseInt(year.trim())).filter(year => !isNaN(year)) : []
   };
 }
 
-// Fungsi validasi data
+// Fungsi validasi data lengkap
 function validateDirectoryData(data: ProcessedData): string[] {
   const errors: string[] = [];
 
@@ -165,173 +165,21 @@ function validateDirectoryData(data: ProcessedData): string[] {
     errors.push("Alamat wajib diisi");
   }
 
-  // Validasi badan usaha (kode 1-8)
+  // Validasi Badan Usaha (1-8)
   if (isNaN(data.badan_usaha) || data.badan_usaha < 1 || data.badan_usaha > 8) {
-    errors.push("Badan usaha h// src/app/api/perusahaan/import/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
-import * as XLSX from 'xlsx';
-
-// Database connection configuration
-const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root", 
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "wirasaba",
-};
-
-// Utility function to create database connection
-async function createDbConnection() {
-  return await mysql.createConnection(dbConfig);
-}
-
-// Interface untuk data Excel yang akan diimport
-interface ExcelRowData {
-  'KIP': string;
-  'Nama Perusahaan': string;
-  'Badan Usaha': string;
-  'Alamat': string;
-  'Kecamatan': string;
-  'Desa': string;
-  'Kode Pos'?: string;
-  'Skala': string;
-  'Lokasi Perusahaan': string;
-  'Nama Kawasan'?: string;
-  'Latitude': number;
-  'Longitude': number;
-  'Jarak (KM)'?: number;
-  'Produk': string;
-  'KBLI': string;
-  'Telepon Perusahaan'?: string;
-  'Email Perusahaan'?: string;
-  'Website Perusahaan'?: string;
-  'Tenaga Kerja': string;
-  'Investasi': string;
-  'Omset': string;
-  'Nama Narasumber': string;
-  'Jabatan Narasumber': string;
-  'Email Narasumber'?: string;
-  'Telepon Narasumber'?: string;
-  'PCL Utama': string;
-  'Catatan'?: string;
-  'Tahun Direktori': string; // Format: "2023,2024,2025"
-}
-
-interface ProcessedData {
-  kip: string;
-  nama_perusahaan: string;
-  badan_usaha: number;
-  alamat: string;
-  kec: number;
-  des: number;
-  kode_pos?: string;
-  skala: string;
-  lok_perusahaan: number;
-  nama_kawasan?: string;
-  lat: number;
-  lon: number;
-  jarak?: number;
-  produk: string;
-  KBLI: number;
-  telp_perusahaan?: string;
-  email_perusahaan?: string;
-  web_perusahaan?: string;
-  tkerja: number;
-  investasi: number;
-  omset: number;
-  nama_narasumber: string;
-  jbtn_narasumber: string;
-  email_narasumber?: string;
-  telp_narasumber?: string;
-  pcl_utama: string;
-  catatan?: string;
-  tahun_direktori: number[];
-}
-
-interface ValidationError {
-  row: number;
-  field: string;
-  message: string;
-  value?: any;
-}
-
-interface DuplicateData {
-  row: number;
-  kip: string;
-  tahun_direktori: number[];
-  existing_company?: {
-    id_perusahaan: number;
-    nama_perusahaan: string;
-  };
-}
-
-// Fungsi validasi email
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
-
-// Fungsi sanitasi data - updated untuk handle kode referensi
-function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
-  return {
-    kip: String(rawData['KIP'] || '').trim(),
-    nama_perusahaan: String(rawData['Nama Perusahaan'] || '').trim(),
-    badan_usaha: parseInt(String(rawData['Badan Usaha'] || '1')), // Sekarang langsung integer
-    alamat: String(rawData['Alamat'] || '').trim(),
-    kec: 1, // Will be mapped later
-    des: 1, // Will be mapped later
-    kode_pos: rawData['Kode Pos'] ? String(rawData['Kode Pos']).trim() : undefined,
-    skala: String(rawData['Skala'] || '').trim(),
-    lok_perusahaan: parseInt(String(rawData['Lokasi Perusahaan'] || '1')), // Sekarang langsung integer
-    nama_kawasan: rawData['Nama Kawasan'] ? String(rawData['Nama Kawasan']).trim() : undefined,
-    lat: Number(rawData['Latitude']),
-    lon: Number(rawData['Longitude']),
-    jarak: rawData['Jarak (KM)'] ? Number(rawData['Jarak (KM)']) : undefined,
-    produk: String(rawData['Produk'] || '').trim(),
-    KBLI: Number(rawData['KBLI']),
-    telp_perusahaan: rawData['Telepon Perusahaan'] ? String(rawData['Telepon Perusahaan']).trim() : undefined,
-    email_perusahaan: rawData['Email Perusahaan'] ? String(rawData['Email Perusahaan']).trim() : undefined,
-    web_perusahaan: rawData['Website Perusahaan'] ? String(rawData['Website Perusahaan']).trim() : undefined,
-    tkerja: parseInt(String(rawData['Tenaga Kerja'] || '1')), // Sekarang langsung integer
-    investasi: parseInt(String(rawData['Investasi'] || '1')), // Sekarang langsung integer
-    omset: parseInt(String(rawData['Omset'] || '1')), // Sekarang langsung integer
-    nama_narasumber: String(rawData['Nama Narasumber'] || '').trim(),
-    jbtn_narasumber: String(rawData['Jabatan Narasumber'] || '').trim(),
-    email_narasumber: rawData['Email Narasumber'] ? String(rawData['Email Narasumber']).trim() : undefined,
-    telp_narasumber: rawData['Telepon Narasumber'] ? String(rawData['Telepon Narasumber']).trim() : undefined,
-    pcl_utama: String(rawData['PCL Utama'] || '').trim(),
-    catatan: rawData['Catatan'] ? String(rawData['Catatan']).trim() : undefined,
-    tahun_direktori: rawData['Tahun Direktori'] ? 
-      String(rawData['Tahun Direktori']).split(',').map(year => parseInt(year.trim())).filter(year => !isNaN(year)) : []
-  };
-}
-
-// Fungsi validasi data
-function validateDirectoryData(data: ProcessedData): string[] {
-  const errors: string[] = [];
-
-  // Validasi KIP
-  if (!data.kip) {
-    errors.push("KIP wajib diisi");
-  } else {
-    if (!/^\d+$/.test(data.kip)) {
-      errors.push("KIP harus berupa angka");
-    }
-    if (data.kip.length > 10) {
-      errors.push("KIP maksimal 10 digit");
-    }
+    errors.push("Badan Usaha harus berupa kode 1-8");
   }
 
-  // Validasi nama perusahaan
-  if (!data.nama_perusahaan) {
-    errors.push("Nama perusahaan wajib diisi");
-  } else if (data.nama_perusahaan.length < 3) {
-    errors.push("Nama perusahaan minimal 3 karakter");
+  // Validasi skala
+  if (!data.skala) {
+    errors.push("Skala wajib diisi");
+  } else if (!['Besar', 'Sedang'].includes(data.skala)) {
+    errors.push("Skala harus 'Besar' atau 'Sedang'");
   }
 
-  // Validasi alamat
-  if (!data.alamat) {
-    errors.push("Alamat wajib diisi");
+  // Validasi Lokasi Perusahaan (1-4)
+  if (isNaN(data.lok_perusahaan) || data.lok_perusahaan < 1 || data.lok_perusahaan > 4) {
+    errors.push("Lokasi Perusahaan harus berupa kode 1-4");
   }
 
   // Validasi koordinat
@@ -357,6 +205,21 @@ function validateDirectoryData(data: ProcessedData): string[] {
     }
   }
 
+  // Validasi Tenaga Kerja (1-4)
+  if (isNaN(data.tkerja) || data.tkerja < 1 || data.tkerja > 4) {
+    errors.push("Tenaga Kerja harus berupa kode 1-4");
+  }
+
+  // Validasi Investasi (1-4)
+  if (isNaN(data.investasi) || data.investasi < 1 || data.investasi > 4) {
+    errors.push("Investasi harus berupa kode 1-4");
+  }
+
+  // Validasi Omset (1-4)
+  if (isNaN(data.omset) || data.omset < 1 || data.omset > 4) {
+    errors.push("Omset harus berupa kode 1-4");
+  }
+
   // Validasi kode pos jika ada
   if (data.kode_pos && !/^\d{5}$/.test(data.kode_pos)) {
     errors.push("Kode pos harus 5 digit angka");
@@ -368,19 +231,6 @@ function validateDirectoryData(data: ProcessedData): string[] {
   }
   if (data.email_narasumber && !isValidEmail(data.email_narasumber)) {
     errors.push("Format email narasumber tidak valid");
-  }
-
-  // Validasi narasumber
-  if (!data.nama_narasumber) {
-    errors.push("Nama narasumber wajib diisi");
-  }
-  if (!data.jbtn_narasumber) {
-    errors.push("Jabatan narasumber wajib diisi");
-  }
-
-  // Validasi PCL utama
-  if (!data.pcl_utama) {
-    errors.push("PCL utama wajib diisi");
   }
 
   // Validasi tahun direktori
@@ -397,85 +247,30 @@ function validateDirectoryData(data: ProcessedData): string[] {
   return errors;
 }
 
-// Fungsi untuk mapping lookup values
-async function mapLookupValues(connection: mysql.Connection, data: ProcessedData) {
+// Fungsi untuk mapping lookup values (kecamatan dan desa)
+async function mapLookupValues(connection: mysql.Connection, data: ProcessedData, kecamatanName: string, desaName: string) {
   try {
-    // Map badan usaha
-    const [badanUsahaRows] = await connection.execute(
-      'SELECT id_badan_usaha FROM badan_usaha WHERE nama_badan_usaha = ?',
-      [data.badan_usaha]
-    ) as mysql.RowDataPacket[][];
-    
-    if (badanUsahaRows.length === 0) {
-      throw new Error(`Badan usaha "${data.badan_usaha}" tidak ditemukan`);
-    }
-    data.badan_usaha = badanUsahaRows[0].id_badan_usaha;
-
     // Map kecamatan berdasarkan nama
     const [kecRows] = await connection.execute(
       'SELECT id_kecamatan FROM kecamatan WHERE nama_kecamatan = ?',
-      [data.kec]
+      [kecamatanName]
     ) as mysql.RowDataPacket[][];
     
     if (kecRows.length === 0) {
-      throw new Error(`Kecamatan "${data.kec}" tidak ditemukan`);
+      throw new Error(`Kecamatan "${kecamatanName}" tidak ditemukan`);
     }
     data.kec = kecRows[0].id_kecamatan;
 
     // Map desa berdasarkan nama dan kecamatan
     const [desRows] = await connection.execute(
       'SELECT id_desa FROM desa WHERE nama_desa = ? AND id_kecamatan = ?',
-      [data.des, data.kec]
+      [desaName, data.kec]
     ) as mysql.RowDataPacket[][];
     
     if (desRows.length === 0) {
-      throw new Error(`Desa "${data.des}" tidak ditemukan di kecamatan yang dipilih`);
+      throw new Error(`Desa "${desaName}" tidak ditemukan di kecamatan "${kecamatanName}"`);
     }
     data.des = desRows[0].id_desa;
-
-    // Map lokasi perusahaan
-    const [lokRows] = await connection.execute(
-      'SELECT id_lok_perusahaan FROM lok_perusahaan WHERE nama_lok_perusahaan = ?',
-      [data.lok_perusahaan]
-    ) as mysql.RowDataPacket[][];
-    
-    if (lokRows.length === 0) {
-      throw new Error(`Lokasi perusahaan "${data.lok_perusahaan}" tidak ditemukan`);
-    }
-    data.lok_perusahaan = lokRows[0].id_lok_perusahaan;
-
-    // Map tenaga kerja
-    const [tkerjaRows] = await connection.execute(
-      'SELECT id_tkerja FROM tkerja WHERE nama_tkerja = ?',
-      [data.tkerja]
-    ) as mysql.RowDataPacket[][];
-    
-    if (tkerjaRows.length === 0) {
-      throw new Error(`Range tenaga kerja "${data.tkerja}" tidak ditemukan`);
-    }
-    data.tkerja = tkerjaRows[0].id_tkerja;
-
-    // Map investasi
-    const [investasiRows] = await connection.execute(
-      'SELECT id_investasi FROM investasi WHERE nama_investasi = ?',
-      [data.investasi]
-    ) as mysql.RowDataPacket[][];
-    
-    if (investasiRows.length === 0) {
-      throw new Error(`Range investasi "${data.investasi}" tidak ditemukan`);
-    }
-    data.investasi = investasiRows[0].id_investasi;
-
-    // Map omset
-    const [omsetRows] = await connection.execute(
-      'SELECT id_omset FROM omset WHERE nama_omset = ?',
-      [data.omset]
-    ) as mysql.RowDataPacket[][];
-    
-    if (omsetRows.length === 0) {
-      throw new Error(`Range omset "${data.omset}" tidak ditemukan`);
-    }
-    data.omset = omsetRows[0].id_omset;
 
     return data;
   } catch (error) {
@@ -690,8 +485,7 @@ export async function POST(request: NextRequest) {
     const requiredHeaders = [
       'KIP', 'Nama Perusahaan', 'Badan Usaha', 'Alamat', 'Kecamatan', 'Desa',
       'Skala', 'Lokasi Perusahaan', 'Latitude', 'Longitude', 'Produk', 'KBLI',
-      'Tenaga Kerja', 'Investasi', 'Omset', 'Nama Narasumber', 'Jabatan Narasumber',
-      'PCL Utama', 'Tahun Direktori'
+      'Tenaga Kerja', 'Investasi', 'Omset', 'Tahun Direktori'
     ];
 
     const firstRow = jsonData[0];
@@ -728,8 +522,31 @@ export async function POST(request: NextRequest) {
         // Sanitize data
         const sanitizedData = sanitizeDirectoryData(rowData);
 
-        // Map lookup values
-        const mappedData = await mapLookupValues(connection, sanitizedData);
+        // Map lookup values (kecamatan dan desa)
+        const kecamatanName = String(rowData['Kecamatan'] || '').trim();
+        const desaName = String(rowData['Desa'] || '').trim();
+        
+        if (!kecamatanName) {
+          validationErrors.push({
+            row: rowNumber,
+            field: 'Kecamatan',
+            message: 'Kecamatan wajib diisi',
+            value: rowData
+          });
+          continue;
+        }
+        
+        if (!desaName) {
+          validationErrors.push({
+            row: rowNumber,
+            field: 'Desa',
+            message: 'Desa wajib diisi',
+            value: rowData
+          });
+          continue;
+        }
+
+        const mappedData = await mapLookupValues(connection, sanitizedData, kecamatanName, desaName);
 
         // Validate data
         const errors = validateDirectoryData(mappedData);

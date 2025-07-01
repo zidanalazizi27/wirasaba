@@ -524,12 +524,18 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     const confirmMessage =
       uploadMode === "replace"
         ? "Mode 'Ganti Semua Data' akan menghapus SEMUA data direktori yang ada dan menggantinya dengan data dari file Excel. Apakah Anda yakin?"
-        : "Mode 'Tambah Data' akan menambahkan data baru dan memperbarui data yang sudah ada. Duplikasi KIP + tahun direktori akan ditolak. Apakah Anda yakin?";
+        : "Mode 'Tambah Data' akan menambahkan data baru dan memperbarui data yang sudah ada. Duplikasi KIP & tahun direktori akan ditolak. Apakah Anda yakin?";
 
     const confirmResult = await SweetAlertUtils.confirm(
-      "Konfirmasi Upload",
-      confirmMessage,
-      uploadMode === "replace" ? "danger" : "warning"
+      "Konfirmasi Upload", // title
+      confirmMessage, // text/message
+      uploadMode === "replace" ? "Ya, Ganti Semua" : "Ya, Lanjutkan", // confirmText
+      "Tidak", // cancelText
+      {
+        // Opsi tambahan untuk styling sesuai tingkat bahaya
+        icon: uploadMode === "replace" ? "warning" : "question",
+        confirmButtonColor: uploadMode === "replace" ? "#ef4444" : "#3b82f6",
+      }
     );
 
     if (!confirmResult.isConfirmed) {
@@ -704,10 +710,11 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
             </h3>
             <ul className="text-xs text-amber-700 space-y-1">
               <li>• Semua field wajib harus diisi sesuai validasi</li>
-              <li>• Pastikan tidak ada duplikasi data KIP & tahun direktori.</li>
               <li>
-                • Data lookup (Kecamatan, Desa, dll) harus sesuai data
-                master
+                • Pastikan tidak ada duplikasi data KIP & tahun direktori.
+              </li>
+              <li>
+                • Data lookup (Kecamatan, Desa, dll) harus sesuai data master
               </li>
             </ul>
           </div>
