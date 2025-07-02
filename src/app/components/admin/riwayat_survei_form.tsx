@@ -407,7 +407,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     if (!validateAllFields()) {
       await SweetAlertUtils.warning(
         "Form Belum Lengkap",
-        "Silakan periksa dan lengkapi form dengan benar. Semua field kecuali keterangan wajib diisi."
+        "Silakan periksa dan lengkapi form dengan benar."
       );
       return;
     }
