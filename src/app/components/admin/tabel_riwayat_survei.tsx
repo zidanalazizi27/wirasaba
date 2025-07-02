@@ -381,7 +381,7 @@ const TabelRiwayatSurvei = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filter options - FIX: Properly define state types and initialize with empty arrays
+  // Filter options state
   const [surveiOptions, setSurveiOptions] = useState<
     Array<{ name: string; uid: string }>
   >([]);
@@ -392,6 +392,11 @@ const TabelRiwayatSurvei = () => {
     Array<{ name: string; uid: string }>
   >([]);
 
+  // State untuk client-side sorting
+  const [allRiwayatData, setAllRiwayatData] = useState<RiwayatSurvei[]>([]);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [hasLoadedAll, setHasLoadedAll] = useState(false);
+
   // Refs for dropdown outside clicks
   const surveiDropdownRef = useRef<HTMLDivElement>(null);
   const pclDropdownRef = useRef<HTMLDivElement>(null);
@@ -399,6 +404,144 @@ const TabelRiwayatSurvei = () => {
   const tahunDropdownRef = useRef<HTMLDivElement>(null);
 
   const hasSearchFilter = Boolean(filterValue);
+
+  // Fetch data API function - EXACTLY like tabel_pcl.tsx
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const searchParams = new URLSearchParams();
+      searchParams.append("page", currentPage.toString());
+      searchParams.append("limit", rowsPerPage.toString());
+
+      // Add search parameter
+      if (filterValue) {
+        searchParams.append("search", filterValue);
+      }
+
+      // Add filter parameters
+      if (surveiFilter !== "all") {
+        searchParams.append("survei", surveiFilter);
+      }
+      if (pclFilter !== "all") {
+        searchParams.append("pcl", pclFilter);
+      }
+      if (selesaiFilter !== "all") {
+        searchParams.append("selesai", selesaiFilter);
+      }
+      if (tahunFilter !== "all") {
+        searchParams.append("tahun", tahunFilter);
+      }
+
+      // Add sort parameters
+      sortDescriptors.forEach((sort, index) => {
+        searchParams.append(`sort[${index}][column]`, sort.column);
+        searchParams.append(
+          `sort[${index}][direction]`,
+          sort.direction || "ascending"
+        );
+      });
+
+      const response = await fetch(
+        `/api/riwayat-survei?${searchParams.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setRiwayatList(result.data || []);
+        setTotalItems(result.count || 0); // ← Fix: gunakan result.count seperti di tabel_pcl.tsx
+        setTotalPages(Math.ceil((result.count || 0) / rowsPerPage)); // ← Fix: hitung sendiri seperti di tabel_pcl.tsx
+      } else {
+        throw new Error(result.message || "Gagal memuat data");
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setError("Gagal memuat data riwayat survei");
+      await SweetAlertUtils.error(
+        "Error",
+        "Gagal memuat data riwayat survei. Silakan refresh halaman."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    currentPage,
+    rowsPerPage,
+    filterValue,
+    surveiFilter,
+    pclFilter,
+    selesaiFilter,
+    tahunFilter,
+    sortDescriptors,
+  ]);
+
+  // Fetch all data for client-side sorting - like tabel_pcl.tsx
+  const fetchAllData = useCallback(async () => {
+    if (hasLoadedAll) return;
+
+    try {
+      setIsLoadingAll(true);
+
+      // Gunakan limit besar untuk mendapatkan semua data sekaligus
+      const params = new URLSearchParams({
+        limit: "10000", // Jumlah besar untuk mendapatkan semua data
+        search: filterValue,
+        survei: surveiFilter,
+        pcl: pclFilter,
+        selesai: selesaiFilter,
+        tahun: tahunFilter,
+      });
+
+      const response = await fetch(`/api/riwayat-survei?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setAllRiwayatData(result.data || []);
+        setHasLoadedAll(true);
+      } else {
+        throw new Error(result.message || "Failed to fetch all data");
+      }
+    } catch (err) {
+      console.error("Error fetching all data:", err);
+    } finally {
+      setIsLoadingAll(false);
+    }
+  }, [
+    filterValue,
+    surveiFilter,
+    pclFilter,
+    selesaiFilter,
+    tahunFilter,
+    hasLoadedAll,
+  ]);
+
+  // Call API when dependencies change
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Fetch all data when needed for client-side sorting
+  useEffect(() => {
+    if (sortDescriptors.length > 0 && !hasLoadedAll) {
+      fetchAllData();
+    }
+  }, [sortDescriptors, fetchAllData]);
+
+  // Reset hasLoadedAll when filters change
+  useEffect(() => {
+    setHasLoadedAll(false);
+  }, [filterValue, surveiFilter, pclFilter, selesaiFilter, tahunFilter]);
 
   // Fetch filter options
   const fetchFilterOptions = useCallback(async () => {
@@ -438,59 +581,154 @@ const TabelRiwayatSurvei = () => {
     }
   }, []);
 
-  const fetchRiwayatSurvei = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  // Filter the data based on search and filters - EXACTLY like tabel_pcl.tsx
+  const filteredItems = useMemo(() => {
+    let filteredRiwayat = [...riwayatList];
 
-      const response = await fetch("/api/riwayat-survei");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        const data = result.data || [];
-        setRiwayatList(data);
-
-        // Extract unique options for filters
-        const uniqueSurvei = [
-          ...new Set(data.map((item: RiwayatSurvei) => item.nama_survei)),
-        ];
-        const uniquePcl = [
-          ...new Set(data.map((item: RiwayatSurvei) => item.nama_pcl)),
-        ];
-        const uniqueTahun = [
-          ...new Set(data.map((item: RiwayatSurvei) => item.tahun)),
-        ].sort((a, b) => b - a);
-
-        setSurveiOptions(uniqueSurvei);
-        setPclOptions(uniquePcl);
-        setTahunOptions(uniqueTahun);
-      } else {
-        throw new Error(result.message || "Gagal memuat data");
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      setError("Gagal memuat data riwayat survei");
-      await SweetAlertUtils.error(
-        "Error",
-        "Gagal memuat data riwayat survei. Silakan refresh halaman."
+    // Text search filter
+    if (hasSearchFilter) {
+      const lowerFilter = filterValue.toLowerCase();
+      filteredRiwayat = filteredRiwayat.filter(
+        (riwayat) =>
+          riwayat.nama_survei.toLowerCase().includes(lowerFilter) ||
+          riwayat.kip.toString().toLowerCase().includes(lowerFilter) ||
+          riwayat.nama_perusahaan.toLowerCase().includes(lowerFilter) ||
+          riwayat.nama_pcl.toLowerCase().includes(lowerFilter)
       );
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+
+    // Filter berdasarkan survei
+    if (surveiFilter !== "all") {
+      filteredRiwayat = filteredRiwayat.filter(
+        (riwayat) => riwayat.nama_survei === surveiFilter
+      );
+    }
+
+    // Filter berdasarkan PCL
+    if (pclFilter !== "all") {
+      filteredRiwayat = filteredRiwayat.filter(
+        (riwayat) => riwayat.nama_pcl === pclFilter
+      );
+    }
+
+    // Filter berdasarkan status selesai
+    if (selesaiFilter !== "all") {
+      filteredRiwayat = filteredRiwayat.filter(
+        (riwayat) => riwayat.selesai === selesaiFilter
+      );
+    }
+
+    // Filter berdasarkan tahun
+    if (tahunFilter !== "all") {
+      filteredRiwayat = filteredRiwayat.filter(
+        (riwayat) => riwayat.tahun.toString() === tahunFilter
+      );
+    }
+
+    return filteredRiwayat;
+  }, [
+    riwayatList,
+    filterValue,
+    surveiFilter,
+    pclFilter,
+    selesaiFilter,
+    tahunFilter,
+    hasSearchFilter,
+  ]);
+
+  // Client-side sorting implementation - EXACTLY like tabel_pcl.tsx
+  const sortedItems = useMemo(() => {
+    // Use all data if loaded and sorting is active, otherwise use paginated data
+    const dataToSort =
+      hasLoadedAll && sortDescriptors.length > 0
+        ? [...allRiwayatData]
+        : [...riwayatList];
+
+    if (sortDescriptors.length === 0) return dataToSort;
+
+    return dataToSort.sort((a, b) => {
+      for (const sort of sortDescriptors) {
+        if (!sort.direction) continue;
+
+        const column = sort.column as keyof RiwayatSurvei;
+
+        // Handle null/undefined values
+        const valueA = a[column] ?? "";
+        const valueB = b[column] ?? "";
+
+        // Handle different column types
+        if (
+          ["nama_survei", "nama_perusahaan", "nama_pcl", "selesai"].includes(
+            column
+          )
+        ) {
+          const strA = String(valueA).toLowerCase();
+          const strB = String(valueB).toLowerCase();
+
+          const compareResult = strA.localeCompare(strB);
+
+          if (compareResult !== 0) {
+            return sort.direction === "ascending"
+              ? compareResult
+              : -compareResult;
+          }
+        } else if (["kip", "tahun"].includes(column)) {
+          const numA = Number(valueA) || 0;
+          const numB = Number(valueB) || 0;
+          const compareResult = numA - numB;
+
+          if (compareResult !== 0) {
+            return sort.direction === "ascending"
+              ? compareResult
+              : -compareResult;
+          }
+        }
+      }
+
+      return 0;
+    });
+  }, [riwayatList, allRiwayatData, sortDescriptors, hasLoadedAll]);
+
+  // Paginate the sorted data - EXACTLY like tabel_pcl.tsx
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+
+    // If sorting is active and all data is loaded, paginate from sorted data
+    if (hasLoadedAll && sortDescriptors.length > 0) {
+      const newTotalPages = Math.ceil(sortedItems.length / rowsPerPage);
+
+      // Update total pages and items
+      if (totalPages !== newTotalPages) {
+        setTotalPages(newTotalPages);
+        setTotalItems(sortedItems.length);
+      }
+
+      return sortedItems.slice(start, end).map((item, index) => ({
+        ...item,
+        no: start + index + 1,
+      }));
+    }
+
+    // Otherwise use the server-paginated data with correct numbering
+    return riwayatList.map((item, index) => ({
+      ...item,
+      no: start + index + 1,
+    }));
+  }, [
+    sortedItems,
+    currentPage,
+    rowsPerPage,
+    riwayatList,
+    hasLoadedAll,
+    sortDescriptors,
+    totalPages,
+  ]);
 
   // Initial data load
   useEffect(() => {
     fetchFilterOptions();
   }, [fetchFilterOptions]);
-
-  // Fetch data when filters or pagination change
-  useEffect(() => {
-    fetchRiwayatSurvei();
-  }, [fetchRiwayatSurvei]);
 
   // Handle outside clicks for dropdowns
   useEffect(() => {
@@ -503,18 +741,15 @@ const TabelRiwayatSurvei = () => {
       ) {
         setSurveiDropdownOpen(false);
       }
-
       if (pclDropdownRef.current && !pclDropdownRef.current.contains(target)) {
         setPclDropdownOpen(false);
       }
-
       if (
         selesaiDropdownRef.current &&
         !selesaiDropdownRef.current.contains(target)
       ) {
         setSelesaiDropdownOpen(false);
       }
-
       if (
         tahunDropdownRef.current &&
         !tahunDropdownRef.current.contains(target)
@@ -532,7 +767,8 @@ const TabelRiwayatSurvei = () => {
   // Search handler
   const onSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setFilterValue(e.target.value);
+      const value = e.target.value;
+      setFilterValue(value);
       setCurrentPage(1);
     },
     []
@@ -568,7 +804,7 @@ const TabelRiwayatSurvei = () => {
     setCurrentPage(1);
   }, []);
 
-  // Sorting handlers
+  // Sorting handlers - EXACTLY like tabel_pcl.tsx
   const handleSort = useCallback((columnKey: string) => {
     setSortDescriptors((prevSorts) => {
       const existingIndex = prevSorts.findIndex((s) => s.column === columnKey);
@@ -577,6 +813,7 @@ const TabelRiwayatSurvei = () => {
         const existingSort = prevSorts[existingIndex];
         const newSorts = [...prevSorts];
 
+        // Toggle sort direction: null -> ascending -> descending -> remove
         if (existingSort.direction === null) {
           newSorts[existingIndex] = {
             column: columnKey,
@@ -588,17 +825,16 @@ const TabelRiwayatSurvei = () => {
             direction: "descending",
           };
         } else {
+          // If already descending, remove from sort list
           newSorts.splice(existingIndex, 1);
         }
 
         return newSorts;
       } else {
+        // If column not in sort list, add with ascending direction
         return [...prevSorts, { column: columnKey, direction: "ascending" }];
       }
     });
-
-    // Reset to page 1 when sorting changes
-    setCurrentPage(1);
   }, []);
 
   // Get current sort direction for a column
@@ -618,18 +854,25 @@ const TabelRiwayatSurvei = () => {
     [sortDescriptors]
   );
 
-  // Pagination handlers
+  // Pagination handlers - EXACTLY like tabel_pcl.tsx
   const onNextPage = useCallback(() => {
     if (currentPage < totalPages) {
-      setCurrentPage((prev) => prev + 1);
+      setCurrentPage(currentPage + 1);
     }
   }, [currentPage, totalPages]);
 
   const onPreviousPage = useCallback(() => {
     if (currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+      setCurrentPage(currentPage - 1);
     }
   }, [currentPage]);
+
+  // Reset to page 1 when sorting changes
+  useEffect(() => {
+    if (sortDescriptors.length > 0) {
+      setCurrentPage(1);
+    }
+  }, [sortDescriptors]);
 
   // Action handlers
   const handleEditRiwayat = (riwayat: RiwayatSurvei) => {
@@ -666,7 +909,8 @@ const TabelRiwayatSurvei = () => {
           "Berhasil Dihapus!",
           `Data riwayat survei "${riwayat.nama_survei}" berhasil dihapus.`
         );
-        await fetchRiwayatSurvei(); // Refresh data
+        // Refresh data after successful deletion
+        fetchData();
       } else {
         throw new Error(result.message || "Gagal menghapus data");
       }
@@ -685,20 +929,88 @@ const TabelRiwayatSurvei = () => {
     setShowUploadModal(true);
   };
 
-  const handleDownloadClick = () => {
-    alert("Fitur download data sedang dalam pengembangan");
+  const handleDownloadClick = async () => {
+    try {
+      // Check if there are active filters, sorting, or search
+      const hasActiveFilters =
+        filterValue ||
+        surveiFilter !== "all" ||
+        pclFilter !== "all" ||
+        selesaiFilter !== "all" ||
+        tahunFilter !== "all" ||
+        sortDescriptors.length > 0;
+
+      // Show confirmation with SweetAlert
+      const result = await SweetAlertUtils.confirm(
+        "Download Data Excel",
+        `Apakah Anda yakin ingin mengunduh data riwayat survei? ${
+          hasActiveFilters
+            ? "Data akan diunduh sesuai dengan filter, sorting, dan pencarian yang sedang aktif."
+            : "Semua data akan diunduh."
+        }`,
+        "Ya, Download",
+        "Batal"
+      );
+
+      if (!result) return;
+
+      // Show loading
+      SweetAlertUtils.loading("Memproses Download", "Mohon tunggu sebentar...");
+
+      // Build download URL with current filters and sorting
+      const searchParams = new URLSearchParams();
+      searchParams.append("format", "excel");
+
+      if (filterValue) searchParams.append("search", filterValue);
+      if (surveiFilter !== "all") searchParams.append("survei", surveiFilter);
+      if (pclFilter !== "all") searchParams.append("pcl", pclFilter);
+      if (selesaiFilter !== "all")
+        searchParams.append("selesai", selesaiFilter);
+      if (tahunFilter !== "all") searchParams.append("tahun", tahunFilter);
+
+      sortDescriptors.forEach((sort, index) => {
+        searchParams.append(`sort[${index}][column]`, sort.column);
+        searchParams.append(
+          `sort[${index}][direction]`,
+          sort.direction || "ascending"
+        );
+      });
+
+      const downloadUrl = `/api/riwayat-survei/export?${searchParams.toString()}`;
+
+      // Create and trigger download
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `riwayat_survei_${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      SweetAlertUtils.closeLoading();
+      await SweetAlertUtils.success(
+        "Download Berhasil!",
+        "File Excel telah berhasil diunduh."
+      );
+    } catch (error) {
+      console.error("Error downloading data:", error);
+      SweetAlertUtils.closeLoading();
+      await SweetAlertUtils.error(
+        "Download Gagal",
+        "Terjadi kesalahan saat mengunduh data. Silakan coba lagi."
+      );
+    }
   };
 
   // Modal success handlers
   const handleAddSuccess = () => {
     setShowAddModal(false);
-    fetchRiwayatSurvei(); // Refresh data
+    fetchData(); // Refresh data
   };
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
     setSelectedRiwayat(null);
-    fetchRiwayatSurvei(); // Refresh data
+    fetchData(); // Refresh data
   };
 
   // Render cell content
@@ -718,6 +1030,8 @@ const TabelRiwayatSurvei = () => {
         case "nama_pcl":
           return <span className="text-sm font-normal">{cellValue}</span>;
         case "tahun":
+          return <span className="text-sm font-normal">{cellValue}</span>;
+        case "selesai":
           return <span className="text-sm font-normal">{cellValue}</span>;
         case "actions":
           return (
@@ -751,6 +1065,7 @@ const TabelRiwayatSurvei = () => {
   const UploadModal = () => {
     const [file, setFile] = useState<File | null>(null);
     const [uploadMode, setUploadMode] = useState("append");
+    const [isUploading, setIsUploading] = useState(false);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
@@ -758,18 +1073,82 @@ const TabelRiwayatSurvei = () => {
       }
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
       if (!file) {
-        alert("Silakan pilih file terlebih dahulu");
+        await SweetAlertUtils.error(
+          "Error",
+          "Silakan pilih file terlebih dahulu"
+        );
         return;
       }
 
-      alert(
-        `File ${file.name} berhasil diupload dengan mode: ${
+      // Validate file type
+      const allowedTypes = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+        "text/csv",
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        await SweetAlertUtils.error(
+          "File Tidak Valid",
+          "Silakan pilih file dengan format .xlsx, .xls, atau .csv"
+        );
+        return;
+      }
+
+      // Confirm upload action
+      const confirmed = await SweetAlertUtils.confirm(
+        "Konfirmasi Upload",
+        `Apakah Anda yakin ingin mengupload file "${file.name}" dengan mode: ${
           uploadMode === "append" ? "Tambah Data" : "Ganti Semua Data"
-        }`
+        }?`,
+        uploadMode === "replace" ? "Ya, Ganti Semua" : "Ya, Upload",
+        "Batal"
       );
-      setShowUploadModal(false);
+
+      if (!confirmed) return;
+
+      try {
+        setIsUploading(true);
+        SweetAlertUtils.loading("Mengupload Data", "Mohon tunggu sebentar...");
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("mode", uploadMode);
+
+        const response = await fetch("/api/riwayat-survei/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await response.json();
+        SweetAlertUtils.closeLoading();
+
+        if (result.success) {
+          await SweetAlertUtils.success(
+            "Upload Berhasil!",
+            `File "${file.name}" berhasil diupload. ${result.message || ""}`
+          );
+          setShowUploadModal(false);
+          setFile(null);
+          setUploadMode("append");
+
+          // Refresh data
+          fetchData();
+        } else {
+          throw new Error(result.message || "Gagal mengupload file");
+        }
+      } catch (error) {
+        console.error("Error uploading file:", error);
+        SweetAlertUtils.closeLoading();
+        await SweetAlertUtils.error(
+          "Upload Gagal",
+          `Terjadi kesalahan saat mengupload file: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
+      } finally {
+        setIsUploading(false);
+      }
     };
 
     return (
@@ -789,6 +1168,7 @@ const TabelRiwayatSurvei = () => {
                 onChange={handleFileChange}
                 accept=".xlsx, .xls, .csv"
                 className="w-full p-2 border border-gray-300 rounded-md"
+                disabled={isUploading}
               />
               {file && (
                 <p className="mt-2 text-sm text-gray-600">
@@ -811,6 +1191,7 @@ const TabelRiwayatSurvei = () => {
                     checked={uploadMode === "append"}
                     onChange={() => setUploadMode("append")}
                     className="h-4 w-4 text-blue-600"
+                    disabled={isUploading}
                   />
                   <label
                     htmlFor="append"
@@ -829,6 +1210,7 @@ const TabelRiwayatSurvei = () => {
                     checked={uploadMode === "replace"}
                     onChange={() => setUploadMode("replace")}
                     className="h-4 w-4 text-blue-600"
+                    disabled={isUploading}
                   />
                   <label
                     htmlFor="replace"
@@ -858,19 +1240,25 @@ const TabelRiwayatSurvei = () => {
           <div className="mt-6 flex justify-end space-x-3">
             <button
               onClick={() => setShowUploadModal(false)}
-              className="px-2 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+              disabled={isUploading}
             >
               Batal
             </button>
             <button
               onClick={handleSubmit}
-              className={`px-2 py-2 text-white rounded-md transition-colors ${
+              className={`px-4 py-2 text-white rounded-md transition-colors ${
                 uploadMode === "replace"
                   ? "bg-red-600 hover:bg-red-700"
                   : "bg-blue-600 hover:bg-blue-700"
-              }`}
+              } ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={isUploading}
             >
-              {uploadMode === "replace" ? "Ganti Semua" : "Upload"}
+              {isUploading
+                ? "Memproses..."
+                : uploadMode === "replace"
+                  ? "Ganti Semua"
+                  : "Upload"}
             </button>
           </div>
         </div>
@@ -935,8 +1323,10 @@ const TabelRiwayatSurvei = () => {
             {/* Survei Dropdown */}
             <div className="relative" ref={surveiDropdownRef}>
               <button
-                className={`px-2 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                  surveiFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  surveiFilter !== "all"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-gray-100"
                 }`}
                 onClick={() => setSurveiDropdownOpen(!surveiDropdownOpen)}
               >
@@ -951,7 +1341,7 @@ const TabelRiwayatSurvei = () => {
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-56">
                   <div className="py-1 max-h-60 overflow-y-auto">
                     <button
-                      className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                         surveiFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
@@ -964,7 +1354,7 @@ const TabelRiwayatSurvei = () => {
                     {surveiOptions.map((option) => (
                       <button
                         key={option.uid}
-                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                           surveiFilter === option.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -983,8 +1373,10 @@ const TabelRiwayatSurvei = () => {
             {/* PCL Dropdown */}
             <div className="relative" ref={pclDropdownRef}>
               <button
-                className={`px-2 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                  pclFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  pclFilter !== "all"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-gray-100"
                 }`}
                 onClick={() => setPclDropdownOpen(!pclDropdownOpen)}
               >
@@ -999,7 +1391,7 @@ const TabelRiwayatSurvei = () => {
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-56">
                   <div className="py-1 max-h-60 overflow-y-auto">
                     <button
-                      className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                         pclFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
@@ -1012,7 +1404,7 @@ const TabelRiwayatSurvei = () => {
                     {pclOptions.map((option) => (
                       <button
                         key={option.uid}
-                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                           pclFilter === option.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -1031,8 +1423,10 @@ const TabelRiwayatSurvei = () => {
             {/* Status Selesai Dropdown */}
             <div className="relative" ref={selesaiDropdownRef}>
               <button
-                className={`px-2 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                  selesaiFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  selesaiFilter !== "all"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-gray-100"
                 }`}
                 onClick={() => setSelesaiDropdownOpen(!selesaiDropdownOpen)}
               >
@@ -1047,7 +1441,7 @@ const TabelRiwayatSurvei = () => {
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-40">
                   <div className="py-1">
                     <button
-                      className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                         selesaiFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
@@ -1060,7 +1454,7 @@ const TabelRiwayatSurvei = () => {
                     {selesaiOptions.map((option) => (
                       <button
                         key={option.uid}
-                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                           selesaiFilter === option.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -1079,8 +1473,10 @@ const TabelRiwayatSurvei = () => {
             {/* Tahun Dropdown */}
             <div className="relative" ref={tahunDropdownRef}>
               <button
-                className={`px-2 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                  tahunFilter !== "all" ? "bg-gray-100" : "bg-gray-100"
+                className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                  tahunFilter !== "all"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-gray-100"
                 }`}
                 onClick={() => setTahunDropdownOpen(!tahunDropdownOpen)}
               >
@@ -1095,7 +1491,7 @@ const TabelRiwayatSurvei = () => {
                 <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-40">
                   <div className="py-1 max-h-60 overflow-y-auto">
                     <button
-                      className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                         tahunFilter === "all" ? "bg-gray-100" : ""
                       }`}
                       onClick={() => {
@@ -1108,7 +1504,7 @@ const TabelRiwayatSurvei = () => {
                     {tahunOptions.map((option) => (
                       <button
                         key={option.uid}
-                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
                           tahunFilter === option.uid ? "bg-gray-100" : ""
                         }`}
                         onClick={() => {
@@ -1221,7 +1617,7 @@ const TabelRiwayatSurvei = () => {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
+            {isLoading || (isLoadingAll && !hasLoadedAll) ? (
               <tr>
                 <td colSpan={columns.length} className="p-4 text-center">
                   <div className="flex justify-center items-center space-x-2">
@@ -1240,8 +1636,8 @@ const TabelRiwayatSurvei = () => {
                   {error}
                 </td>
               </tr>
-            ) : riwayatList.length > 0 ? (
-              riwayatList.map((item, index) => (
+            ) : paginatedItems.length > 0 ? (
+              paginatedItems.map((item) => (
                 <tr
                   key={item.id_riwayat}
                   className="border-t border-gray-200 hover:bg-gray-50"
@@ -1252,12 +1648,7 @@ const TabelRiwayatSurvei = () => {
                       className="p-4"
                     >
                       {renderCell(
-                        column.uid === "no"
-                          ? {
-                              ...item,
-                              no: (currentPage - 1) * rowsPerPage + index + 1,
-                            }
-                          : item,
+                        item,
                         column.uid as keyof RiwayatSurvei | "actions"
                       )}
                     </td>
@@ -1278,7 +1669,7 @@ const TabelRiwayatSurvei = () => {
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination - EXACTLY like tabel_pcl.tsx */}
       <div className="p-4 flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 gap-4">
         <span className="text-sm text-gray-500 order-2 sm:order-1">
           Total {totalItems} data
