@@ -10,6 +10,7 @@ import React, {
 import type { SVGProps } from "react";
 import RiwayatSurveiForm from "./riwayat_survei_form";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
+const XLSX = require("xlsx");
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -978,25 +979,59 @@ const TabelRiwayatSurvei = () => {
 
       const downloadUrl = `/api/riwayat-survei/export?${searchParams.toString()}`;
 
-      // Create and trigger download
+      // Fetch file
+      const response = await fetch(downloadUrl);
+
+      if (!response.ok) {
+        SweetAlertUtils.closeLoading();
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Get blob data
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = `riwayat_survei_${new Date().toISOString().split("T")[0]}.xlsx`;
+      link.href = url;
+
+      // Get filename from response header
+      const contentDisposition = response.headers.get("content-disposition");
+      let filename = "riwayat_survei.xlsx";
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
+
+      // Cleanup
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
       SweetAlertUtils.closeLoading();
-      await SweetAlertUtils.success(
-        "Download Berhasil!",
-        "File Excel telah berhasil diunduh."
-      );
+
+      // Calculate download info
+      let downloadInfo = "Data riwayat survei berhasil diunduh!";
+      if (hasActiveFilters) {
+        downloadInfo +=
+          " Data yang diunduh telah difilter sesuai pengaturan Anda.";
+      }
+
+      await SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
+        timer: 4000,
+      });
     } catch (error) {
       console.error("Error downloading data:", error);
       SweetAlertUtils.closeLoading();
       await SweetAlertUtils.error(
         "Download Gagal",
-        "Terjadi kesalahan saat mengunduh data. Silakan coba lagi."
+        `Terjadi kesalahan saat mengunduh data: ${(error as Error).message}. Silakan coba lagi.`
       );
     }
   };
@@ -1067,22 +1102,157 @@ const TabelRiwayatSurvei = () => {
     const [uploadMode, setUploadMode] = useState("append");
     const [isUploading, setIsUploading] = useState(false);
 
+    // Handle file selection
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
-        setFile(e.target.files[0]);
+        const selectedFile = e.target.files[0];
+
+        // Validate file type
+        const allowedTypes = [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-excel",
+          "text/csv",
+        ];
+
+        if (!allowedTypes.includes(selectedFile.type)) {
+          SweetAlertUtils.error(
+            "File Tidak Valid",
+            "Harap pilih file dengan format .xlsx, .xls, atau .csv"
+          );
+          return;
+        }
+
+        // Validate file size (max 10MB)
+        const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+        if (selectedFile.size > maxSize) {
+          SweetAlertUtils.error(
+            "File Terlalu Besar",
+            "Ukuran file maksimal adalah 10MB"
+          );
+          return;
+        }
+
+        setFile(selectedFile);
       }
     };
 
-    const handleSubmit = async () => {
-      if (!file) {
+    // Handle template download
+    const handleDownloadTemplate = async () => {
+      try {
+        SweetAlertUtils.loading(
+          "Mengunduh Template",
+          "Mohon tunggu sebentar..."
+        );
+
+        const response = await fetch("/api/riwayat-survei/template");
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+
+        const currentDate = new Date().toISOString().split("T")[0];
+        link.download = `template_riwayat_survei_${currentDate}.xlsx`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        SweetAlertUtils.closeLoading();
+        await SweetAlertUtils.success(
+          "Template Berhasil Diunduh!",
+          "Silakan isi template dan upload kembali."
+        );
+      } catch (error) {
+        SweetAlertUtils.closeLoading();
+        console.error("Error downloading template:", error);
         await SweetAlertUtils.error(
           "Error",
-          "Silakan pilih file terlebih dahulu"
+          `Gagal mengunduh template: ${(error as Error).message}`
+        );
+      }
+    };
+
+    // Validation functions for riwayat survei data
+    const validateRiwayatData = (data: any): string[] => {
+      const errors: string[] = [];
+
+      // Validate id_survei
+      if (!data.id_survei) {
+        errors.push("ID Survei wajib diisi");
+      } else {
+        const idSurvei = parseInt(data.id_survei);
+        if (isNaN(idSurvei) || idSurvei <= 0) {
+          errors.push("ID Survei harus berupa angka positif");
+        }
+      }
+
+      // Validate id_perusahaan
+      if (!data.id_perusahaan) {
+        errors.push("ID Perusahaan wajib diisi");
+      } else {
+        const idPerusahaan = parseInt(data.id_perusahaan);
+        if (isNaN(idPerusahaan) || idPerusahaan <= 0) {
+          errors.push("ID Perusahaan harus berupa angka positif");
+        }
+      }
+
+      // Validate id_pcl
+      if (!data.id_pcl) {
+        errors.push("ID PCL wajib diisi");
+      } else {
+        const idPcl = parseInt(data.id_pcl);
+        if (isNaN(idPcl) || idPcl <= 0) {
+          errors.push("ID PCL harus berupa angka positif");
+        }
+      }
+
+      // Validate selesai
+      if (!data.selesai || typeof data.selesai !== "string") {
+        errors.push("Status Selesai wajib diisi");
+      } else {
+        const status = data.selesai.trim();
+        if (status !== "Iya" && status !== "Tidak") {
+          errors.push('Status Selesai harus berisi "Iya" atau "Tidak"');
+        }
+      }
+
+      // Validate ket_survei (optional, but check length if provided)
+      if (data.ket_survei && typeof data.ket_survei === "string") {
+        if (data.ket_survei.length > 500) {
+          errors.push("Keterangan survei maksimal 500 karakter");
+        }
+      }
+
+      return errors;
+    };
+
+    const sanitizeRiwayatData = (data: any) => {
+      return {
+        id_survei: parseInt(data.id_survei) || 0,
+        id_perusahaan: parseInt(data.id_perusahaan) || 0,
+        id_pcl: parseInt(data.id_pcl) || 0,
+        selesai: data.selesai ? data.selesai.toString().trim() : "",
+        ket_survei: data.ket_survei ? data.ket_survei.toString().trim() : "",
+      };
+    };
+
+    // Handle form submission
+    const handleSubmit = async () => {
+      if (!file) {
+        await SweetAlertUtils.warning(
+          "File Belum Dipilih",
+          "Silakan pilih file Excel terlebih dahulu"
         );
         return;
       }
 
-      // Validate file type
+      // Validate file type again
       const allowedTypes = [
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.ms-excel",
@@ -1092,59 +1262,163 @@ const TabelRiwayatSurvei = () => {
       if (!allowedTypes.includes(file.type)) {
         await SweetAlertUtils.error(
           "File Tidak Valid",
-          "Silakan pilih file dengan format .xlsx, .xls, atau .csv"
+          "Harap pilih file dengan format .xlsx, .xls, atau .csv"
         );
         return;
       }
 
-      // Confirm upload action
-      const confirmed = await SweetAlertUtils.confirm(
+      // Confirmation
+      const confirmText =
+        uploadMode === "replace"
+          ? "MENGGANTI SEMUA data riwayat survei yang ada dengan data dari file Excel ini"
+          : "MENAMBAHKAN data dari file Excel ke data riwayat survei yang sudah ada";
+
+      const confirmUpload = await SweetAlertUtils.confirm(
         "Konfirmasi Upload",
-        `Apakah Anda yakin ingin mengupload file "${file.name}" dengan mode: ${
-          uploadMode === "append" ? "Tambah Data" : "Ganti Semua Data"
-        }?`,
-        uploadMode === "replace" ? "Ya, Ganti Semua" : "Ya, Upload",
+        `Apakah Anda yakin ingin ${confirmText}?`,
+        "Ya, Lanjutkan",
         "Batal"
       );
 
-      if (!confirmed) return;
+      if (!confirmUpload) return;
 
       try {
         setIsUploading(true);
-        SweetAlertUtils.loading("Mengupload Data", "Mohon tunggu sebentar...");
+        SweetAlertUtils.loading(
+          "Memproses File",
+          "Membaca dan memvalidasi data..."
+        );
 
+        // Read and validate Excel file
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "buffer" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (jsonData.length < 2) {
+          throw new Error(
+            "File Excel harus memiliki minimal 1 baris data (selain header)"
+          );
+        }
+
+        // Get headers and data
+        const headers = jsonData[0] as string[];
+        const rows = jsonData.slice(1) as any[][];
+
+        // Validate headers
+        const requiredHeaders = [
+          "id_survei",
+          "id_perusahaan",
+          "id_pcl",
+          "selesai",
+        ];
+        const optionalHeaders = ["ket_survei"];
+        const allowedHeaders = [...requiredHeaders, ...optionalHeaders];
+
+        const missingHeaders = requiredHeaders.filter(
+          (header) => !headers.includes(header)
+        );
+
+        if (missingHeaders.length > 0) {
+          throw new Error(
+            `Header yang diperlukan tidak ditemukan: ${missingHeaders.join(", ")}`
+          );
+        }
+
+        // Process data
+        const processedData: any[] = [];
+        const validationErrors: string[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+
+          // Skip empty rows
+          if (!row || row.every((cell) => !cell && cell !== 0)) {
+            continue;
+          }
+
+          const rowData: any = {};
+          headers.forEach((header, index) => {
+            if (allowedHeaders.includes(header)) {
+              rowData[header] = row[index];
+            }
+          });
+
+          // Sanitize data
+          const sanitizedData = sanitizeRiwayatData(rowData);
+
+          // Validate data
+          const errors = validateRiwayatData(sanitizedData);
+          if (errors.length > 0) {
+            validationErrors.push(`Baris ${i + 2}: ${errors.join(", ")}`);
+          } else {
+            processedData.push(sanitizedData);
+          }
+        }
+
+        if (validationErrors.length > 0) {
+          SweetAlertUtils.closeLoading();
+          await SweetAlertUtils.error(
+            "Validasi Gagal",
+            `Ditemukan ${validationErrors.length} error:\n\n${validationErrors
+              .slice(0, 5)
+              .join("\n")}${
+              validationErrors.length > 5 ? "\n\n...dan lainnya" : ""
+            }`
+          );
+          return;
+        }
+
+        if (processedData.length === 0) {
+          throw new Error("Tidak ada data valid yang ditemukan dalam file");
+        }
+
+        // Update loading message
+        SweetAlertUtils.loading(
+          "Mengunggah Data",
+          `Memproses ${processedData.length} data riwayat survei...`
+        );
+
+        // Prepare FormData for upload
         const formData = new FormData();
         formData.append("file", file);
         formData.append("mode", uploadMode);
+        formData.append("data", JSON.stringify(processedData));
 
-        const response = await fetch("/api/riwayat-survei/upload", {
+        // Send to API
+        const response = await fetch("/api/riwayat-survei/import", {
           method: "POST",
           body: formData,
         });
 
         const result = await response.json();
+
         SweetAlertUtils.closeLoading();
 
         if (result.success) {
-          await SweetAlertUtils.success(
-            "Upload Berhasil!",
-            `File "${file.name}" berhasil diupload. ${result.message || ""}`
-          );
-          setShowUploadModal(false);
+          const message =
+            uploadMode === "replace"
+              ? `Berhasil mengganti semua data dengan ${result.total || processedData.length} data baru`
+              : `Berhasil memproses ${result.total || processedData.length} data`;
+
+          await SweetAlertUtils.success("Upload Berhasil!", message);
+
+          // Reset modal state and refresh data
           setFile(null);
           setUploadMode("append");
-
-          // Refresh data
+          setShowUploadModal(false);
           fetchData();
         } else {
-          throw new Error(result.message || "Gagal mengupload file");
+          throw new Error(result.message || "Gagal mengupload data");
         }
       } catch (error) {
-        console.error("Error uploading file:", error);
+        console.error("Error uploading data:", error);
         SweetAlertUtils.closeLoading();
+
         await SweetAlertUtils.error(
           "Upload Gagal",
-          `Terjadi kesalahan saat mengupload file: ${error instanceof Error ? error.message : "Unknown error"}`
+          `Terjadi kesalahan: ${(error as Error).message}`
         );
       } finally {
         setIsUploading(false);
@@ -1153,112 +1427,144 @@ const TabelRiwayatSurvei = () => {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
-          <h2 className="text-xl font-medium mb-4">
-            Upload Data Riwayat Survei
-          </h2>
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          {/* Modal Header */}
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-900">
+              Upload Data Riwayat Survei
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Upload file Excel untuk menambah atau mengganti data riwayat
+              survei
+            </p>
+          </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pilih File Excel (.xlsx, .xls, .csv)
-              </label>
-              <input
-                type="file"
-                onChange={handleFileChange}
-                accept=".xlsx, .xls, .csv"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                disabled={isUploading}
-              />
-              {file && (
-                <p className="mt-2 text-sm text-gray-600">
-                  File terpilih: {file.name}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mode Upload
-              </label>
-              <div className="space-y-2">
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="append"
-                    name="uploadMode"
-                    value="append"
-                    checked={uploadMode === "append"}
-                    onChange={() => setUploadMode("append")}
-                    className="h-4 w-4 text-blue-600"
-                    disabled={isUploading}
-                  />
-                  <label
-                    htmlFor="append"
-                    className="ml-2 text-sm text-gray-700"
-                  >
-                    Tambah Data — Menambahkan data baru, memperbarui data yang
-                    sudah ada
-                  </label>
+          {/* Modal Body */}
+          <div className="px-6 py-4 space-y-6">
+            {/* Template Download Section */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-gray-900">
+                    Download Template Excel
+                  </h4>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Unduh template untuk melihat format yang benar
+                  </p>
                 </div>
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="replace"
-                    name="uploadMode"
-                    value="replace"
-                    checked={uploadMode === "replace"}
-                    onChange={() => setUploadMode("replace")}
-                    className="h-4 w-4 text-blue-600"
-                    disabled={isUploading}
-                  />
-                  <label
-                    htmlFor="replace"
-                    className="ml-2 text-sm text-gray-700"
-                  >
-                    Ganti Semua Data — Menghapus semua data yang ada dan
-                    menggantinya dengan data baru
-                  </label>
-                </div>
+                <button
+                  onClick={handleDownloadTemplate}
+                  disabled={isUploading}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <DownloadIcon size={16} />
+                  Download Template
+                </button>
               </div>
             </div>
 
-            <div className="text-sm text-gray-600">
-              <p>Catatan:</p>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Format file harus sesuai dengan template</li>
-                <li>Ukuran file maksimal 5MB</li>
-                {uploadMode === "replace" && (
-                  <li className="text-red-600 font-medium">
-                    Semua data akan dihapus dan diganti dengan data baru!
-                  </li>
+            <div className="border-t border-gray-200"></div>
+
+            {/* File Upload Section */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pilih File Excel *
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileChange}
+                  disabled={isUploading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Format: .xlsx, .xls, atau .csv (maksimal 10MB)
+                </p>
+                {file && (
+                  <p className="text-sm text-green-600 mt-2">
+                    File terpilih: {file.name} (
+                    {(file.size / 1024 / 1024).toFixed(2)} MB)
+                  </p>
                 )}
+              </div>
+
+              {/* Upload Mode Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mode Upload *
+                </label>
+                <select
+                  value={uploadMode}
+                  onChange={(e) => setUploadMode(e.target.value)}
+                  disabled={isUploading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="append">
+                    Tambah Data - Menambah/update data yang sudah ada
+                  </option>
+                  <option value="replace">
+                    Ganti Semua - Hapus semua data lalu tambah data baru
+                  </option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {uploadMode === "append"
+                    ? "Data baru akan ditambahkan. Jika ada duplikasi (kombinasi id_survei + id_perusahaan sama), data akan diupdate."
+                    : "HATI-HATI: Semua data riwayat survei yang ada akan dihapus dan diganti dengan data dari file Excel."}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-200"></div>
+
+            {/* Important Notes */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h4 className="font-medium text-yellow-800 mb-2">
+                ⚠️ Catatan Penting:
+              </h4>
+              <ul className="text-sm text-yellow-700 space-y-1">
+                <li>
+                  • Field wajib: id_survei, id_perusahaan, id_pcl, selesai
+                </li>
+                <li>• Field opsional: ket_survei</li>
+                <li>
+                  • ID yang digunakan harus sudah tersedia di database survei,
+                  perusahaan, dan PCL
+                </li>
+                <li>
+                  • Status selesai hanya boleh diisi "Iya" atau "Tidak" (case
+                  sensitive)
+                </li>
+                <li>• Kombinasi id_survei + id_perusahaan harus unik</li>
+                <li>
+                  • Jangan mengubah nama kolom pada baris pertama (header)
+                </li>
               </ul>
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
+          {/* Modal Footer */}
+          <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
             <button
               onClick={() => setShowUploadModal(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
               disabled={isUploading}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
             >
               Batal
             </button>
             <button
               onClick={handleSubmit}
-              className={`px-4 py-2 text-white rounded-md transition-colors ${
-                uploadMode === "replace"
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-blue-600 hover:bg-blue-700"
-              } ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}
-              disabled={isUploading}
+              disabled={!file || isUploading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
-              {isUploading
-                ? "Memproses..."
-                : uploadMode === "replace"
-                  ? "Ganti Semua"
-                  : "Upload"}
+              {isUploading ? (
+                "Memproses..."
+              ) : (
+                <>
+                  <UploadIcon size={16} />
+                  Upload
+                </>
+              )}
             </button>
           </div>
         </div>
