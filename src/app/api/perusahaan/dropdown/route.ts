@@ -1,3 +1,5 @@
+// src\app\api\perusahaan\dropdown\route.ts
+
 import { NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 
@@ -10,22 +12,39 @@ export async function GET() {
       database: process.env.DB_NAME || 'wirasaba',
     });
 
-    // Query untuk mendapatkan data ringkas perusahaan untuk dropdown
+    // Query untuk mendapatkan data perusahaan dengan penanganan duplikat
+    // Menggunakan GROUP BY untuk menggabungkan perusahaan dengan KIP dan nama yang sama
     const [rows] = await dbConnection.execute(`
       SELECT 
-        id_perusahaan, 
+        GROUP_CONCAT(id_perusahaan ORDER BY id_perusahaan ASC) as id_perusahaan_list,
+        MIN(id_perusahaan) as id_perusahaan,
         kip, 
-        nama_perusahaan 
+        nama_perusahaan,
+        COUNT(*) as duplicate_count
       FROM perusahaan 
+      GROUP BY kip, nama_perusahaan
       ORDER BY nama_perusahaan ASC
     `);
 
     await dbConnection.end();
 
-    // Format response khusus untuk dropdown
+    // Format response dengan informasi duplikat
+    const formattedData = (rows as any[]).map(row => ({
+      id: row.id_perusahaan, // Menggunakan ID terkecil sebagai representatif
+      id_list: row.id_perusahaan_list, // Daftar semua ID dengan KIP & nama sama
+      name: row.nama_perusahaan,
+      kip: row.kip || "-",
+      isDuplicate: row.duplicate_count > 1,
+      duplicateCount: row.duplicate_count,
+      // Label yang informatif untuk dropdown
+      displayLabel: row.duplicate_count > 1 
+        ? `${row.nama_perusahaan} (KIP: ${row.kip}) - ${row.duplicate_count} entries`
+        : `${row.nama_perusahaan} (KIP: ${row.kip})`
+    }));
+
     return NextResponse.json({ 
       success: true, 
-      data: rows
+      data: formattedData
     });
   } catch (error) {
     console.error('Database error:', error.message);

@@ -70,6 +70,57 @@ export async function GET(request: NextRequest) {
   if (searchParams.has("check_duplicate")) {
     return handleCheckDuplicate(request);
   }
+
+  // TAMBAH: Check duplicate company group endpoint
+  if (searchParams.get('check_duplicate_company_group') === 'true') {
+    try {
+      const id_survei = searchParams.get('id_survei');
+      const id_perusahaan_list = searchParams.get('id_perusahaan_list');
+      const exclude_id = searchParams.get('exclude_id');
+
+      if (!id_survei || !id_perusahaan_list) {
+        return NextResponse.json({ isDuplicate: false });
+      }
+
+      const connection = await createDbConnection();
+
+      const idArray = id_perusahaan_list.split(',').map(id => parseInt(id.trim()));
+      const placeholders = idArray.map(() => '?').join(',');
+      
+      let query = `
+        SELECT rs.*, p.nama_perusahaan, p.kip 
+        FROM riwayat_survei rs
+        JOIN perusahaan p ON rs.id_perusahaan = p.id_perusahaan
+        WHERE rs.id_survei = ? AND rs.id_perusahaan IN (${placeholders})
+      `;
+      
+      const queryParams = [id_survei, ...idArray];
+      
+      if (exclude_id) {
+        query += ' AND rs.id_riwayat != ?';
+        queryParams.push(exclude_id);
+      }
+
+      const [rows] = await connection.execute(query, queryParams);
+      await connection.end();
+      
+      if ((rows as any[]).length > 0) {
+        return NextResponse.json({
+          isDuplicate: true,
+          duplicateInfo: {
+            existing_entries: rows,
+            message: "Survei ini sudah memiliki data untuk perusahaan dengan KIP dan nama yang sama"
+          }
+        });
+      }
+
+      return NextResponse.json({ isDuplicate: false });
+    } catch (error) {
+      console.error('Error checking duplicate company group:', error);
+      return NextResponse.json({ isDuplicate: false });
+    }
+  }
+
   const searchTerm = searchParams.get("search") || "";
   const surveiFilter = searchParams.get("survei") || "all";
   const pclFilter = searchParams.get("pcl") || "all";

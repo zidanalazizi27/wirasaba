@@ -1,3 +1,5 @@
+// PERBAIKAN UNTUK src/app/components/admin/riwayat_survei_form.tsx
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -19,10 +21,15 @@ interface RiwayatSurveiData {
   ket_survei: string;
 }
 
+// 🔧 PERBAIKAN: Update interface PerusahaanOption sesuai API response
 interface PerusahaanOption {
-  id: number | string;
-  name: string;
-  kip: string;
+  id: number; // dari API: id (MIN(id_perusahaan))
+  id_list: string; // dari API: id_list (GROUP_CONCAT(id_perusahaan))
+  name: string; // dari API: name (nama_perusahaan)
+  kip: string; // dari API: kip
+  isDuplicate: boolean; // dari API: isDuplicate (duplicate_count > 1)
+  duplicateCount: number; // dari API: duplicateCount (COUNT(*))
+  displayLabel: string; // dari API: displayLabel
 }
 
 // State untuk field validation
@@ -199,26 +206,54 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     }
   };
 
-  // Tambahkan ini di awal file riwayat_survei_form.tsx
-  const DEBUG = true; // Set false di production
+  // 🔧 PERBAIKAN: Update function dengan sesuai API structure
+  const checkDuplicatePerusahaanEntry = async (
+    selectedPerusahaan: PerusahaanOption,
+    id_survei: string
+  ): Promise<{ isDuplicate: boolean; duplicateInfo?: any }> => {
+    try {
+      // Safety check berdasarkan struktur API yang benar
+      if (!selectedPerusahaan.isDuplicate || !selectedPerusahaan.id_list) {
+        return { isDuplicate: false };
+      }
 
+      const params = new URLSearchParams({
+        check_duplicate_company_group: "true",
+        id_survei: id_survei.toString(),
+        id_perusahaan_list: selectedPerusahaan.id_list,
+        exclude_id: mode === "edit" && id ? id.toString() : "",
+      });
+
+      const response = await fetch(`/api/riwayat-survei?${params}`);
+      const result = await response.json();
+
+      return {
+        isDuplicate: result.isDuplicate,
+        duplicateInfo: result.duplicateInfo,
+      };
+    } catch (error) {
+      console.error("Error checking duplicate company entry:", error);
+      return { isDuplicate: false };
+    }
+  };
+
+  // Debug function
+  const DEBUG = true;
   function debug(...args: any[]) {
     if (DEBUG) {
       console.log(...args);
     }
   }
 
-  // Gunakan di berbagai tempat
+  // useEffect hooks
   useEffect(() => {
     debug("Component mounted, mode:", mode, "id:", id);
-    // ...
-  }, []);
+  }, [mode, id]);
 
   useEffect(() => {
     debug("Selected perusahaan changed:", selectedPerusahaan);
   }, [selectedPerusahaan]);
 
-  // Gunakan untuk memantau perubahan state
   useEffect(() => {
     debug("perusahaanOptions updated:", perusahaanOptions);
   }, [perusahaanOptions]);
@@ -239,7 +274,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
 
           if (result.success) {
             setFormData(result.data);
-            setOriginalData(result.data); // SET original data
+            setOriginalData(result.data);
           } else {
             throw new Error(result.message || "Failed to fetch riwayat data");
           }
@@ -255,7 +290,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     }
   }, [id, mode]);
 
-  // Fetch dropdown options
+  // 🔧 PERBAIKAN: Fetch dropdown options dengan error handling yang lebih baik
   useEffect(() => {
     const fetchOptions = async () => {
       try {
@@ -298,32 +333,73 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
           console.error("Error fetching PCL options:", err);
         }
 
-        // Fetch perusahaan options using the new endpoint
+        // 🔧 PERBAIKAN: Fetch perusahaan options dengan mapping yang benar
         try {
-          // Gunakan endpoint baru khusus dropdown
           const perusahaanResponse = await fetch("/api/perusahaan/dropdown");
           console.log("Perusahaan response status:", perusahaanResponse.status);
 
           if (perusahaanResponse.ok) {
             const result = await perusahaanResponse.json();
-            console.log("Perusahaan dropdown data:", result);
+            console.log("Raw perusahaan dropdown data:", result);
 
             if (result.success && Array.isArray(result.data)) {
-              const options = result.data.map((item: any) => ({
-                id: item.id_perusahaan,
-                name: item.nama_perusahaan,
-                kip: item.kip || "-",
-              }));
+              // Log raw data untuk debugging
+              console.log("Raw data sample:", result.data.slice(0, 3));
 
+              // 🔧 PERBAIKAN: Mapping yang sesuai dengan API response
+              const options: PerusahaanOption[] = result.data
+                .filter((item: any) => {
+                  // Filter out invalid items
+                  const isValid =
+                    item &&
+                    item.id !== undefined &&
+                    item.id !== null &&
+                    item.name;
+
+                  if (!isValid) {
+                    console.warn("Filtering out invalid item:", item);
+                  }
+
+                  return isValid;
+                })
+                .map((item: any) => ({
+                  // API response sudah menggunakan field names yang benar
+                  id: Number(item.id), // API response: id
+                  name: String(item.name || ""), // API response: name
+                  kip: String(item.kip || "-"), // API response: kip
+                  id_list: String(item.id_list || ""), // API response: id_list
+                  isDuplicate: Boolean(item.isDuplicate), // API response: isDuplicate
+                  duplicateCount: Number(item.duplicateCount) || 1, // API response: duplicateCount
+                  displayLabel: String(
+                    item.displayLabel ||
+                      `${item.kip || "-"} - ${item.name || ""}`
+                  ), // API response: displayLabel
+                }));
+
+              console.log("Processed perusahaan options:", options);
+              console.log("Options count:", options.length);
               setPerusahaanOptions(options);
 
               // Jika dalam edit mode, set selected perusahaan
               if (mode === "edit" && formData.id_perusahaan) {
-                const selected = options.find(
-                  (opt) => Number(opt.id) === Number(formData.id_perusahaan)
-                );
+                const selected = options.find((opt) => {
+                  // Safety check untuk edit mode
+                  if (!opt || opt.id === undefined || opt.id === null)
+                    return false;
+                  return Number(opt.id) === Number(formData.id_perusahaan);
+                });
+
                 if (selected) {
+                  console.log(
+                    "Setting selected perusahaan for edit mode:",
+                    selected
+                  );
                   setSelectedPerusahaan(selected);
+                } else {
+                  console.log(
+                    "No matching perusahaan found for edit mode. FormData id_perusahaan:",
+                    formData.id_perusahaan
+                  );
                 }
               }
             } else {
@@ -377,20 +453,31 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
       return;
     }
 
-    const selected = perusahaanOptions.find(
-      (p) => p.id.toString() === perusahaanId.toString()
-    );
+    // 🔧 PERBAIKAN: Safety checks untuk mencegah error
+    const selected = perusahaanOptions.find((p) => {
+      // Safety check: pastikan p dan p.id exists
+      if (!p || p.id === undefined || p.id === null) {
+        console.warn("Invalid perusahaan option:", p);
+        return false;
+      }
+
+      // Convert both to string safely
+      const optionId = String(p.id);
+      const selectedId = String(perusahaanId);
+
+      return optionId === selectedId;
+    });
 
     debug("Found selected perusahaan:", selected);
 
-    if (selected) {
+    if (selected && selected.id !== undefined) {
       setSelectedPerusahaan(selected);
       setFormData((prev) => ({
         ...prev,
         id_perusahaan: selected.id,
       }));
     } else {
-      debug("Selected perusahaan not found in options");
+      debug("Selected perusahaan not found in options or invalid");
       setSelectedPerusahaan(null);
       setFormData((prev) => ({
         ...prev,
@@ -410,6 +497,37 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
         "Silakan periksa dan lengkapi form dengan benar."
       );
       return;
+    }
+
+    // Validasi khusus untuk duplikat berdasarkan KIP & nama perusahaan
+    if (selectedPerusahaan) {
+      const duplicateCheck = await checkDuplicatePerusahaanEntry(
+        selectedPerusahaan,
+        formData.id_survei.toString()
+      );
+
+      if (duplicateCheck.isDuplicate) {
+        const duplicateInfo = duplicateCheck.duplicateInfo;
+        const existingEntries = duplicateInfo?.existing_entries || [];
+
+        let warningMessage = `Data riwayat survei untuk perusahaan dengan KIP "${selectedPerusahaan.kip}" dan nama "${selectedPerusahaan.name}" sudah ada untuk survei ini.\n\n`;
+
+        if (existingEntries.length > 0) {
+          warningMessage += "Data yang sudah ada:\n";
+          existingEntries.forEach((entry: any, index: number) => {
+            warningMessage += `${index + 1}. ID Riwayat: ${entry.id_riwayat}, Perusahaan: ${entry.nama_perusahaan} (KIP: ${entry.kip})\n`;
+          });
+        }
+
+        warningMessage +=
+          "\nSistem tidak mengizinkan duplikasi data ini karena KIP dan nama perusahaan sudah sama.";
+
+        await SweetAlertUtils.warning(
+          "Data Duplikat Terdeteksi",
+          warningMessage
+        );
+        return;
+      }
     }
 
     // Check duplicate data
@@ -491,7 +609,6 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     onCancel();
   };
 
-  // No need for search input change handler with dropdown
   if (isLoading && mode === "edit") {
     return <div className="p-4 text-center">Memuat data...</div>;
   }
@@ -575,9 +692,25 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
                 }`}
               >
                 <option value="">Pilih Perusahaan</option>
-                {perusahaanOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.kip} - {option.name}
+                {/* 🔧 PERBAIKAN: Tambahkan unique key dan safety checks */}
+                {perusahaanOptions.map((perusahaan, index) => (
+                  <option
+                    key={`perusahaan-${perusahaan.id}-${index}`} // Unique key
+                    value={perusahaan.id}
+                    className={
+                      perusahaan.isDuplicate
+                        ? "bg-yellow-50 text-orange-600"
+                        : ""
+                    }
+                    title={
+                      perusahaan.isDuplicate
+                        ? `⚠️ Ada ${perusahaan.duplicateCount} perusahaan dengan KIP dan nama yang sama`
+                        : ""
+                    }
+                  >
+                    {/* 🔧 PERBAIKAN: Fallback untuk displayLabel */}
+                    {perusahaan.displayLabel ||
+                      `${perusahaan.kip} - ${perusahaan.name}`}
                   </option>
                 ))}
               </select>
@@ -596,6 +729,43 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
           )}
         </div>
       </div>
+
+      {/* 🔧 PERBAIKAN: Indikator visual dengan safety checks */}
+      {selectedPerusahaan && selectedPerusahaan.isDuplicate && (
+        <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-5 w-5 text-yellow-400"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Peringatan: Data Duplikat Terdeteksi
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>
+                  Terdapat {selectedPerusahaan.duplicateCount} perusahaan dengan
+                  KIP "{selectedPerusahaan.kip}" dan nama "
+                  {selectedPerusahaan.name}" yang sama dalam database.
+                </p>
+                <p className="mt-1">
+                  Sistem akan mencegah duplikasi data riwayat survei untuk
+                  kombinasi KIP dan nama perusahaan yang sama.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         {/* ID_PCL */}
@@ -657,8 +827,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
                   : "border-gray-300"
               }`}
             >
-              <option value="">Pilih Status</option>{" "}
-              {/* TAMBAHKAN placeholder option */}
+              <option value="">Pilih Status</option>
               <option value="Iya">Iya</option>
               <option value="Tidak">Tidak</option>
             </select>

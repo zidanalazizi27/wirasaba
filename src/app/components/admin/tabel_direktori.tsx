@@ -1427,7 +1427,7 @@ const TabelDirektori = () => {
             ? "Data akan diunduh sesuai dengan filter yang sedang aktif."
             : "Semua data akan diunduh."
         }`,
-        "info" // ✅ Parameter yang benar
+        "Iya, Download" // ✅ Parameter yang benar
       );
 
       if (!confirmResult.isConfirmed) return;
