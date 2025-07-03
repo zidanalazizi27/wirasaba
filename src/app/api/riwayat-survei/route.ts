@@ -63,82 +63,93 @@ async function handleCheckDuplicate(request: NextRequest) {
   }
 }
 
+// Function untuk check duplicate company group
+async function handleCheckDuplicateCompanyGroup(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const id_survei = searchParams.get('id_survei');
+    const id_perusahaan_list = searchParams.get('id_perusahaan_list');
+    const exclude_id = searchParams.get('exclude_id');
+
+    if (!id_survei || !id_perusahaan_list) {
+      return NextResponse.json({ isDuplicate: false });
+    }
+
+    const connection = await createDbConnection();
+
+    const idArray = id_perusahaan_list.split(',').map(id => parseInt(id.trim()));
+    const placeholders = idArray.map(() => '?').join(',');
+    
+    let query = `
+      SELECT rs.*, p.nama_perusahaan, p.kip 
+      FROM riwayat_survei rs
+      JOIN perusahaan p ON rs.id_perusahaan = p.id_perusahaan
+      WHERE rs.id_survei = ? AND rs.id_perusahaan IN (${placeholders})
+    `;
+    
+    const queryParams = [id_survei, ...idArray];
+    
+    if (exclude_id) {
+      query += ' AND rs.id_riwayat != ?';
+      queryParams.push(exclude_id);
+    }
+
+    const [rows] = await connection.execute(query, queryParams);
+    await connection.end();
+    
+    if ((rows as any[]).length > 0) {
+      return NextResponse.json({
+        isDuplicate: true,
+        duplicateInfo: {
+          existing_entries: rows,
+          message: "Survei ini sudah memiliki data untuk perusahaan dengan KIP dan nama yang sama"
+        }
+      });
+    }
+
+    return NextResponse.json({ isDuplicate: false });
+  } catch (error) {
+    console.error('Error checking duplicate company group:', error);
+    return NextResponse.json({ isDuplicate: false });
+  }
+}
+
 // GET endpoint with advanced filtering, sorting, and pagination
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
+  
   // Check duplicate endpoint
   if (searchParams.has("check_duplicate")) {
     return handleCheckDuplicate(request);
   }
 
-  // TAMBAH: Check duplicate company group endpoint
+  // Check duplicate company group endpoint
   if (searchParams.get('check_duplicate_company_group') === 'true') {
-    try {
-      const id_survei = searchParams.get('id_survei');
-      const id_perusahaan_list = searchParams.get('id_perusahaan_list');
-      const exclude_id = searchParams.get('exclude_id');
-
-      if (!id_survei || !id_perusahaan_list) {
-        return NextResponse.json({ isDuplicate: false });
-      }
-
-      const connection = await createDbConnection();
-
-      const idArray = id_perusahaan_list.split(',').map(id => parseInt(id.trim()));
-      const placeholders = idArray.map(() => '?').join(',');
-      
-      let query = `
-        SELECT rs.*, p.nama_perusahaan, p.kip 
-        FROM riwayat_survei rs
-        JOIN perusahaan p ON rs.id_perusahaan = p.id_perusahaan
-        WHERE rs.id_survei = ? AND rs.id_perusahaan IN (${placeholders})
-      `;
-      
-      const queryParams = [id_survei, ...idArray];
-      
-      if (exclude_id) {
-        query += ' AND rs.id_riwayat != ?';
-        queryParams.push(exclude_id);
-      }
-
-      const [rows] = await connection.execute(query, queryParams);
-      await connection.end();
-      
-      if ((rows as any[]).length > 0) {
-        return NextResponse.json({
-          isDuplicate: true,
-          duplicateInfo: {
-            existing_entries: rows,
-            message: "Survei ini sudah memiliki data untuk perusahaan dengan KIP dan nama yang sama"
-          }
-        });
-      }
-
-      return NextResponse.json({ isDuplicate: false });
-    } catch (error) {
-      console.error('Error checking duplicate company group:', error);
-      return NextResponse.json({ isDuplicate: false });
-    }
+    return handleCheckDuplicateCompanyGroup(request);
   }
 
+  // Extract filter parameters
   const searchTerm = searchParams.get("search") || "";
   const surveiFilter = searchParams.get("survei") || "all";
   const pclFilter = searchParams.get("pcl") || "all";
   const selesaiFilter = searchParams.get("selesai") || "all";
   const tahunFilter = searchParams.get("tahun") || "all";
+  const kipFilter = searchParams.get("kip") || "";
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "10");
   const offset = (page - 1) * limit;
 
+  let connection;
+  
   try {
     // Create database connection
-    const connection = await createDbConnection();
+    connection = await createDbConnection();
 
     // Prepare where conditions
     let whereConditions = [];
     let queryParams = [];
 
-    // Search filter (multi-column)
+    // Search filter (multi-column) - Include KIP in search
     if (searchTerm) {
       whereConditions.push(
         "(s.nama_survei LIKE ? OR p.kip LIKE ? OR p.nama_perusahaan LIKE ? OR pcl.nama_pcl LIKE ?)"
@@ -149,6 +160,12 @@ export async function GET(request: NextRequest) {
         `%${searchTerm}%`,
         `%${searchTerm}%`
       );
+    }
+
+    // Filter khusus berdasarkan KIP
+    if (kipFilter) {
+      whereConditions.push("p.kip = ?");
+      queryParams.push(kipFilter);
     }
 
     // Survei filter
@@ -176,12 +193,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Build WHERE clause
-    const whereClause =
-      whereConditions.length > 0
-        ? "WHERE " + whereConditions.join(" AND ")
-        : "";
+    const whereClause = whereConditions.length > 0 
+      ? "WHERE " + whereConditions.join(" AND ") 
+      : "";
 
-    // Get sort parameters if any
+    // Get sort parameters
     const sorts = [];
     let i = 0;
     while (searchParams.has(`sort[${i}][column]`)) {
@@ -189,7 +205,7 @@ export async function GET(request: NextRequest) {
       const direction = searchParams.get(`sort[${i}][direction]`);
       if (column && direction) {
         // Validate column name to prevent SQL injection
-        const validColumns = ["nama_survei", "kip", "nama_perusahaan", "nama_pcl", "tahun"];
+        const validColumns = ["nama_survei", "kip", "nama_perusahaan", "nama_pcl", "tahun", "selesai", "id_riwayat"];
         if (validColumns.includes(column)) {
           sorts.push({ column, direction });
         }
@@ -221,6 +237,12 @@ export async function GET(request: NextRequest) {
           case "tahun":
             columnWithPrefix = "s.tahun";
             break;
+          case "selesai":
+            columnWithPrefix = "r.selesai";
+            break;
+          case "id_riwayat":
+            columnWithPrefix = "r.id_riwayat";
+            break;
           default:
             columnWithPrefix = "r.id_riwayat";
         }
@@ -230,49 +252,62 @@ export async function GET(request: NextRequest) {
       orderByClause = "ORDER BY " + orderByParts.join(", ");
     } else {
       // Default sorting
-      orderByClause = "ORDER BY r.id_riwayat DESC";
+      orderByClause = "ORDER BY s.tahun DESC, s.nama_survei ASC, p.nama_perusahaan ASC";
     }
 
     // Count total records for pagination
-    const [totalRows] = await connection.execute(
-      `SELECT COUNT(*) as total 
-       FROM riwayat_survei r
-       JOIN survei s ON r.id_survei = s.id_survei
-       JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
-       JOIN pcl ON r.id_pcl = pcl.id_pcl
-       ${whereClause}`,
-      queryParams
-    );
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM riwayat_survei r
+      LEFT JOIN survei s ON r.id_survei = s.id_survei
+      LEFT JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
+      LEFT JOIN pcl ON r.id_pcl = pcl.id_pcl
+      ${whereClause}
+    `;
 
-    // Execute query with pagination
-    const [rows] = await connection.execute(
-      `SELECT 
-         r.id_riwayat, 
-         r.id_survei, 
-         s.nama_survei,
-         r.id_perusahaan,
-         p.kip,
-         p.nama_perusahaan,
-         r.id_pcl,
-         pcl.nama_pcl,
-         s.tahun,
-         r.selesai,
-         r.ket_survei
-       FROM riwayat_survei r
-       JOIN survei s ON r.id_survei = s.id_survei
-       JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
-       JOIN pcl ON r.id_pcl = pcl.id_pcl
-       ${whereClause}
-       ${orderByClause}
-       LIMIT ? OFFSET ?`,
-      [...queryParams, limit, offset]
-    );
+    // Main query - REMOVED created_at and updated_at that might not exist
+    const mainQuery = `
+      SELECT 
+        r.id_riwayat, 
+        r.id_survei, 
+        s.nama_survei,
+        COALESCE(s.fungsi, '') as fungsi,
+        COALESCE(s.periode, '') as periode,
+        COALESCE(s.tahun, 0) as tahun,
+        r.id_perusahaan,
+        COALESCE(p.kip, '') as kip,
+        COALESCE(p.nama_perusahaan, '') as nama_perusahaan,
+        r.id_pcl,
+        COALESCE(pcl.nama_pcl, '') as nama_pcl,
+        r.selesai,
+        COALESCE(r.ket_survei, '') as ket_survei
+      FROM riwayat_survei r
+      LEFT JOIN survei s ON r.id_survei = s.id_survei
+      LEFT JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
+      LEFT JOIN pcl ON r.id_pcl = pcl.id_pcl
+      ${whereClause}
+      ${orderByClause}
+      LIMIT ? OFFSET ?
+    `;
+
+    console.log("Executing count query:", countQuery);
+    console.log("Query params:", queryParams);
+
+    // Execute queries
+    const [totalRows] = await connection.execute(countQuery, queryParams);
+    
+    console.log("Executing main query:", mainQuery);
+    console.log("Main query params:", [...queryParams, limit, offset]);
+    
+    const [rows] = await connection.execute(mainQuery, [...queryParams, limit, offset]);
 
     // Close connection
     await connection.end();
 
     // Format the response
     const total = (totalRows as any[])[0].total;
+
+    console.log("Query successful. Total rows:", total, "Data rows:", (rows as any[]).length);
 
     return NextResponse.json({
       success: true,
@@ -284,11 +319,37 @@ export async function GET(request: NextRequest) {
         currentPage: page,
         perPage: limit,
       },
+      applied_filters: {
+        search: searchTerm || null,
+        kip: kipFilter || null,
+        survei: surveiFilter !== "all" ? surveiFilter : null,
+        pcl: pclFilter !== "all" ? pclFilter : null,
+        selesai: selesaiFilter !== "all" ? selesaiFilter : null,
+        tahun: tahunFilter !== "all" ? tahunFilter : null,
+      }
     });
   } catch (error) {
     console.error("Database error:", error);
+    console.error("Error details:", {
+      message: (error as Error).message,
+      stack: (error as Error).stack
+    });
+    
+    // Close connection if still open
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (closeError) {
+        console.error("Error closing connection:", closeError);
+      }
+    }
+    
     return NextResponse.json(
-      { success: false, message: (error as Error).message },
+      { 
+        success: false, 
+        message: "Database error: " + (error as Error).message,
+        error_details: (error as Error).message 
+      },
       { status: 500 }
     );
   }
@@ -296,6 +357,8 @@ export async function GET(request: NextRequest) {
 
 // POST endpoint to add a new riwayat survei
 export async function POST(request: NextRequest) {
+  let connection;
+  
   try {
     const data = await request.json();
 
@@ -311,7 +374,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create database connection
-    const connection = await createDbConnection();
+    connection = await createDbConnection();
 
     // Check for duplicate combination with detailed info
     const [duplicateCheck] = await connection.execute(
@@ -360,6 +423,16 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Database error:", error);
+    
+    // Close connection if still open
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (closeError) {
+        console.error("Error closing connection:", closeError);
+      }
+    }
+    
     return NextResponse.json(
       {
         success: false,
@@ -370,3 +443,184 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PUT endpoint to update riwayat survei
+export async function PUT(request: NextRequest) {
+  let connection;
+  
+  try {
+    const data = await request.json();
+    const { id, ...updateData } = data;
+
+    // Validate required fields
+    if (!id || !updateData.id_survei || !updateData.id_perusahaan || !updateData.id_pcl || !updateData.selesai) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Semua field wajib diisi termasuk ID",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Create database connection
+    connection = await createDbConnection();
+
+    // Check if record exists
+    const [existingRecord] = await connection.execute(
+      `SELECT id_riwayat FROM riwayat_survei WHERE id_riwayat = ?`,
+      [id]
+    );
+
+    if ((existingRecord as any[]).length === 0) {
+      await connection.end();
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Data riwayat survei tidak ditemukan",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Check for duplicate combination (excluding current record)
+    const [duplicateCheck] = await connection.execute(
+      `SELECT r.id_riwayat, s.nama_survei, p.nama_perusahaan, p.kip
+       FROM riwayat_survei r
+       JOIN survei s ON r.id_survei = s.id_survei
+       JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
+       WHERE r.id_survei = ? AND r.id_perusahaan = ? AND r.id_riwayat != ?`,
+      [updateData.id_survei, updateData.id_perusahaan, id]
+    );
+
+    if ((duplicateCheck as any[]).length > 0) {
+      const duplicate = (duplicateCheck as any[])[0];
+      await connection.end();
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Kombinasi survei "${duplicate.nama_survei}" dan perusahaan "${duplicate.nama_perusahaan}" (KIP: ${duplicate.kip}) sudah terdaftar dalam sistem.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Update riwayat survei - REMOVED updated_at that might not exist
+    await connection.execute(
+      `UPDATE riwayat_survei 
+       SET id_survei = ?, id_perusahaan = ?, id_pcl = ?, selesai = ?, ket_survei = ?
+       WHERE id_riwayat = ?`,
+      [
+        updateData.id_survei,
+        updateData.id_perusahaan,
+        updateData.id_pcl,
+        updateData.selesai,
+        updateData.ket_survei || "",
+        id
+      ]
+    );
+
+    await connection.end();
+
+    return NextResponse.json({
+      success: true,
+      message: "Data riwayat survei berhasil diperbarui",
+      id: id,
+    });
+  } catch (error) {
+    console.error("Database error:", error);
+    
+    // Close connection if still open
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (closeError) {
+        console.error("Error closing connection:", closeError);
+      }
+    }
+    
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Error saat memperbarui data: " + (error as Error).message,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE endpoint to delete riwayat survei
+export async function DELETE(request: NextRequest) {
+  let connection;
+  
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "ID riwayat survei diperlukan",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Create database connection
+    connection = await createDbConnection();
+
+    // Check if record exists
+    const [existingRecord] = await connection.execute(
+      `SELECT r.id_riwayat, s.nama_survei, p.nama_perusahaan, p.kip
+       FROM riwayat_survei r
+       LEFT JOIN survei s ON r.id_survei = s.id_survei
+       LEFT JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
+       WHERE r.id_riwayat = ?`,
+      [id]
+    );
+
+    if ((existingRecord as any[]).length === 0) {
+      await connection.end();
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Data riwayat survei tidak ditemukan",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Delete riwayat survei
+    await connection.execute(
+      `DELETE FROM riwayat_survei WHERE id_riwayat = ?`,
+      [id]
+    );
+
+    await connection.end();
+
+    const record = (existingRecord as any[])[0];
+    return NextResponse.json({
+      success: true,
+      message: `Data riwayat survei "${record.nama_survei || 'Unknown'}" untuk perusahaan "${record.nama_perusahaan || 'Unknown'}" berhasil dihapus`,
+    });
+  } catch (error) {
+    console.error("Database error:", error);
+    
+    // Close connection if still open
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (closeError) {
+        console.error("Error closing connection:", closeError);
+      }
+    }
+    
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Error saat menghapus data: " + (error as Error).message,
+      },
+      { status: 500 }
+    );
+  }
+}

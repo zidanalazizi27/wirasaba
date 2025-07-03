@@ -8,16 +8,22 @@ import Breadcrumb from "@/app/components/admin/breadcrumb";
 import DetailDirektori from "@/app/components/admin/detail_direktori";
 import RiwayatSurveiPerusahaan from "@/app/components/admin/riwayat_survei_perusahaaan";
 
+interface CompanyData {
+  id_perusahaan: number;
+  nama_perusahaan: string;
+  kip: string;
+}
+
 export default function DirektoriDetail() {
   const params = useParams();
   const router = useRouter();
   const id_perusahaan = params.id_perusahaan;
-  const [companyName, setCompanyName] = useState("");
+  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch company name for breadcrumb
+  // Fetch company data including KIP
   useEffect(() => {
-    const fetchCompanyName = async () => {
+    const fetchCompanyData = async () => {
       try {
         const response = await fetch(`/api/perusahaan/${id_perusahaan}`);
 
@@ -26,17 +32,25 @@ export default function DirektoriDetail() {
         }
 
         const data = await response.json();
-        setCompanyName(data.nama_perusahaan || "Detail Perusahaan");
+        setCompanyData({
+          id_perusahaan: data.id_perusahaan,
+          nama_perusahaan: data.nama_perusahaan || "Detail Perusahaan",
+          kip: data.kip || "",
+        });
         setIsLoading(false);
       } catch (error) {
-        console.error("Error fetching company name:", error);
-        setCompanyName("Detail Perusahaan");
+        console.error("Error fetching company data:", error);
+        setCompanyData({
+          id_perusahaan: 0,
+          nama_perusahaan: "Detail Perusahaan",
+          kip: "",
+        });
         setIsLoading(false);
       }
     };
 
     if (id_perusahaan) {
-      fetchCompanyName();
+      fetchCompanyData();
     }
   }, [id_perusahaan]);
 
@@ -46,7 +60,11 @@ export default function DirektoriDetail() {
         <Breadcrumb
           items={[
             { label: "Direktori IBS", link: "/admin/direktori" },
-            { label: isLoading ? "Memuat..." : companyName },
+            {
+              label: isLoading
+                ? "Memuat..."
+                : companyData?.nama_perusahaan || "Detail Perusahaan",
+            },
           ]}
         />
 
@@ -56,9 +74,22 @@ export default function DirektoriDetail() {
           </h2>
           <DetailDirektori id_perusahaan={id_perusahaan} />
 
-          {/* Tabel Riwayat Survei */}
+          {/* Tabel Riwayat Survei - Sekarang menggunakan KIP */}
           <div className="mt-8 border-t pt-6">
-            <RiwayatSurveiPerusahaan id_perusahaan={id_perusahaan} />
+            {companyData?.kip ? (
+              <RiwayatSurveiPerusahaan kip={companyData.kip} />
+            ) : (
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold mb-4">Riwayat Survei</h3>
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500">
+                    {isLoading
+                      ? "Memuat data..."
+                      : "KIP perusahaan tidak tersedia"}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

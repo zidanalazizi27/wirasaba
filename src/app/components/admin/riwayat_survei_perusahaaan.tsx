@@ -11,14 +11,16 @@ interface RiwayatSurvei {
   nama_pcl: string;
   selesai: string;
   ket_survei: string;
+  nama_perusahaan: string;
+  kip: string;
 }
 
 interface RiwayatSurveiPerusahaanProps {
-  id_perusahaan: string | string[];
+  kip: string | string[];
 }
 
 const RiwayatSurveiPerusahaan: React.FC<RiwayatSurveiPerusahaanProps> = ({
-  id_perusahaan,
+  kip,
 }) => {
   const [riwayatList, setRiwayatList] = useState<RiwayatSurvei[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,13 +28,13 @@ const RiwayatSurveiPerusahaan: React.FC<RiwayatSurveiPerusahaanProps> = ({
 
   useEffect(() => {
     const fetchRiwayatSurvei = async () => {
-      if (!id_perusahaan) return;
+      if (!kip) return;
 
       try {
         setIsLoading(true);
-        // Endpoint khusus untuk mendapatkan riwayat survei berdasarkan ID perusahaan
+        // Endpoint untuk mendapatkan riwayat survei berdasarkan KIP
         const response = await fetch(
-          `/api/perusahaan/${id_perusahaan}/riwayat-survei`
+          `/api/riwayat-survei/by-kip?kip=${encodeURIComponent(kip)}`
         );
 
         if (!response.ok) {
@@ -55,7 +57,7 @@ const RiwayatSurveiPerusahaan: React.FC<RiwayatSurveiPerusahaanProps> = ({
     };
 
     fetchRiwayatSurvei();
-  }, [id_perusahaan]);
+  }, [kip]);
 
   if (isLoading) {
     return (
@@ -88,36 +90,32 @@ const RiwayatSurveiPerusahaan: React.FC<RiwayatSurveiPerusahaanProps> = ({
       <h3 className="text-lg font-semibold mb-4 text-center">Riwayat Survei</h3>
 
       {riwayatList.length === 0 ? (
-        <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-6 rounded text-center">
-          Tidak ada data riwayat survei untuk perusahaan ini
+        <div className="text-center py-8 bg-gray-50 rounded-lg">
+          <p className="text-cdark">
+            Belum ada riwayat survei untuk Perusahaan ini
+          </p>
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cdark tracking-wider border-b">
                   No
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cdark tracking-wider border-b">
                   Nama Survei
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
-                  Fungsi
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
-                  Periode
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cdark tracking-wider border-b">
                   Tahun
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cdark tracking-wider border-b">
                   PCL
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cdark tracking-wider border-b">
                   Selesai
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 tracking-wider border-b">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cdark tracking-wider border-b">
                   Keterangan
                 </th>
               </tr>
@@ -125,42 +123,58 @@ const RiwayatSurveiPerusahaan: React.FC<RiwayatSurveiPerusahaanProps> = ({
             <tbody className="divide-y divide-gray-200">
               {riwayatList.map((riwayat, index) => (
                 <tr key={riwayat.id_riwayat} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-sm text-gray-900">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-cdark border-b">
                     {index + 1}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-900">
+                  <td className="px-4 py-3 text-xs text-cdark border-b">
                     {riwayat.nama_survei}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-900">
-                    {riwayat.fungsi}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-900">
-                    {riwayat.periode}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-900">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-cdark border-b">
                     {riwayat.tahun}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-900">
+                  <td className="px-4 py-3 text-xs text-cdark border-b">
                     {riwayat.nama_pcl}
                   </td>
-                  <td className="px-4 py-2 text-sm">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs border-b">
                     <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${
                         riwayat.selesai === "Iya"
                           ? "bg-green-100 text-green-800"
-                          : "bg-yellow-100 text-yellow-800"
+                          : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {riwayat.selesai}
+                      {riwayat.selesai === "Iya" ? "Iya" : "Tidak"}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-900">
+                  <td className="px-4 py-3 text-xs text-cdark border-b">
                     {riwayat.ket_survei || "-"}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {/* Summary Information */}
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-blue-700">Total Survei:</span>
+                <span className="ml-2">{riwayatList.length}</span>
+              </div>
+              <div>
+                <span className="font-medium text-green-700">Selesai:</span>
+                <span className="ml-2">
+                  {riwayatList.filter((r) => r.selesai === "Iya").length}
+                </span>
+              </div>
+              <div>
+                <span className="font-medium text-red-700">Belum Selesai:</span>
+                <span className="ml-2">
+                  {riwayatList.filter((r) => r.selesai === "Tidak").length}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
