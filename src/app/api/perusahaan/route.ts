@@ -23,6 +23,19 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "10");
   const offset = (page - 1) * limit;
 
+  // Parse sorting parameters
+  const sortString = searchParams.get("sort");
+  let sortDescriptors: Array<{ column: string; direction: string }> = [];
+  
+  if (sortString) {
+    try {
+      sortDescriptors = JSON.parse(sortString);
+    } catch (error) {
+      console.error("Error parsing sort parameters:", error);
+      sortDescriptors = [];
+    }
+  }
+
   try {
     // Buat koneksi ke database
     const connection = await mysql.createConnection({
@@ -57,7 +70,42 @@ export async function GET(request: NextRequest) {
       ? "WHERE " + whereConditions.join(" AND ") 
       : "";
 
-    // Query untuk menghitung total data dan data survei
+    // Build ORDER BY clause
+    let orderByClause = "";
+    if (sortDescriptors.length > 0) {
+      const orderByParts = sortDescriptors.map(sort => {
+        const direction = sort.direction === "descending" ? "DESC" : "ASC";
+        
+        // Map column names to their table prefixes
+        let columnWithPrefix;
+        switch (sort.column) {
+          case "kip":
+            columnWithPrefix = "p.kip";
+            break;
+          case "nama_perusahaan":
+            columnWithPrefix = "p.nama_perusahaan";
+            break;
+          case "alamat":
+            columnWithPrefix = "p.alamat";
+            break;
+          case "jarak":
+            columnWithPrefix = "CAST(REPLACE(REPLACE(p.jarak, ' km', ''), ',', '.') AS DECIMAL(10,2))";
+            break;
+          case "pcl_utama":
+            columnWithPrefix = "p.pcl_utama";
+            break;
+          default:
+            columnWithPrefix = "p.id_perusahaan";
+        }
+        
+        return `${columnWithPrefix} ${direction}`;
+      });
+      orderByClause = "ORDER BY " + orderByParts.join(", ");
+    } else {
+      orderByClause = "ORDER BY p.id_perusahaan ASC";
+    }
+
+    // Query untuk menghitung total data dan data survei berdasarkan KIP
     const [rows] = await connection.execute(
       `SELECT 
         p.id_perusahaan, 
@@ -66,13 +114,21 @@ export async function GET(request: NextRequest) {
         p.alamat, 
         p.jarak,
         p.pcl_utama,
-        (SELECT COUNT(*) FROM riwayat_survei rs WHERE rs.id_perusahaan = p.id_perusahaan) AS total_survei,
-        (SELECT COUNT(*) FROM riwayat_survei rs WHERE rs.id_perusahaan = p.id_perusahaan AND rs.selesai = 'Iya') AS completed_survei
+        -- Total survei berdasarkan KIP (dari semua perusahaan dengan KIP yang sama)
+        (SELECT COUNT(*) 
+         FROM riwayat_survei rs 
+         JOIN perusahaan p2 ON rs.id_perusahaan = p2.id_perusahaan 
+         WHERE p2.kip = p.kip) AS total_survei,
+        -- Survei selesai berdasarkan KIP (dari semua perusahaan dengan KIP yang sama)
+        (SELECT COUNT(*) 
+         FROM riwayat_survei rs 
+         JOIN perusahaan p2 ON rs.id_perusahaan = p2.id_perusahaan 
+         WHERE p2.kip = p.kip AND rs.selesai = 'Iya') AS completed_survei
       FROM perusahaan p
       JOIN direktori d ON p.id_perusahaan = d.id_perusahaan
       ${whereClause}
       GROUP BY p.id_perusahaan
-      ORDER BY p.id_perusahaan ASC`,
+      ${orderByClause}`,
       [...queryParams]
     );
 
@@ -109,17 +165,22 @@ export async function GET(request: NextRequest) {
     await connection.end();
 
     return NextResponse.json({
+      success: true,
       data: paginatedRows,
       pagination: {
         total,
         totalPages,
         currentPage: page,
         perPage: limit,
-      }
+      },
+      message: `Data berhasil diambil. Menampilkan ${paginatedRows.length} dari ${total} perusahaan.`
     });
   } catch (error) {
     console.error("Database error:", error);
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      message: "Error saat mengambil data perusahaan: " + error.message 
+    }, { status: 500 });
   }
 }
 

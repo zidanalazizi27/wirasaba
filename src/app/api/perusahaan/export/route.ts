@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       return "rendah";
     };
 
-    // Query sederhana tanpa join untuk tabel referensi
+    // Query untuk mendapatkan data perusahaan
     let baseQuery = `
       SELECT 
         p.id_perusahaan,
@@ -152,10 +152,10 @@ export async function GET(request: NextRequest) {
     const [rows] = await connection.execute(baseQuery, queryParams);
     console.log("Query executed, rows found:", (rows as any[]).length);
 
-    // Jika perlu data survei, ambil secara terpisah untuk setiap perusahaan
+    // Ambil data survei berdasarkan KIP untuk setiap perusahaan
     const perusahaanData = rows as any[];
     
-    // Query untuk mendapatkan data direktori dan survei dengan format selesai yang benar
+    // Query untuk mendapatkan data direktori dan survei berdasarkan KIP
     const enrichedData = await Promise.all(
       perusahaanData.map(async (row) => {
         try {
@@ -166,19 +166,21 @@ export async function GET(request: NextRequest) {
             [row.id_perusahaan]
           );
           
-          // PERBAIKAN: Get survei data dengan format selesai yang benar (string "Iya"/"Tidak")
+          // PERUBAHAN UTAMA: Get survei data berdasarkan KIP (bukan id_perusahaan)
           const [surveiRows] = await connection.execute(
             `SELECT 
                COUNT(*) as total_survei,
-               COUNT(CASE WHEN selesai = 'Iya' THEN 1 END) as completed_survei
-             FROM riwayat_survei WHERE id_perusahaan = ?`,
-            [row.id_perusahaan]
+               COUNT(CASE WHEN rs.selesai = 'Iya' THEN 1 END) as completed_survei
+             FROM riwayat_survei rs
+             JOIN perusahaan p2 ON rs.id_perusahaan = p2.id_perusahaan
+             WHERE p2.kip = ?`,
+            [row.kip]
           );
 
           const direktoriData = (direktoriRows as any[])[0];
           const surveiData = (surveiRows as any[])[0];
 
-          console.log(`Company ${row.id_perusahaan} - Total: ${surveiData?.total_survei}, Completed: ${surveiData?.completed_survei}`);
+          console.log(`Company ${row.id_perusahaan} (KIP: ${row.kip}) - Total: ${surveiData?.total_survei}, Completed: ${surveiData?.completed_survei}`);
 
           return {
             ...row,
@@ -217,7 +219,7 @@ export async function GET(request: NextRequest) {
       filteredData.slice(0, 3).forEach((row, index) => {
         const percentage = row.total_survei > 0 ? Math.round((row.completed_survei / row.total_survei) * 100) : 0;
         const status = getStatus(row.total_survei, row.completed_survei);
-        console.log(`Sample ${index + 1}: ${row.nama_perusahaan} - Total: ${row.total_survei}, Completed: ${row.completed_survei}, Percentage: ${percentage}%, Status: ${status}`);
+        console.log(`Sample ${index + 1}: ${row.nama_perusahaan} (KIP: ${row.kip}) - Total: ${row.total_survei}, Completed: ${row.completed_survei}, Percentage: ${percentage}%, Status: ${status}`);
       });
     }
 
@@ -260,10 +262,10 @@ export async function GET(request: NextRequest) {
         "PCL Utama": row.pcl_utama || "",
         "Catatan": row.catatan || "",
         "Tahun Direktori": row.tahun_direktori || "",
-        "Total Survei": totalSurvei,
-        "Survei Selesai": completedSurvei,
+        "Total Survei (Berdasarkan KIP)": totalSurvei, // PERUBAHAN: Menambahkan label "Berdasarkan KIP"
+        "Survei Selesai (Berdasarkan KIP)": completedSurvei, // PERUBAHAN: Menambahkan label "Berdasarkan KIP"
         "Persentase Penyelesaian (%)": completionPercentage,
-        "Status": statusValue
+        "Status Survei": statusValue
       };
     });
 
@@ -307,10 +309,10 @@ export async function GET(request: NextRequest) {
       { wch: 15 },  // PCL Utama
       { wch: 30 },  // Catatan
       { wch: 15 },  // Tahun Direktori
-      { wch: 12 },  // Total Survei
-      { wch: 12 },  // Survei Selesai
+      { wch: 20 },  // Total Survei (Berdasarkan KIP)
+      { wch: 20 },  // Survei Selesai (Berdasarkan KIP)
       { wch: 20 },  // Persentase Penyelesaian
-      { wch: 12 }   // Status
+      { wch: 15 }   // Status Survei
     ];
     worksheet['!cols'] = columnWidths;
 
@@ -332,7 +334,7 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
     
-    let filename = `direktori-perusahaan-${timestamp}`;
+    let filename = `direktori-perusahaan-kip-based-${timestamp}`;
     if (year && year !== "all") filename += `-tahun-${year}`;
     if (search) filename += `-search-${search.substring(0, 10)}`;
     if (status && status !== "all") filename += `-status-${status}`;

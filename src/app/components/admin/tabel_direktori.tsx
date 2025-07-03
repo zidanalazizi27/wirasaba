@@ -11,6 +11,14 @@ import React, {
 import type { SVGProps } from "react";
 import { useRouter } from "next/navigation";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
+import {
+  determineSurveyStatus,
+  getStatusText,
+  getStatusColorClasses,
+  getTooltipColor,
+  createTooltipText,
+  SurveyStatusData,
+} from "@/app/utils/surveyStatusUtils";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -392,6 +400,7 @@ type Business = {
   total_survei: number;
   completed_survei: number;
 };
+
 type SortDirection = "ascending" | "descending" | null;
 
 interface SortDescriptor {
@@ -1562,46 +1571,25 @@ const TabelDirektori = () => {
           );
         // Perbarui kode untuk status di renderCell
         case "status":
-          const statusText =
-            cellValue === "tinggi"
-              ? "Tinggi"
-              : cellValue === "sedang"
-                ? "Sedang"
-                : cellValue === "rendah"
-                  ? "Rendah"
-                  : "Kosong";
+          const statusData: SurveyStatusData = {
+            total_survei: business.total_survei,
+            completed_survei: business.completed_survei,
+            completion_percentage: business.completion_percentage,
+            status: business.status,
+            status_text: getStatusText(business.status),
+          };
 
-          const tooltipText =
-            cellValue === "kosong"
-              ? "Tidak ada riwayat survei"
-              : `${business.completion_percentage}% survei selesai (${business.completed_survei}/${business.total_survei})`;
+          const colorClasses = getStatusColorClasses(business.status);
+          const tooltipText = createTooltipText(statusData);
+          const tooltipColor = getTooltipColor(business.status);
 
           return (
-            <Tooltip
-              content={tooltipText}
-              color={
-                cellValue === "tinggi"
-                  ? "primary"
-                  : cellValue === "sedang"
-                    ? "warning"
-                    : cellValue === "rendah"
-                      ? "danger"
-                      : "default"
-              }
-            >
+            <Tooltip content={tooltipText} color={tooltipColor}>
               <div className="flex flex-col">
                 <span
-                  className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${
-                    cellValue === "tinggi"
-                      ? "bg-green-100 text-green-800"
-                      : cellValue === "sedang"
-                        ? "bg-amber-100 text-amber-800"
-                        : cellValue === "rendah"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-gray-100 text-gray-800"
-                  }`}
+                  className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${colorClasses.bg} ${colorClasses.text}`}
                 >
-                  {statusText}
+                  {statusData.status_text}
                 </span>
               </div>
             </Tooltip>
