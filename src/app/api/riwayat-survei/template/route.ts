@@ -8,42 +8,43 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔄 Generating riwayat survei template...');
 
-    // Define the template structure for riwayat survei
+    // Template data dengan informasi lengkap untuk verifikasi relasi
     const templateData = [
       {
-        'id_survei': 1,
-        'id_perusahaan': 1,
-        'id_pcl': 1,
+        'kip': '1234567890',
+        'nama_perusahaan': 'PT. Industri Manufaktur Jaya',
+        'nama_survei': 'Survei Industri Besar dan Sedang',
+        'tahun': 2024,
+        'nama_pcl': 'Ahmad Wijaya',
         'selesai': 'Iya',
         'ket_survei': 'Survei telah selesai dilaksanakan'
       },
       {
-        'id_survei': 2,
-        'id_perusahaan': 2,
-        'id_pcl': 2,
+        'kip': '2345678901',
+        'nama_perusahaan': 'CV. Teknologi Berkembang',
+        'nama_survei': 'Survei Tahunan Perusahaan',
+        'tahun': 2024,
+        'nama_pcl': 'Siti Nurhaliza',
         'selesai': 'Tidak',
         'ket_survei': 'Perusahaan tutup sementara'
       },
       {
-        'id_survei': 1,
-        'id_perusahaan': 3,
-        'id_pcl': 1,
+        'kip': '1422345678',
+        'nama_perusahaan': 'PT. Global Industries',
+        'nama_survei': 'Survei Industri Besar dan Sedang',
+        'tahun': 2024,
+        'nama_pcl': 'Ahmad Wijaya',
         'selesai': 'Iya',
-        'ket_survei': ''
+        'ket_survei': 'Data lengkap dan valid'
       },
       {
-        'id_survei': 3,
-        'id_perusahaan': 1,
-        'id_pcl': 3,
+        'kip': '123456789',
+        'nama_perusahaan': 'PT. Maju Bersama',
+        'nama_survei': 'Survei Khusus Industri',
+        'tahun': 2023,
+        'nama_pcl': 'Budi Santoso',
         'selesai': 'Tidak',
         'ket_survei': 'Narasumber tidak bersedia'
-      },
-      {
-        'id_survei': 2,
-        'id_perusahaan': 4,
-        'id_pcl': 2,
-        'selesai': 'Iya',
-        'ket_survei': 'Survei berhasil diselesaikan'
       }
     ];
 
@@ -51,11 +52,13 @@ export async function GET(request: NextRequest) {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(templateData);
 
-    // Set column widths for better readability
+    // Set column widths untuk template dengan data relasi
     const columnWidths = [
-      { wch: 12 }, // id_survei
-      { wch: 15 }, // id_perusahaan
-      { wch: 10 }, // id_pcl
+      { wch: 12 }, // kip
+      { wch: 35 }, // nama_perusahaan
+      { wch: 35 }, // nama_survei
+      { wch: 8 },  // tahun
+      { wch: 20 }, // nama_pcl
       { wch: 12 }, // selesai
       { wch: 40 }  // ket_survei
     ];
@@ -66,16 +69,18 @@ export async function GET(request: NextRequest) {
 
     // Create instructions sheet
     const instructionsData = [
-      { 'Field': 'id_survei', 'Tipe Data': 'Number', 'Wajib': 'Ya', 'Keterangan': 'ID survei yang ada dalam database survei' },
-      { 'Field': 'id_perusahaan', 'Tipe Data': 'Number', 'Wajib': 'Ya', 'Keterangan': 'ID perusahaan yang ada dalam database perusahaan' },
-      { 'Field': 'id_pcl', 'Tipe Data': 'Number', 'Wajib': 'Ya', 'Keterangan': 'ID PCL yang ada dalam database pcl' },
+      { 'Field': 'kip', 'Tipe Data': 'Text', 'Wajib': 'Ya', 'Keterangan': 'KIP perusahaan yang terdaftar dalam database (maksimal 10 digit)' },
+      { 'Field': 'nama_perusahaan', 'Tipe Data': 'Text', 'Wajib': 'Ya', 'Keterangan': 'Nama perusahaan yang sesuai dengan KIP di database' },
+      { 'Field': 'nama_survei', 'Tipe Data': 'Text', 'Wajib': 'Ya', 'Keterangan': 'Nama survei yang terdaftar dalam database survei' },
+      { 'Field': 'tahun', 'Tipe Data': 'Number', 'Wajib': 'Ya', 'Keterangan': 'Tahun survei yang sesuai dengan nama survei di database' },
+      { 'Field': 'nama_pcl', 'Tipe Data': 'Text', 'Wajib': 'Ya', 'Keterangan': 'Nama PCL yang terdaftar dalam database PCL' },
       { 'Field': 'selesai', 'Tipe Data': 'Text', 'Wajib': 'Ya', 'Keterangan': 'Status penyelesaian survei: "Iya" atau "Tidak"' },
       { 'Field': 'ket_survei', 'Tipe Data': 'Text', 'Wajib': 'Tidak', 'Keterangan': 'Keterangan tambahan mengenai survei (maksimal 500 karakter)' }
     ];
 
     const instructionsSheet = XLSX.utils.json_to_sheet(instructionsData);
     instructionsSheet['!cols'] = [
-      { wch: 15 }, // Field
+      { wch: 18 }, // Field
       { wch: 12 }, // Tipe Data
       { wch: 8 },  // Wajib
       { wch: 60 }  // Keterangan
@@ -85,12 +90,15 @@ export async function GET(request: NextRequest) {
 
     // Create validation rules sheet
     const validationData = [
-      { 'Validasi': 'ID Survei', 'Aturan': 'Harus berupa angka dan terdapat dalam database survei' },
-      { 'Validasi': 'ID Perusahaan', 'Aturan': 'Harus berupa angka dan terdapat dalam database perusahaan' },
-      { 'Validasi': 'ID PCL', 'Aturan': 'Harus berupa angka dan terdapat dalam database PCL' },
+      { 'Validasi': 'KIP', 'Aturan': 'Maksimal 10 digit dan terdapat dalam database perusahaan' },
+      { 'Validasi': 'Nama Perusahaan', 'Aturan': 'Harus sesuai dengan KIP yang diinput dan terdaftar di database perusahaan' },
+      { 'Validasi': 'Nama Survei', 'Aturan': 'Harus terdapat dalam database survei dan aktif' },
+      { 'Validasi': 'Tahun', 'Aturan': 'Harus sesuai dengan tahun survei yang terdaftar di database' },
+      { 'Validasi': 'Nama PCL', 'Aturan': 'Harus terdapat dalam database PCL dan status aktif' },
       { 'Validasi': 'Status Selesai', 'Aturan': 'Hanya boleh diisi dengan "Iya" atau "Tidak" (case sensitive)' },
       { 'Validasi': 'Keterangan', 'Aturan': 'Boleh kosong, maksimal 500 karakter' },
-      { 'Validasi': 'Duplikasi', 'Aturan': 'Kombinasi id_survei + id_perusahaan harus unik' },
+      { 'Validasi': 'Duplikasi', 'Aturan': 'Kombinasi KIP + Nama Survei + Tahun harus unik' },
+      { 'Validasi': 'Relasi Data', 'Aturan': 'Semua data harus konsisten dengan data yang ada di database terkait' },
       { 'Validasi': 'Format File', 'Aturan': 'File harus dalam format .xlsx, .xls, atau .csv' }
     ];
 
@@ -102,34 +110,41 @@ export async function GET(request: NextRequest) {
 
     XLSX.utils.book_append_sheet(workbook, validationSheet, 'Aturan Validasi');
 
-    // Create reference data sheet dengan contoh ID yang valid
+    // Create reference data sheet
     const referenceData = [
-      { 'Tabel': 'Survei', 'Contoh ID': '1, 2, 3, ...', 'Keterangan': 'Lihat tabel survei untuk ID yang tersedia' },
-      { 'Tabel': 'Perusahaan', 'Contoh ID': '1, 2, 3, ...', 'Keterangan': 'Lihat tabel perusahaan untuk ID yang tersedia' },
-      { 'Tabel': 'PCL', 'Contoh ID': '1, 2, 3, ...', 'Keterangan': 'Lihat tabel PCL untuk ID yang tersedia' },
-      { 'Tabel': '', 'Contoh ID': '', 'Keterangan': '' },
-      { 'Tabel': 'Status Selesai', 'Contoh ID': 'Iya / Tidak', 'Keterangan': 'Nilai yang diperbolehkan (case sensitive)' }
+      { 'Verifikasi': 'KIP + Nama Perusahaan', 'Penjelasan': 'Sistem akan mengecek apakah KIP dan nama perusahaan cocok di database' },
+      { 'Verifikasi': 'Nama Survei + Tahun', 'Penjelasan': 'Sistem akan mengecek apakah kombinasi nama survei dan tahun valid' },
+      { 'Verifikasi': 'Nama PCL', 'Penjelasan': 'Sistem akan mengecek apakah PCL terdaftar dan aktif' },
+      { 'Verifikasi': 'Konsistensi Data', 'Penjelasan': 'Semua field harus konsisten dengan data master di database' },
+      { 'Verifikasi': '', 'Penjelasan': '' },
+      { 'Verifikasi': 'Contoh Valid:', 'Penjelasan': '' },
+      { 'Verifikasi': 'KIP', 'Penjelasan': '1234567890123456 (16 digit, terdaftar di database)' },
+      { 'Verifikasi': 'Perusahaan', 'Penjelasan': 'PT. Industri Manufaktur Jaya (sesuai dengan KIP)' },
+      { 'Verifikasi': 'Survei', 'Penjelasan': 'Survei Industri Besar dan Sedang (terdaftar di database)' },
+      { 'Verifikasi': 'Tahun', 'Penjelasan': '2024 (sesuai dengan tahun survei)' },
+      { 'Verifikasi': 'PCL', 'Penjelasan': 'Ahmad Wijaya (terdaftar dan aktif)' }
     ];
 
     const referenceSheet = XLSX.utils.json_to_sheet(referenceData);
     referenceSheet['!cols'] = [
-      { wch: 15 }, // Tabel
-      { wch: 20 }, // Contoh ID
-      { wch: 50 }  // Keterangan
+      { wch: 25 }, // Verifikasi
+      { wch: 60 }  // Penjelasan
     ];
 
-    XLSX.utils.book_append_sheet(workbook, referenceSheet, 'Data Referensi');
+    XLSX.utils.book_append_sheet(workbook, referenceSheet, 'Verifikasi Relasi');
 
     // Create information sheet
     const infoData = [
       { 'Informasi': 'Format File', 'Detail': 'File harus dalam format .xlsx, .xls, atau .csv' },
       { 'Informasi': 'Ukuran File', 'Detail': 'Maksimal 10MB per file' },
       { 'Informasi': 'Header Kolom', 'Detail': 'Jangan ubah nama kolom pada baris pertama' },
-      { 'Informasi': 'Field Wajib', 'Detail': 'id_survei, id_perusahaan, id_pcl, selesai (4 field HARUS DIISI)' },
+      { 'Informasi': 'Field Wajib', 'Detail': 'kip, nama_perusahaan, nama_survei, tahun, nama_pcl, selesai (6 field HARUS DIISI)' },
       { 'Informasi': 'Field Opsional', 'Detail': 'ket_survei (boleh dikosongkan)' },
-      { 'Informasi': 'Validasi Duplikasi', 'Detail': 'Sistem akan mengecek duplikasi berdasarkan kombinasi id_survei + id_perusahaan' },
+      { 'Informasi': 'Validasi Duplikasi', 'Detail': 'Sistem akan mengecek duplikasi berdasarkan KIP + Nama Survei + Tahun' },
+      { 'Informasi': 'Validasi Relasi', 'Detail': 'Sistem akan memverifikasi kecocokan data dengan tabel perusahaan, survei, dan PCL' },
       { 'Informasi': 'Mode Upload', 'Detail': 'Tambah Data: menambah/update data existing | Ganti Semua: hapus semua data existing' },
-      { 'Informasi': 'Relasi Data', 'Detail': 'ID yang digunakan harus sudah tersedia di tabel survei, perusahaan, dan pcl' }
+      { 'Informasi': 'Verifikasi Otomatis', 'Detail': 'Sistem akan mengonversi nama menjadi ID yang sesuai secara otomatis' },
+      { 'Informasi': 'Error Handling', 'Detail': 'Jika ada data yang tidak cocok, sistem akan memberikan pesan error detail' }
     ];
 
     const infoSheet = XLSX.utils.json_to_sheet(infoData);
@@ -148,7 +163,7 @@ export async function GET(request: NextRequest) {
       compression: true
     });
 
-    console.log('✅ Riwayat survei template generated successfully');
+    console.log('✅ Riwayat survei template with relation verification generated successfully');
 
     // Get current date for filename
     const currentDate = new Date();
