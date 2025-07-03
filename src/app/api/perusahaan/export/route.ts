@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import mysql from "mysql2/promise";
 import * as XLSX from "xlsx";
+import {
+  calculateSurveyStatus
+} from "@/app/utils/surveyStatusUtils";
 
 export async function GET(request: NextRequest) {
   console.log("Starting Excel export...");
@@ -49,18 +52,7 @@ export async function GET(request: NextRequest) {
 
     console.log("Database connected successfully");
 
-    // Fungsi untuk menentukan status berdasarkan range yang benar
-    const getStatus = (totalCount: number, completedCount: number): string => {
-      if (totalCount === 0) return "kosong";
-      
-      const percentage = (completedCount / totalCount) * 100;
-      
-      if (percentage >= 80) return "tinggi";
-      if (percentage >= 50) return "sedang";
-      return "rendah";
-    };
-
-    // Query untuk mendapatkan data perusahaan
+    // Query sederhana tanpa join untuk tabel referensi
     let baseQuery = `
       SELECT 
         p.id_perusahaan,
@@ -98,7 +90,7 @@ export async function GET(request: NextRequest) {
     const whereConditions: string[] = [];
 
     // Filter berdasarkan tahun direktori (jika ada)
-    if (year && year !== "all") {
+    if (year && year !== "all" && year !== "") {
       baseQuery += ` INNER JOIN direktori d ON p.id_perusahaan = d.id_perusahaan`;
       whereConditions.push("d.thn_direktori = ?");
       queryParams.push(year);
@@ -128,9 +120,10 @@ export async function GET(request: NextRequest) {
 
     // Tambahkan sorting jika ada
     if (sortParams.length > 0) {
-      const orderClauses = sortParams.map(sort => {
+    const orderClauses = sortParams
+      .filter(sort => sort.column && sort.direction) // Filter valid sort params
+      .map(sort => {
         const direction = sort.direction === "ascending" ? "ASC" : "DESC";
-        // Map kolom UI ke kolom database
         const columnMap: { [key: string]: string } = {
           kip: "p.kip",
           nama_perusahaan: "p.nama_perusahaan", 
@@ -141,7 +134,12 @@ export async function GET(request: NextRequest) {
         const dbColumn = columnMap[sort.column] || `p.${sort.column}`;
         return `${dbColumn} ${direction}`;
       });
+      
+    if (orderClauses.length > 0) {
       baseQuery += ` ORDER BY ${orderClauses.join(", ")}`;
+    } else {
+      baseQuery += ` ORDER BY p.nama_perusahaan ASC`;
+    }
     } else {
       baseQuery += ` ORDER BY p.nama_perusahaan ASC`;
     }
@@ -152,10 +150,10 @@ export async function GET(request: NextRequest) {
     const [rows] = await connection.execute(baseQuery, queryParams);
     console.log("Query executed, rows found:", (rows as any[]).length);
 
-    // Ambil data survei berdasarkan KIP untuk setiap perusahaan
+    // Jika perlu data survei, ambil secara terpisah untuk setiap perusahaan
     const perusahaanData = rows as any[];
     
-    // Query untuk mendapatkan data direktori dan survei berdasarkan KIP
+    // Query untuk mendapatkan data direktori dan survei dengan format selesai yang benar
     const enrichedData = await Promise.all(
       perusahaanData.map(async (row) => {
         try {
@@ -166,21 +164,21 @@ export async function GET(request: NextRequest) {
             [row.id_perusahaan]
           );
           
-          // PERUBAHAN UTAMA: Get survei data berdasarkan KIP (bukan id_perusahaan)
+          // PERBAIKAN: Get survei data dengan format selesai yang benar (string "Iya"/"Tidak")
           const [surveiRows] = await connection.execute(
             `SELECT 
-               COUNT(*) as total_survei,
-               COUNT(CASE WHEN rs.selesai = 'Iya' THEN 1 END) as completed_survei
-             FROM riwayat_survei rs
-             JOIN perusahaan p2 ON rs.id_perusahaan = p2.id_perusahaan
-             WHERE p2.kip = ?`,
+              COUNT(*) as total_survei,
+              COUNT(CASE WHEN rs.selesai = 'Iya' THEN 1 END) as completed_survei
+            FROM riwayat_survei rs
+            JOIN perusahaan p2 ON rs.id_perusahaan = p2.id_perusahaan
+            WHERE p2.kip = ?`,
             [row.kip]
           );
 
           const direktoriData = (direktoriRows as any[])[0];
           const surveiData = (surveiRows as any[])[0];
 
-          console.log(`Company ${row.id_perusahaan} (KIP: ${row.kip}) - Total: ${surveiData?.total_survei}, Completed: ${surveiData?.completed_survei}`);
+          console.log(`Company ${row.id_perusahaan} - Total: ${surveiData?.total_survei}, Completed: ${surveiData?.completed_survei}`);
 
           return {
             ...row,
@@ -206,8 +204,8 @@ export async function GET(request: NextRequest) {
     let filteredData = enrichedData;
     if (status && status !== "all") {
       filteredData = enrichedData.filter(row => {
-        const calculatedStatus = getStatus(row.total_survei, row.completed_survei);
-        return calculatedStatus === status;
+        const surveyStatusData = calculateSurveyStatus(row.completed_survei, row.total_survei);
+        return surveyStatusData.status === status;
       });
     }
 
@@ -217,141 +215,145 @@ export async function GET(request: NextRequest) {
     if (filteredData.length > 0) {
       console.log("Sample data for verification:");
       filteredData.slice(0, 3).forEach((row, index) => {
-        const percentage = row.total_survei > 0 ? Math.round((row.completed_survei / row.total_survei) * 100) : 0;
-        const status = getStatus(row.total_survei, row.completed_survei);
-        console.log(`Sample ${index + 1}: ${row.nama_perusahaan} (KIP: ${row.kip}) - Total: ${row.total_survei}, Completed: ${row.completed_survei}, Percentage: ${percentage}%, Status: ${status}`);
+        const surveyStatusData = calculateSurveyStatus(row.completed_survei, row.total_survei);
+        console.log(`Sample ${index + 1}: ${row.nama_perusahaan} - Total: ${row.total_survei}, Completed: ${row.completed_survei}, Percentage: ${surveyStatusData.completion_percentage}%, Status: ${surveyStatusData.status_text}`);
       });
     }
 
     // Format data untuk export dengan auto increment yang benar
     const exportData = filteredData.map((row, index) => {
-      const totalSurvei = row.total_survei || 0;
-      const completedSurvei = row.completed_survei || 0;
-      const completionPercentage = totalSurvei > 0 ? Math.round((completedSurvei / totalSurvei) * 100) : 0;
-      
-      // Gunakan fungsi getStatus dengan range yang benar
-      const statusValue = getStatus(totalSurvei, completedSurvei);
-
-      return {
-        "No": index + 1, // Auto increment berdasarkan urutan data yang berhasil diunduh
-        "KIP": row.kip || "",
-        "Nama Perusahaan": row.nama_perusahaan || "",
-        "Badan Usaha": row.badan_usaha || "", // Kode referensi saja
-        "Alamat": row.alamat || "",
-        "Kecamatan": row.kec || "", // Kode referensi saja
-        "Desa": row.des || "", // Kode referensi saja
-        "Kode Pos": row.kode_pos || "",
-        "Skala": row.skala || "",
-        "Lokasi Perusahaan": row.lok_perusahaan || "", // Kode referensi saja
-        "Nama Kawasan": row.nama_kawasan || "",
-        "Latitude": row.lat || "",
-        "Longitude": row.lon || "",
-        "Jarak (km)": row.jarak || "",
-        "Produk": row.produk || "",
-        "KBLI": row.KBLI || "",
-        "Telepon Perusahaan": row.telp_perusahaan || "",
-        "Email Perusahaan": row.email_perusahaan || "",
-        "Website Perusahaan": row.web_perusahaan || "",
-        "Tenaga Kerja": row.tkerja || "", // Kode referensi saja
-        "Investasi": row.investasi || "", // Kode referensi saja
-        "Omset": row.omset || "", // Kode referensi saja
-        "Nama Narasumber": row.nama_narasumber || "",
-        "Jabatan Narasumber": row.jbtn_narasumber || "",
-        "Email Narasumber": row.email_narasumber || "",
-        "Telepon Narasumber": row.telp_narasumber || "",
-        "PCL Utama": row.pcl_utama || "",
-        "Catatan": row.catatan || "",
-        "Tahun Direktori": row.tahun_direktori || "",
-        "Total Survei (Berdasarkan KIP)": totalSurvei, // PERUBAHAN: Menambahkan label "Berdasarkan KIP"
-        "Survei Selesai (Berdasarkan KIP)": completedSurvei, // PERUBAHAN: Menambahkan label "Berdasarkan KIP"
-        "Persentase Penyelesaian (%)": completionPercentage,
-        "Status Survei": statusValue
-      };
-    });
-
-    console.log("Export data formatted, creating Excel...");
-
-    // Tutup koneksi database
-    await connection.end();
-
-    // Buat workbook Excel
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-
-    // Set column widths yang disesuaikan
-    const columnWidths = [
-      { wch: 5 },   // No
-      { wch: 15 },  // KIP
-      { wch: 30 },  // Nama Perusahaan
-      { wch: 10 },  // Badan Usaha (kode)
-      { wch: 40 },  // Alamat
-      { wch: 10 },  // Kecamatan (kode)
-      { wch: 10 },  // Desa (kode)
-      { wch: 10 },  // Kode Pos
-      { wch: 10 },  // Skala
-      { wch: 10 },  // Lokasi Perusahaan (kode)
-      { wch: 20 },  // Nama Kawasan
-      { wch: 15 },  // Latitude
-      { wch: 15 },  // Longitude
-      { wch: 12 },  // Jarak
-      { wch: 30 },  // Produk
-      { wch: 10 },  // KBLI
-      { wch: 15 },  // Telepon Perusahaan
-      { wch: 25 },  // Email Perusahaan
-      { wch: 25 },  // Website Perusahaan
-      { wch: 10 },  // Tenaga Kerja (kode)
-      { wch: 10 },  // Investasi (kode)
-      { wch: 10 },  // Omset (kode)
-      { wch: 20 },  // Nama Narasumber
-      { wch: 20 },  // Jabatan Narasumber
-      { wch: 25 },  // Email Narasumber
-      { wch: 15 },  // Telepon Narasumber
-      { wch: 15 },  // PCL Utama
-      { wch: 30 },  // Catatan
-      { wch: 15 },  // Tahun Direktori
-      { wch: 20 },  // Total Survei (Berdasarkan KIP)
-      { wch: 20 },  // Survei Selesai (Berdasarkan KIP)
-      { wch: 20 },  // Persentase Penyelesaian
-      { wch: 15 }   // Status Survei
-    ];
-    worksheet['!cols'] = columnWidths;
-
-    // Tambahkan worksheet ke workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Direktori Perusahaan");
-
-    console.log("Excel workbook created, generating buffer...");
-
-    // Generate Excel buffer
-    const excelBuffer = XLSX.write(workbook, { 
-      type: 'buffer', 
-      bookType: 'xlsx',
-      compression: true
-    });
-
-    console.log("Excel buffer generated, size:", excelBuffer.length);
-
-    // Generate filename dengan timestamp dan filter info
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    const totalSurvei = row.total_survei || 0;
+    const completedSurvei = row.completed_survei || 0;
     
-    let filename = `direktori-perusahaan-kip-based-${timestamp}`;
-    if (year && year !== "all") filename += `-tahun-${year}`;
-    if (search) filename += `-search-${search.substring(0, 10)}`;
-    if (status && status !== "all") filename += `-status-${status}`;
-    if (pcl && pcl !== "all") filename += `-pcl-${pcl.substring(0, 10)}`;
-    filename += '.xlsx';
+    // Gunakan utils yang sudah ada untuk konsistensi
+    const surveyStatusData = calculateSurveyStatus(completedSurvei, totalSurvei);
 
-    console.log("Sending Excel file:", filename);
+    return {
+      "No": index + 1,
+      "KIP": row.kip || "",
+      "Nama Perusahaan": row.nama_perusahaan || "",
+      "Badan Usaha": row.badan_usaha || "",
+      "Alamat": row.alamat || "",
+      "Kecamatan": row.kec || "",
+      "Desa": row.des || "",
+      "Kode Pos": row.kode_pos || "",
+      "Skala": row.skala || "",
+      "Lokasi Perusahaan": row.lok_perusahaan || "",
+      "Nama Kawasan": row.nama_kawasan || "",
+      "Latitude": row.lat || "",
+      "Longitude": row.lon || "",
+      "Jarak (km)": row.jarak || "",
+      "Produk": row.produk || "",
+      "KBLI": row.KBLI || "",
+      "Telepon Perusahaan": row.telp_perusahaan || "",
+      "Email Perusahaan": row.email_perusahaan || "",
+      "Website Perusahaan": row.web_perusahaan || "",
+      "Tenaga Kerja": row.tkerja || "",
+      "Investasi": row.investasi || "",
+      "Omset": row.omset || "",
+      "Nama Narasumber": row.nama_narasumber || "",
+      "Jabatan Narasumber": row.jbtn_narasumber || "",
+      "Email Narasumber": row.email_narasumber || "",
+      "Telepon Narasumber": row.telp_narasumber || "",
+      "PCL Utama": row.pcl_utama || "",
+      "Catatan": row.catatan || "",
+      "Tahun Direktori": row.tahun_direktori || "",
+      "Total Survei": totalSurvei,
+      "Survei Selesai": completedSurvei,
+      "Persentase Penyelesaian (%)": surveyStatusData.completion_percentage,
+      "Status": surveyStatusData.status_text // Menggunakan status_text yang user-friendly
+    };
+  });
 
-    // Return Excel file sebagai response
-    return new NextResponse(excelBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': excelBuffer.length.toString(),
-      },
-    });
+      console.log("Export data formatted, creating Excel...");
+
+      // Tutup koneksi database
+      try {
+        await connection.end();
+        console.log("Database connection closed successfully");
+      } catch (closeError) {
+        console.error("Error closing database connection:", closeError);
+        // Don't throw error here, just log it
+      }
+
+      // Buat workbook Excel
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths yang disesuaikan
+      const columnWidths = [
+        { wch: 5 },   // No
+        { wch: 15 },  // KIP
+        { wch: 30 },  // Nama Perusahaan
+        { wch: 10 },  // Badan Usaha (kode)
+        { wch: 40 },  // Alamat
+        { wch: 10 },  // Kecamatan (kode)
+        { wch: 10 },  // Desa (kode)
+        { wch: 10 },  // Kode Pos
+        { wch: 10 },  // Skala
+        { wch: 10 },  // Lokasi Perusahaan (kode)
+        { wch: 20 },  // Nama Kawasan
+        { wch: 15 },  // Latitude
+        { wch: 15 },  // Longitude
+        { wch: 12 },  // Jarak
+        { wch: 30 },  // Produk
+        { wch: 10 },  // KBLI
+        { wch: 15 },  // Telepon Perusahaan
+        { wch: 25 },  // Email Perusahaan
+        { wch: 25 },  // Website Perusahaan
+        { wch: 10 },  // Tenaga Kerja (kode)
+        { wch: 10 },  // Investasi (kode)
+        { wch: 10 },  // Omset (kode)
+        { wch: 20 },  // Nama Narasumber
+        { wch: 20 },  // Jabatan Narasumber
+        { wch: 25 },  // Email Narasumber
+        { wch: 15 },  // Telepon Narasumber
+        { wch: 15 },  // PCL Utama
+        { wch: 30 },  // Catatan
+        { wch: 15 },  // Tahun Direktori
+        { wch: 12 },  // Total Survei
+        { wch: 12 },  // Survei Selesai
+        { wch: 20 },  // Persentase Penyelesaian
+        { wch: 12 }   // Status
+      ];
+      worksheet['!cols'] = columnWidths;
+
+      // Tambahkan worksheet ke workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Direktori Perusahaan");
+
+      console.log("Excel workbook created, generating buffer...");
+
+      // Generate Excel buffer
+      const excelBuffer = XLSX.write(workbook, { 
+        type: 'buffer', 
+        bookType: 'xlsx',
+        compression: true
+      });
+
+      console.log("Excel buffer generated, size:", excelBuffer.length);
+
+      // Generate filename dengan timestamp dan filter info
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      
+      let filename = `direktori-perusahaan-${timestamp}`;
+      if (year && year !== "all") filename += `-tahun-${year}`;
+      if (search) filename += `-search-${search.substring(0, 10)}`;
+      if (status && status !== "all") filename += `-status-${status}`;
+      if (pcl && pcl !== "all") filename += `-pcl-${pcl.substring(0, 10)}`;
+      filename += '.xlsx';
+
+      console.log("Sending Excel file:", filename);
+
+      // Return Excel file sebagai response
+      return new NextResponse(excelBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Content-Length': excelBuffer.length.toString(),
+        },
+      });
 
   } catch (error) {
     console.error("Detailed error in Excel export:", error);
