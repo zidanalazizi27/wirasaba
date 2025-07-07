@@ -27,7 +27,7 @@ const Navbar = () => {
 
   const getMenuClasses = (menu: string) => {
     return activeMenu === menu
-      ? "font-bold font-roboto text-sm text-clightbrown bg-white py-2 px-4 rounded-full transition-colors duration-100"
+      ? "font-bold font-roboto text-sm text-cdarkbrown bg-white py-2 px-4 rounded-full transition-colors duration-100"
       : "font-bold font-roboto text-sm text-white transition-colors duration-100";
   };
 
@@ -36,14 +36,14 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="sticky top-0 w-full bg-clightbrown z-50">
+    <nav className="sticky top-0 w-full bg-cdarkbrown z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center">
               <Image
-                src="/image/logo_wirasaba.png"
+                src="/image/logo_wirasaba.svg"
                 alt="Wirasaba"
                 width={140}
                 height={80}
@@ -116,7 +116,7 @@ const Navbar = () => {
             {isLoggedIn ? (
               <button
                 onClick={handleLogout}
-                className="font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+                className="font-bold font-roboto text-sm text-white hover:text-cdarkbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
               >
                 <span>Logout</span>
                 <IoLogOut size={18} />
@@ -124,7 +124,7 @@ const Navbar = () => {
             ) : (
               <Link
                 href="/login"
-                className="font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+                className="font-bold font-roboto text-sm text-white hover:text-cdarkbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
               >
                 <span>Login</span>
                 <IoLogIn size={18} />
@@ -179,7 +179,7 @@ const Navbar = () => {
                   handleLogout();
                   setIsMenuOpen(false);
                 }}
-                className="w-full text-left font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+                className="w-full text-left font-bold font-roboto text-sm text-white hover:text-cdarkbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
               >
                 <span>Logout</span>
                 <IoLogOut size={18} />
@@ -187,7 +187,7 @@ const Navbar = () => {
             ) : (
               <Link
                 href="/login"
-                className="font-bold font-roboto text-sm text-white hover:text-clightbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
+                className="font-bold font-roboto text-sm text-white hover:text-cdarkbrown hover:bg-white py-2 px-4 rounded-full transition-colors duration-100 flex items-center gap-1"
                 onClick={() => setIsMenuOpen(false)}
               >
                 <span>Login</span>

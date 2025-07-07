@@ -13,7 +13,7 @@ import KInd from "./components/kind";
 const Hero = React.lazy(() => import("./components/hero"));
 
 export const metadata: Metadata = {
-  title: "Beranda | Wirasaba",
+  title: "Beranda | Kahuripan",
   description: "",
 };
 

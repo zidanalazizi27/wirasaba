@@ -476,7 +476,7 @@ const TentangPage: React.FC = () => {
                 return (
                   <div
                     key={i}
-                    className="relative overflow-hidden rounded-lg shadow-lg bg-white"
+                    className="relative overflow-hidden rounded-xl shadow-lg bg-cdarkbrown"
                   >
                     <div className="aspect-[4/3] w-full">
                       <img

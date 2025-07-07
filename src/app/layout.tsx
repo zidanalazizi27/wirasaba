@@ -26,9 +26,9 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Wirasaba - Direktori Industri",
+  title: "Kahuripan",
   description:
-    "Wirasaba - Direktori Industri Besar dan Sedang Kabupaten Sidoarjo",
+    "Kahuripan - Direktori Industri Besar dan Sedang Kabupaten Sidoarjo",
 };
 
 export default function RootLayout({

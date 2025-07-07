@@ -4,11 +4,10 @@ import React from "react";
 import FacebookOutlinedIcon from "@mui/icons-material/FacebookOutlined";
 import YouTubeIcon from "@mui/icons-material/YouTube";
 import InstagramIcon from "@mui/icons-material/Instagram";
-import XIcon from '@mui/icons-material/X';
+import XIcon from "@mui/icons-material/X";
 import CallIcon from "@mui/icons-material/Call";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import EmailIcon from "@mui/icons-material/Email";
-
 
 type FooterItem = {
   icon: React.ElementType;
@@ -20,22 +19,22 @@ const medSos: FooterItem[] = [
   {
     icon: FacebookOutlinedIcon,
     href: "https://id-id.facebook.com/statistik.sidoarjo/",
-    text:"",
+    text: "",
   },
   {
     icon: InstagramIcon,
     href: "https://www.instagram.com/bps.sidoarjo/",
-    text:"",
+    text: "",
   },
   {
     icon: XIcon,
     href: "https://x.com/bpskabsidoarjo",
-    text:"",
+    text: "",
   },
   {
     icon: YouTubeIcon,
     href: "https://www.youtube.com/@bpskabupatensidoarjo3550",
-    text:"",
+    text: "",
   },
 ];
 
@@ -91,17 +90,15 @@ const Footer: React.FC = () => {
   return (
     <footer
       id="footer"
-      className="relative flex flex-col p-5 mt-10 overflow-hidden bg-clightbrown text-white md:h-40 md:flex-around md:flex-row md:items-center md:p-0"
+      className="relative flex flex-col p-5 mt-10 overflow-hidden bg-cdarkbrown text-white md:h-40 md:flex-around md:flex-row md:items-center md:p-0"
     >
       <div className="flex flex-col items-center justify-center mb-5 md:w-4/12 md:my-0">
         <div className="flex items-center">
           <img alt="logo" src="/image/logo.png" width={120} height={120} />
-          <div className="w-[6px] rounded-full h-24 bg-white mx-4"></div>
-          <p className="block text-2xl">
-            <b>BPS</b> <span className="block">Kabupaten</span>
-            <span className="block">
-              <b>Sidoarjo</b>
-            </span>
+          {/* <div className="w-[6px] rounded-full h-24 bg-white mx-4"></div> */}
+          <p className="block text-xl font-medium font-arial italic">
+            Badan Pusat Statistik
+            <span className="block">Kabupaten Sidoarjo</span>
           </p>
         </div>
       </div>
@@ -114,7 +111,12 @@ const Footer: React.FC = () => {
         </div>
       </div>
       <div className="absolute bottom-0 right-0 hidden md:block">
-        <img src="/image/footer_pattern.png" width={200} height={200} style={{ transform: "scaleX(-1)" }} />
+        <img
+          src="/image/footer_pattern.png"
+          width={200}
+          height={200}
+          style={{ transform: "scaleX(-1)" }}
+        />
       </div>
       <div className="absolute bottom-0 left-0 hidden md:block">
         <img src="/image/footer_pattern.png" width={200} height={200} />

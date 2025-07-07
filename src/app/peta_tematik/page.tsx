@@ -3,7 +3,7 @@ import Navbar from "../components/navbar";
 import Map from "../components/map";
 
 export const metadata: Metadata = {
-  title: "Peta Tematik | Wirasaba",
+  title: "Peta Tematik | Kahuripan",
   description: "",
 };
 

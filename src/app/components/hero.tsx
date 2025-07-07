@@ -13,7 +13,7 @@ const HeroSection = () => {
 
     const typed = new Typed(el.current, {
       strings: [
-        '<span class="text-transparent bg-clip-text bg-gradient-to-r from-base to-white">Wadah Integrasi Survei Aktivitas Berbasis Industri</span>',
+        '<span class="text-transparent bg-clip-text bg-gradient-to-r from-base to-white">Katalog Penghubung Riwayat Industri Pengolahan</span>',
       ],
       typeSpeed: 80,
       backSpeed: 50,

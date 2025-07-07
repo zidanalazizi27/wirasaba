@@ -11,15 +11,6 @@ import React, {
 import type { SVGProps } from "react";
 import { useRouter } from "next/navigation";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
-import {
-  determineSurveyStatus,
-  getStatusText,
-  getStatusColorClasses,
-  getTooltipColor,
-  calculateSurveyStatus,
-  createTooltipText,
-  SurveyStatusData,
-} from "@/app/utils/surveyStatusUtils";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -999,7 +990,7 @@ const TabelDirektori = () => {
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: rowsPerPage.toString(),
-        year: selectedYear || "", // Pastikan year selalu dikirim
+        year: selectedYear,
         search: filterValue,
         status: statusFilter,
         pcl: pclFilter,
@@ -1425,56 +1416,43 @@ const TabelDirektori = () => {
   // Fungsi handleExportClick
   const handleExportClick = async () => {
     try {
-      // Cek apakah ada filter, sorting, atau pencarian aktif
-      const hasActiveFilters =
-        filterValue ||
-        statusFilter !== "all" ||
-        pclFilter !== "all" ||
-        selectedYear ||
-        sortDescriptors.length > 0;
-
-      // Buat detail filter untuk ditampilkan
-      const filterDetails = [];
-      if (filterValue) filterDetails.push(`Pencarian: "${filterValue}"`);
-      if (statusFilter !== "all") filterDetails.push(`Status: ${statusFilter}`);
-      if (pclFilter !== "all") filterDetails.push(`PCL: ${pclFilter}`);
-      if (selectedYear) filterDetails.push(`Tahun: ${selectedYear}`);
-      if (sortDescriptors.length > 0)
-        filterDetails.push(`Sorting: ${sortDescriptors.length} kolom`);
-
-      const confirmMessage = hasActiveFilters
-        ? "Apakah Anda yakin ingin mengunduh data direktori perusahaan? Data akan diunduh sesuai dengan filter, sorting, dan pencarian yang sedang aktif."
-        : "Apakah Anda yakin ingin mengunduh semua data direktori perusahaan?";
-
-      const result = await SweetAlertUtils.confirm(
+      // Tampilkan konfirmasi dengan SweetAlert
+      const confirmResult = await SweetAlertUtils.confirm(
         "Download Data Excel",
-        confirmMessage,
-        "Ya, Download",
-        "Batal"
+        `Apakah Anda yakin ingin mengunduh data direktori perusahaan? ${
+          filterValue ||
+          statusFilter !== "all" ||
+          pclFilter !== "all" ||
+          selectedYear
+            ? "Data akan diunduh sesuai dengan filter yang sedang aktif."
+            : "Semua data akan diunduh."
+        }`,
+        "info" // ✅ Parameter yang benar
       );
 
-      if (!result) return;
+      if (!confirmResult.isConfirmed) return;
 
       // Tampilkan loading
       SweetAlertUtils.loading(
         "Memproses Download",
-        `Mohon tunggu, sedang memproses ${totalItems.toLocaleString("id-ID")} record...`
+        "Mohon tunggu, data sedang diproses..."
       );
 
       // Buat parameter URL yang sama dengan parameter tabel saat ini
       const params = new URLSearchParams();
 
+      if (selectedYear) params.append("year", selectedYear);
       if (filterValue) params.append("search", filterValue);
       if (statusFilter !== "all") params.append("status", statusFilter);
       if (pclFilter !== "all") params.append("pcl", pclFilter);
-      if (selectedYear) params.append("year", selectedYear);
 
       // Tambahkan parameter sorting jika ada
       sortDescriptors.forEach((sort, index) => {
-        if (sort.direction) {
-          params.append(`sort[${index}][column]`, sort.column);
-          params.append(`sort[${index}][direction]`, sort.direction);
-        }
+        params.append(`sort[${index}][column]`, sort.column);
+        params.append(
+          `sort[${index}][direction]`,
+          sort.direction || "ascending"
+        );
       });
 
       // Buat URL untuk download
@@ -1485,10 +1463,7 @@ const TabelDirektori = () => {
 
       if (!response.ok) {
         SweetAlertUtils.closeLoading();
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message || `HTTP error! status: ${response.status}`
-        );
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       // Ambil data blob
@@ -1521,36 +1496,23 @@ const TabelDirektori = () => {
       // Tutup loading dan tampilkan success
       SweetAlertUtils.closeLoading();
 
-      // Hitung informasi download
-      let downloadInfo = `Data direktori perusahaan berhasil diunduh!\n\nFile: ${filename}\nTotal record: ${totalItems.toLocaleString("id-ID")}`;
-      if (hasActiveFilters) {
-        downloadInfo += "\n\nData diunduh sesuai filter yang aktif.";
+      // Hitung jumlah data yang didownload (opsional, untuk informasi user)
+      let downloadInfo = "Data direktori perusahaan berhasil diunduh!";
+      if (filterValue || statusFilter !== "all" || pclFilter !== "all") {
+        downloadInfo +=
+          " Data yang diunduh telah difilter sesuai pengaturan Anda.";
       }
 
-      await SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
-        timer: 5000,
+      SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
+        timer: 4000,
       });
     } catch (error) {
       SweetAlertUtils.closeLoading();
       console.error("Error downloading Excel:", error);
 
-      // Tentukan pesan error dan saran
-      let errorMessage =
-        (error as Error).message || "Terjadi kesalahan yang tidak diketahui";
-      let suggestions =
-        "Silakan coba lagi atau hubungi administrator jika masalah berlanjut.";
-
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        suggestions =
-          "Periksa koneksi internet Anda dan pastikan server dapat diakses.";
-      } else if (error instanceof Error && error.message.includes("500")) {
-        suggestions =
-          "Terjadi kesalahan server. Coba lagi dengan filter yang lebih spesifik atau hubungi administrator.";
-      }
-
-      await SweetAlertUtils.error(
+      SweetAlertUtils.error(
         "Download Gagal",
-        `${errorMessage}\n\n${suggestions}`
+        `Terjadi kesalahan saat mengunduh data: ${error.message}. Silakan coba lagi.`
       );
     }
   };
@@ -1600,22 +1562,46 @@ const TabelDirektori = () => {
           );
         // Perbarui kode untuk status di renderCell
         case "status":
-          // Gunakan utils yang sudah ada untuk menentukan status survei
-          const surveyStatusData = calculateSurveyStatus(
-            business.completed_survei,
-            business.total_survei
-          );
-          const statusClasses = getStatusColorClasses(surveyStatusData.status);
-          const tooltipColor = getTooltipColor(surveyStatusData.status);
-          const tooltipText = createTooltipText(surveyStatusData);
+          const statusText =
+            cellValue === "tinggi"
+              ? "Tinggi"
+              : cellValue === "sedang"
+                ? "Sedang"
+                : cellValue === "rendah"
+                  ? "Rendah"
+                  : "Kosong";
+
+          const tooltipText =
+            cellValue === "kosong"
+              ? "Tidak ada riwayat survei"
+              : `${business.completion_percentage}% survei selesai (${business.completed_survei}/${business.total_survei})`;
 
           return (
-            <Tooltip content={tooltipText} color={tooltipColor}>
+            <Tooltip
+              content={tooltipText}
+              color={
+                cellValue === "tinggi"
+                  ? "primary"
+                  : cellValue === "sedang"
+                    ? "warning"
+                    : cellValue === "rendah"
+                      ? "danger"
+                      : "default"
+              }
+            >
               <div className="flex flex-col">
                 <span
-                  className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${statusClasses.bg} ${statusClasses.text}`}
+                  className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${
+                    cellValue === "tinggi"
+                      ? "bg-green-100 text-green-800"
+                      : cellValue === "sedang"
+                        ? "bg-amber-100 text-amber-800"
+                        : cellValue === "rendah"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-gray-100 text-gray-800"
+                  }`}
                 >
-                  {surveyStatusData.status_text}
+                  {statusText}
                 </span>
               </div>
             </Tooltip>

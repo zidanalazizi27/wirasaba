@@ -3,7 +3,7 @@ import Login from "../components/login";
 import Map from "../components/map";
 
 export const metadata: Metadata = {
-  title: "Login | Wirasaba",
+  title: "Login | Kahuripan",
   description: "",
 };
 
