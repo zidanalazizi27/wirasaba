@@ -136,7 +136,7 @@ const RiwayatSurveiPerusahaan: React.FC<Props> = ({ kip, onSummaryChange }) => {
         ) : riwayatList.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-500">
-              Tidak ada riwayat survei untuk KIP ini.
+              Tidak ada riwayat survei untuk perusahaan ini.
             </p>
           </div>
         ) : (
