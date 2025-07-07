@@ -367,7 +367,7 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
           htmlFor="telp_pcl"
           className="block text-sm font-medium text-gray-700 mb-1"
         >
-          Telepon <span className="text-gray-400 text-xs">(opsional)</span>
+          Telepon
         </label>
         <input
           type="text"

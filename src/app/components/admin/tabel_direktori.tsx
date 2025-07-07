@@ -512,7 +512,6 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     }
   };
 
-  // ✅ PERBAIKAN: Enhanced upload handler dengan logging detail
   const handleUpload = async () => {
     if (!file) {
       SweetAlertUtils.warning(
@@ -529,12 +528,11 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
         : "Mode 'Tambah Data' akan menambahkan data baru dan memperbarui data yang sudah ada. Duplikasi KIP & tahun direktori akan ditolak. Apakah Anda yakin?";
 
     const confirmResult = await SweetAlertUtils.confirm(
-      "Konfirmasi Upload", // title
-      confirmMessage, // text/message
-      uploadMode === "replace" ? "Ya, Ganti Semua" : "Ya, Lanjutkan", // confirmText
-      "Tidak", // cancelText
+      "Konfirmasi Upload",
+      confirmMessage,
+      uploadMode === "replace" ? "Ya, Ganti Semua" : "Ya, Lanjutkan",
+      "Tidak",
       {
-        // Opsi tambahan untuk styling sesuai tingkat bahaya
         icon: uploadMode === "replace" ? "warning" : "question",
         confirmButtonColor: uploadMode === "replace" ? "#ef4444" : "#3b82f6",
       }
@@ -558,8 +556,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
       formData.append("file", file);
       formData.append("mode", uploadMode);
 
-      // ✅ PERBAIKAN: Enhanced logging untuk debugging
-      console.log("🔄 Starting upload with FULL FIX:", {
+      console.log("🔄 Starting upload with:", {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
@@ -572,14 +569,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
         body: formData,
       });
 
-      console.log("📡 Response status:", response.status);
-      console.log(
-        "📡 Response headers:",
-        Object.fromEntries(response.headers.entries())
-      );
-
       const result = await response.json();
-      console.log("📋 Response data with FULL FIX:", result);
+      console.log("📋 Upload result:", result);
 
       if (result.success) {
         SweetAlertUtils.closeLoading();
@@ -587,120 +578,19 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
         const message =
           uploadMode === "replace"
             ? `Berhasil mengganti semua data dengan ${result.inserted || 0} data baru`
-            : `Berhasil memproses ${(result.inserted || 0) + (result.updated || 0)} data (${result.inserted || 0} baru, ${result.updated || 0} diperbarui)`;
+            : `Berhasil memproses ${(result.inserted || 0) + (result.updated || 0)} data`;
 
-        // ✅ PERBAIKAN: Enhanced success message dengan summary
-        const detailMessage = result.summary
-          ? `
-          ${message}
-          
-          📊 Ringkasan Upload:
-          • Total baris di file: ${result.summary.total_rows_in_file}
-          • Data valid diproses: ${result.summary.valid_data_processed}
-          • Field wajib: ${result.summary.field_wajib_count}
-          • Field opsional: ${result.summary.field_opsional_count}
-        `
-          : message;
-
-        await SweetAlertUtils.success("Upload Berhasil!", detailMessage);
-        onSuccess();
-        onClose();
+        SweetAlertUtils.success("Upload Berhasil!", message);
+        onSuccess(); // Trigger refresh
       } else {
-        SweetAlertUtils.closeLoading();
-
-        // ✅ PERBAIKAN: Enhanced error handling dengan detail yang lebih baik
-        console.error("❌ Upload failed with FULL FIX:", result);
-
-        if (result.details && result.error_summary) {
-          // Show detailed validation errors
-          const errorDetails = `
-            ${result.message}
-            
-            📋 Detail Error Validasi:
-            • Total baris diproses: ${result.error_summary.total_rows_processed}
-            • Error validasi: ${result.error_summary.validation_errors}
-            
-            🔴 Field Wajib yang harus diisi:
-            ${result.error_summary.field_wajib_yang_harus_diisi.join(", ")}
-            
-            ❌ Error yang ditemukan:
-            ${result.details}
-            
-            💡 Tips: Pastikan semua 16 field wajib terisi dan format data sesuai template.
-          `;
-
-          await SweetAlertUtils.error(
-            "Upload Gagal - Error Validasi",
-            errorDetails,
-            {
-              width: "700px",
-              customClass: { popup: "text-left" },
-            }
-          );
-        } else if (result.details && result.total_duplicates) {
-          // Show duplicate data errors
-          const duplicateDetails = `
-            ${result.message}
-            
-            📋 Detail Duplikasi:
-            • Total duplikasi: ${result.total_duplicates}
-            
-            ⚠️ Data yang duplikat:
-            ${result.details}
-            
-            💡 Tips: Periksa kombinasi KIP + tahun direktori yang sudah ada di database.
-          `;
-
-          await SweetAlertUtils.error(
-            "Upload Gagal - Data Duplikat",
-            duplicateDetails,
-            {
-              width: "700px",
-              customClass: { popup: "text-left" },
-            }
-          );
-        } else if (result.details && result.missing_headers) {
-          // Show missing headers error
-          const headerDetails = `
-            ${result.message}
-            
-            📋 Detail Header:
-            • Diharapkan: ${result.details.expected_count} kolom
-            • Ditemukan: ${result.details.actual_count} kolom
-            • Kolom yang hilang: ${result.details.missing_headers.join(", ")}
-            
-            💡 Tips: Download template terbaru yang sudah diperbaiki dengan 28 kolom lengkap.
-          `;
-
-          await SweetAlertUtils.error(
-            "Upload Gagal - Header Tidak Lengkap",
-            headerDetails,
-            {
-              width: "700px",
-              customClass: { popup: "text-left" },
-            }
-          );
-        } else {
-          // General error
-          await SweetAlertUtils.error(
-            "Upload Gagal",
-            result.message || "Terjadi kesalahan yang tidak diketahui"
-          );
-        }
+        throw new Error(result.message || "Upload gagal");
       }
     } catch (error) {
-      console.error("❌ Upload error with FULL FIX:", error);
       SweetAlertUtils.closeLoading();
-
-      await SweetAlertUtils.error(
+      console.error("Error uploading file:", error);
+      SweetAlertUtils.error(
         "Upload Gagal",
-        `Terjadi kesalahan: ${(error as Error).message}. 
-        
-        🔍 Tips Debugging:
-        1. Buka Console Browser (F12 → Console) untuk detail error
-        2. Pastikan template menggunakan versi terbaru (28 kolom)
-        3. Periksa koneksi internet dan server
-        4. Coba dengan file yang lebih kecil terlebih dahulu`
+        `Terjadi kesalahan saat mengupload file: ${(error as Error).message}.\n\n🔍 Tips Debugging:\n1. Buka Console Browser (F12 → Console) untuk detail error\n2. Pastikan template menggunakan versi terbaru (28 kolom)\n3. Periksa koneksi internet dan server\n4. Coba dengan file yang lebih kecil terlebih dahulu`
       );
     } finally {
       setIsUploading(false);
@@ -779,7 +669,6 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                   </label>
                 </div>
               </div>
-
               <div className="flex items-start">
                 <input
                   type="radio"
@@ -796,48 +685,25 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                     <span className="font-medium text-red-600">
                       Ganti Semua Data
                     </span>{" "}
-                    — Menghapus semua data lama dan mengganti dengan data baru
+                    — Menghapus semua data lama dan mengganti dengan data baru.
                   </label>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ✅ PERBAIKAN: Enhanced Important Notes dengan info field wajib */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-amber-800 mb-2">
-              📋 Informasi Penting (FULL FIX):
-            </h3>
-            <ul className="text-xs text-amber-700 space-y-1">
-              <li>
-                • <strong>16 field WAJIB diisi (🔴):</strong> KIP, Nama
-                Perusahaan, Alamat, Kecamatan, Desa, Badan Usaha, Lokasi
-                Perusahaan, KBLI, Produk, Latitude, Longitude, Tenaga Kerja,
-                Investasi, Omset, Skala, Tahun Direktori
-              </li>
-              <li>
-                • <strong>12 field OPSIONAL (⚪):</strong> Boleh dikosongkan
-              </li>
-              <li>• Template sudah diperbaiki dengan 28 kolom lengkap</li>
-              <li>
-                • Enhanced error reporting untuk debugging yang lebih mudah
-              </li>
-              <li>• Duplikasi: KIP + tahun direktori harus unik</li>
-            </ul>
-          </div>
-
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-3">
             <button
               onClick={handleCancel}
-              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 text-sm disabled:opacity-50 transition-colors"
+              className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
               disabled={isUploading}
             >
               Batal
             </button>
             <button
               onClick={handleUpload}
-              className={`flex-1 px-4 py-2 text-white rounded-md text-sm disabled:opacity-50 transition-colors ${
+              className={`flex-1 px-4 py-2 text-white rounded-md transition-colors ${
                 uploadMode === "replace"
                   ? "bg-red-600 hover:bg-red-700"
                   : "bg-blue-600 hover:bg-blue-700"
@@ -909,8 +775,118 @@ const TabelDirektori = () => {
     setShowUploadModal(false);
     setHasLoadedAll(false); // Reset untuk refresh data
     fetchData(); // Refresh data tabel
+    fetchDirectoryYears(); // Refresh tahun options
+    fetchPclOptions();
     // Reset filters jika diperlukan
     setCurrentPage(1);
+    setFilterValue(""); // Reset search jika diperlukan
+  };
+
+  const handleDownloadClick = async () => {
+    try {
+      // Check if there are active filters
+      const hasActiveFilters =
+        filterValue ||
+        statusFilter !== "all" ||
+        pclFilter !== "all" ||
+        selectedYear;
+
+      // Show confirmation with SweetAlert
+      const confirmResult = await SweetAlertUtils.confirm(
+        "Download Data Excel",
+        `Apakah Anda yakin ingin mengunduh data direktori perusahaan?\n\n${
+          hasActiveFilters
+            ? "Data akan diunduh sesuai dengan filter yang sedang aktif."
+            : "Semua data akan diunduh."
+        }`,
+        "info" // Parameter yang benar
+      );
+
+      if (!confirmResult.isConfirmed) return;
+
+      // Show loading
+      SweetAlertUtils.loading(
+        "Memproses Download",
+        "Mohon tunggu, data sedang diproses..."
+      );
+
+      // Build URL parameters that match current table state
+      const params = new URLSearchParams();
+
+      if (selectedYear) params.append("year", selectedYear);
+      if (filterValue) params.append("search", filterValue);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (pclFilter !== "all") params.append("pcl", pclFilter);
+
+      // Add sorting parameters if any
+      sortDescriptors.forEach((sort, index) => {
+        params.append(`sort[${index}][column]`, sort.column);
+        params.append(
+          `sort[${index}][direction]`,
+          sort.direction || "ascending"
+        );
+      });
+
+      // Build download URL
+      const downloadUrl = `/api/perusahaan/export?${params.toString()}`;
+
+      // Fetch file
+      const response = await fetch(downloadUrl);
+
+      if (!response.ok) {
+        SweetAlertUtils.closeLoading();
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Get blob data
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+
+      // Get filename from response header
+      const contentDisposition = response.headers.get("content-disposition");
+      let filename = "direktori-perusahaan.xlsx";
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Close loading and show success
+      SweetAlertUtils.closeLoading();
+
+      // Calculate download info (optional, for user information)
+      let downloadInfo = "Data direktori perusahaan berhasil diunduh!";
+      if (filterValue || statusFilter !== "all" || pclFilter !== "all") {
+        downloadInfo +=
+          " Data yang diunduh telah difilter sesuai pengaturan Anda.";
+      }
+
+      SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
+        timer: 4000,
+      });
+    } catch (error) {
+      SweetAlertUtils.closeLoading();
+      console.error("Error downloading Excel:", error);
+
+      SweetAlertUtils.error(
+        "Download Gagal",
+        `Terjadi kesalahan saat mengunduh data: ${(error as Error).message}\n\n🔍 Tips:\n• Periksa koneksi internet\n• Coba refresh halaman\n• Hubungi administrator jika masalah berlanjut`
+      );
+    }
   };
 
   // Fungsi untuk mengambil data direktori dan ekstrak tahun unik
@@ -1409,114 +1385,6 @@ const TabelDirektori = () => {
     }
   };
 
-  const handleImportClick = () => {
-    setShowUploadModal(true);
-  };
-
-  // Fungsi handleExportClick
-  const handleExportClick = async () => {
-    try {
-      // Tampilkan konfirmasi dengan SweetAlert
-      const confirmResult = await SweetAlertUtils.confirm(
-        "Download Data Excel",
-        `Apakah Anda yakin ingin mengunduh data direktori perusahaan? ${
-          filterValue ||
-          statusFilter !== "all" ||
-          pclFilter !== "all" ||
-          selectedYear
-            ? "Data akan diunduh sesuai dengan filter yang sedang aktif."
-            : "Semua data akan diunduh."
-        }`,
-        "info" // ✅ Parameter yang benar
-      );
-
-      if (!confirmResult.isConfirmed) return;
-
-      // Tampilkan loading
-      SweetAlertUtils.loading(
-        "Memproses Download",
-        "Mohon tunggu, data sedang diproses..."
-      );
-
-      // Buat parameter URL yang sama dengan parameter tabel saat ini
-      const params = new URLSearchParams();
-
-      if (selectedYear) params.append("year", selectedYear);
-      if (filterValue) params.append("search", filterValue);
-      if (statusFilter !== "all") params.append("status", statusFilter);
-      if (pclFilter !== "all") params.append("pcl", pclFilter);
-
-      // Tambahkan parameter sorting jika ada
-      sortDescriptors.forEach((sort, index) => {
-        params.append(`sort[${index}][column]`, sort.column);
-        params.append(
-          `sort[${index}][direction]`,
-          sort.direction || "ascending"
-        );
-      });
-
-      // Buat URL untuk download
-      const downloadUrl = `/api/perusahaan/export?${params.toString()}`;
-
-      // Fetch file
-      const response = await fetch(downloadUrl);
-
-      if (!response.ok) {
-        SweetAlertUtils.closeLoading();
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // Ambil data blob
-      const blob = await response.blob();
-
-      // Buat link untuk download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-
-      // Ambil filename dari response header
-      const contentDisposition = response.headers.get("content-disposition");
-      let filename = "direktori-perusahaan.xlsx";
-
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
-        }
-      }
-
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-
-      // Cleanup
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      // Tutup loading dan tampilkan success
-      SweetAlertUtils.closeLoading();
-
-      // Hitung jumlah data yang didownload (opsional, untuk informasi user)
-      let downloadInfo = "Data direktori perusahaan berhasil diunduh!";
-      if (filterValue || statusFilter !== "all" || pclFilter !== "all") {
-        downloadInfo +=
-          " Data yang diunduh telah difilter sesuai pengaturan Anda.";
-      }
-
-      SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
-        timer: 4000,
-      });
-    } catch (error) {
-      SweetAlertUtils.closeLoading();
-      console.error("Error downloading Excel:", error);
-
-      SweetAlertUtils.error(
-        "Download Gagal",
-        `Terjadi kesalahan saat mengunduh data: ${error.message}. Silakan coba lagi.`
-      );
-    }
-  };
-
   // Calculate pages
   const pages = totalPages;
 
@@ -1823,7 +1691,7 @@ const TabelDirektori = () => {
             <Tooltip content="Upload Data" position="bottom">
               <button
                 className="p-2 bg-gray-100 text-green-600 rounded-lg flex items-center justify-center"
-                onClick={handleImportClick}
+                onClick={handleUploadClick}
               >
                 <UploadIcon size={20} />
               </button>
@@ -1832,7 +1700,7 @@ const TabelDirektori = () => {
             <Tooltip content="Download Data" position="bottom">
               <button
                 className="p-2 bg-gray-100 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-50 transition-colors"
-                onClick={handleExportClick}
+                onClick={handleDownloadClick}
               >
                 <DownloadIcon size={20} />
               </button>
