@@ -784,69 +784,85 @@ const TabelDirektori = () => {
 
   const handleDownloadClick = async () => {
     try {
-      // Check if there are active filters
+      // Cek apakah ada filter, sorting, atau pencarian aktif
       const hasActiveFilters =
         filterValue ||
         statusFilter !== "all" ||
         pclFilter !== "all" ||
-        selectedYear;
+        selectedYear ||
+        sortDescriptors.length > 0;
 
-      // Show confirmation with SweetAlert
-      const confirmResult = await SweetAlertUtils.confirm(
+      // Buat detail filter untuk ditampilkan
+      const filterDetails = [];
+      if (filterValue) filterDetails.push(`Pencarian: "${filterValue}"`);
+      if (statusFilter !== "all") filterDetails.push(`Status: ${statusFilter}`);
+      if (pclFilter !== "all") filterDetails.push(`PCL: ${pclFilter}`);
+      if (selectedYear) filterDetails.push(`Tahun: ${selectedYear}`);
+      if (sortDescriptors.length > 0)
+        filterDetails.push(`Sorting: ${sortDescriptors.length} kolom`);
+
+      const confirmMessage = hasActiveFilters
+        ? "Apakah Anda yakin ingin mengunduh data direktori perusahaan? Data akan diunduh sesuai dengan filter, sorting, dan pencarian yang sedang aktif."
+        : "Apakah Anda yakin ingin mengunduh semua data direktori perusahaan?";
+
+      const result = await SweetAlertUtils.confirm(
         "Download Data Excel",
-        `Apakah Anda yakin ingin mengunduh data direktori perusahaan?\n\n${
-          hasActiveFilters
-            ? "Data akan diunduh sesuai dengan filter yang sedang aktif."
-            : "Semua data akan diunduh."
-        }`,
-        "info" // Parameter yang benar
+        confirmMessage,
+        "Ya, Download",
+        "Batal"
       );
 
-      if (!confirmResult.isConfirmed) return;
+      if (!result) return;
 
-      // Show loading
+      // Tampilkan loading
       SweetAlertUtils.loading(
         "Memproses Download",
-        "Mohon tunggu, data sedang diproses..."
+        `Mohon tunggu, sedang memproses ${totalItems.toLocaleString("id-ID")} record...`
       );
 
-      // Build URL parameters that match current table state
+      // Buat parameter URL yang sama dengan parameter tabel saat ini
       const params = new URLSearchParams();
 
-      if (selectedYear) params.append("year", selectedYear);
       if (filterValue) params.append("search", filterValue);
       if (statusFilter !== "all") params.append("status", statusFilter);
       if (pclFilter !== "all") params.append("pcl", pclFilter);
+      if (selectedYear) params.append("year", selectedYear);
 
-      // Add sorting parameters if any
+      // Tambahkan parameter sorting jika ada
       sortDescriptors.forEach((sort, index) => {
-        params.append(`sort[${index}][column]`, sort.column);
-        params.append(
-          `sort[${index}][direction]`,
-          sort.direction || "ascending"
-        );
+        if (sort.direction) {
+          params.append(`sort[${index}][column]`, sort.column);
+          params.append(`sort[${index}][direction]`, sort.direction);
+        }
       });
 
-      // Build download URL
+      // Buat URL untuk download
       const downloadUrl = `/api/perusahaan/export?${params.toString()}`;
+
+      console.log("🔗 Download URL:", downloadUrl);
 
       // Fetch file
       const response = await fetch(downloadUrl);
 
       if (!response.ok) {
         SweetAlertUtils.closeLoading();
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || `HTTP error! status: ${response.status}`
+        );
       }
 
-      // Get blob data
+      // Ambil data blob
       const blob = await response.blob();
 
-      // Create download link
+      console.log("📊 Downloaded blob size:", blob.size);
+
+      // Buat link untuk download
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
 
-      // Get filename from response header
+      // Ambil filename dari response header
       const contentDisposition = response.headers.get("content-disposition");
       let filename = "direktori-perusahaan.xlsx";
 
@@ -865,26 +881,39 @@ const TabelDirektori = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Close loading and show success
+      // Tutup loading dan tampilkan success
       SweetAlertUtils.closeLoading();
 
-      // Calculate download info (optional, for user information)
-      let downloadInfo = "Data direktori perusahaan berhasil diunduh!";
-      if (filterValue || statusFilter !== "all" || pclFilter !== "all") {
-        downloadInfo +=
-          " Data yang diunduh telah difilter sesuai pengaturan Anda.";
+      // Hitung informasi download
+      let downloadInfo = `Data direktori perusahaan berhasil diunduh!\n\nFile: ${filename}\nTotal record: ${totalItems.toLocaleString("id-ID")}`;
+      if (hasActiveFilters) {
+        downloadInfo += "\n\nData diunduh sesuai filter yang aktif.";
       }
 
-      SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
-        timer: 4000,
+      await SweetAlertUtils.success("Download Berhasil!", downloadInfo, {
+        timer: 5000,
       });
     } catch (error) {
       SweetAlertUtils.closeLoading();
       console.error("Error downloading Excel:", error);
 
-      SweetAlertUtils.error(
+      // Tentukan pesan error dan saran
+      let errorMessage =
+        (error as Error).message || "Terjadi kesalahan yang tidak diketahui";
+      let suggestions =
+        "Silakan coba lagi atau hubungi administrator jika masalah berlanjut.";
+
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        suggestions =
+          "Periksa koneksi internet Anda dan pastikan server dapat diakses.";
+      } else if (error instanceof Error && error.message.includes("500")) {
+        suggestions =
+          "Terjadi kesalahan server. Coba lagi dengan filter yang lebih spesifik atau hubungi administrator.";
+      }
+
+      await SweetAlertUtils.error(
         "Download Gagal",
-        `Terjadi kesalahan saat mengunduh data: ${(error as Error).message}\n\n🔍 Tips:\n• Periksa koneksi internet\n• Coba refresh halaman\n• Hubungi administrator jika masalah berlanjut`
+        `${errorMessage}\n\n${suggestions}`
       );
     }
   };
