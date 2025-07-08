@@ -1,6 +1,6 @@
-// src/app/api/perusahaan/import/route.ts - FULL FIX VERSION (Part 1)
-import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+// src/app/api/perusahaan/import/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import mysql from 'mysql2/promise';
 import * as XLSX from 'xlsx';
 
 // Database connection configuration
@@ -16,36 +16,9 @@ async function createDbConnection() {
   return await mysql.createConnection(dbConfig);
 }
 
-// ✅ PERBAIKAN: Interface untuk data Excel dengan optional fields dan multiple types
+// Interfaces
 interface ExcelRowData {
-  'KIP'?: string | number;
-  'Nama Perusahaan'?: string;
-  'Badan Usaha'?: string | number;
-  'Alamat'?: string;
-  'Kecamatan'?: string;
-  'Desa'?: string;
-  'Kode Pos'?: string | number;
-  'Skala'?: string;
-  'Lokasi Perusahaan'?: string | number;
-  'Nama Kawasan'?: string;
-  'Latitude'?: string | number;
-  'Longitude'?: string | number;
-  'Jarak (KM)'?: string | number;
-  'Produk'?: string;
-  'KBLI'?: string | number;
-  'Telepon Perusahaan'?: string;
-  'Email Perusahaan'?: string;
-  'Website Perusahaan'?: string;
-  'Tenaga Kerja'?: string | number;
-  'Investasi'?: string | number;
-  'Omset'?: string | number;
-  'Nama Narasumber'?: string;
-  'Jabatan Narasumber'?: string;
-  'Email Narasumber'?: string;
-  'Telepon Narasumber'?: string;
-  'PCL Utama'?: string;
-  'Catatan'?: string;
-  'Tahun Direktori'?: string | number;
+  [key: string]: any;
 }
 
 interface ProcessedData {
@@ -102,7 +75,7 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
-// ✅ PERBAIKAN: Fungsi sanitasi data - handle semua 28 field dengan benar
+// ✅ Fungsi sanitasi data - handle semua 28 field dengan benar
 function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
   return {
     kip: String(rawData['KIP'] || '').trim(),
@@ -137,7 +110,7 @@ function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
   };
 }
 
-// ✅ PERBAIKAN: Fungsi validasi data - HANYA validasi 16 field wajib dengan ketat
+// ✅ Fungsi validasi data - HANYA validasi 16 field wajib dengan ketat
 function validateDirectoryData(data: ProcessedData): string[] {
   const errors: string[] = [];
 
@@ -150,8 +123,8 @@ function validateDirectoryData(data: ProcessedData): string[] {
     if (!/^\d+$/.test(data.kip)) {
       errors.push("KIP harus berupa angka");
     }
-    if (data.kip.length > 10) {
-      errors.push("KIP maksimal 10 digit");
+    if (data.kip.length > 16) {
+      errors.push("KIP maksimal 16 digit");
     }
   }
 
@@ -228,7 +201,17 @@ function validateDirectoryData(data: ProcessedData): string[] {
     errors.push("Skala harus 'Besar' atau 'Sedang'");
   }
 
-  // 14. Validasi Tahun Direktori (WAJIB)
+  // 14. Validasi Kecamatan (WAJIB - handled in lookup)
+  if (!data.kec || data.kec === 0) {
+    errors.push("Kecamatan tidak ditemukan dalam database");
+  }
+
+  // 15. Validasi Desa (WAJIB - handled in lookup) 
+  if (!data.des || data.des === 0) {
+    errors.push("Desa tidak ditemukan dalam database");
+  }
+
+  // 16. Validasi Tahun Direktori (WAJIB)
   if (!data.tahun_direktori || data.tahun_direktori.length === 0) {
     errors.push("Tahun direktori wajib diisi");
   } else {
@@ -279,8 +262,9 @@ async function mapLookupValues(connection: mysql.Connection, data: ProcessedData
     ) as mysql.RowDataPacket[][];
     
     if (kecRows.length === 0) {
-      throw new Error(`Kecamatan "${kecamatanName}" tidak ditemukan`);
+      throw new Error(`Kecamatan '${kecamatanName}' tidak ditemukan dalam database`);
     }
+    
     data.kec = kecRows[0].id_kecamatan;
 
     // Map desa berdasarkan nama dan kecamatan
@@ -290,8 +274,9 @@ async function mapLookupValues(connection: mysql.Connection, data: ProcessedData
     ) as mysql.RowDataPacket[][];
     
     if (desRows.length === 0) {
-      throw new Error(`Desa "${desaName}" tidak ditemukan di kecamatan "${kecamatanName}"`);
+      throw new Error(`Desa '${desaName}' tidak ditemukan dalam kecamatan '${kecamatanName}'`);
     }
+    
     data.des = desRows[0].id_desa;
 
     return data;
@@ -300,74 +285,83 @@ async function mapLookupValues(connection: mysql.Connection, data: ProcessedData
   }
 }
 
-// Fungsi untuk cek duplikasi KIP dan tahun direktori
-async function checkDuplicateKipAndYear(
-  connection: mysql.Connection, 
-  kip: string, 
-  tahunDirektori: number[], 
-  excludeId?: number
-): Promise<DuplicateData[]> {
+// Function to check duplicate KIP and year combinations
+async function checkDuplicateKipAndYear(connection: mysql.Connection, kip: string, years: number[]): Promise<DuplicateData[]> {
   const duplicates: DuplicateData[] = [];
   
-  for (const year of tahunDirektori) {
-    let query = `
-      SELECT p.id_perusahaan, p.nama_perusahaan, p.kip,
-             GROUP_CONCAT(pd.tahun_direktori) as tahun_list
-      FROM perusahaan p
-      JOIN perusahaan_direktori pd ON p.id_perusahaan = pd.id_perusahaan
-      WHERE p.kip = ? AND pd.tahun_direktori = ?
-    `;
-    const params = [kip, year];
-    
-    if (excludeId) {
-      query += ' AND p.id_perusahaan != ?';
-      params.push(excludeId);
+  try {
+    for (const year of years) {
+      const [existingRows] = await connection.execute(`
+        SELECT p.id_perusahaan, p.nama_perusahaan, p.kip 
+        FROM perusahaan p
+        JOIN perusahaan_direktori pd ON p.id_perusahaan = pd.id_perusahaan
+        WHERE p.kip = ? AND pd.tahun_direktori = ?
+      `, [kip, year]) as mysql.RowDataPacket[][];
+
+      if (existingRows.length > 0) {
+        duplicates.push({
+          row: 0, // Will be set later
+          kip: kip,
+          tahun_direktori: [year],
+          existing_company: {
+            id_perusahaan: existingRows[0].id_perusahaan,
+            nama_perusahaan: existingRows[0].nama_perusahaan
+          }
+        });
+      }
     }
     
-    query += ' GROUP BY p.id_perusahaan';
-    
-    const [rows] = await connection.execute(query, params) as mysql.RowDataPacket[][];
-    
-    if (rows.length > 0) {
-      duplicates.push({
-        row: 0, // Will be set by caller
-        kip,
-        tahun_direktori: [year],
-        existing_company: {
-          id_perusahaan: rows[0].id_perusahaan,
-          nama_perusahaan: rows[0].nama_perusahaan
-        }
-      });
-    }
+    return duplicates;
+  } catch (error) {
+    console.error('Error checking duplicates:', error);
+    return [];
   }
-  
-  return duplicates;
 }
 
-// Fungsi untuk menyimpan data perusahaan
-async function saveCompanyData(connection: mysql.Connection, data: ProcessedData, mode: 'append' | 'replace'): Promise<number> {
+// Function to save or update company data
+async function saveCompanyData(connection: mysql.Connection, data: ProcessedData, mode: string) {
   try {
-    // Check if company exists (untuk mode append)
     let companyId: number;
-    
-    if (mode === 'append') {
+
+    if (mode === 'replace') {
+      // Insert new company
+      const [result] = await connection.execute(`
+        INSERT INTO perusahaan (
+          kip, nama_perusahaan, badan_usaha, alamat, kec, des, kode_pos, skala, 
+          lok_perusahaan, nama_kawasan, lat, lon, jarak, produk, KBLI,
+          telp_perusahaan, email_perusahaan, web_perusahaan, tkerja, investasi,
+          omset, nama_narasumber, jbtn_narasumber, email_narasumber,
+          telp_narasumber, pcl_utama, catatan, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      `, [
+        data.kip, data.nama_perusahaan, data.badan_usaha, data.alamat, data.kec,
+        data.des, data.kode_pos, data.skala, data.lok_perusahaan, data.nama_kawasan,
+        data.lat, data.lon, data.jarak, data.produk, data.KBLI,
+        data.telp_perusahaan, data.email_perusahaan, data.web_perusahaan,
+        data.tkerja, data.investasi, data.omset, data.nama_narasumber,
+        data.jbtn_narasumber, data.email_narasumber, data.telp_narasumber,
+        data.pcl_utama, data.catatan
+      ]) as mysql.ResultSetHeader[];
+      
+      companyId = result.insertId;
+    } else {
+      // Check if company exists
       const [existingCompany] = await connection.execute(
         'SELECT id_perusahaan FROM perusahaan WHERE kip = ?',
         [data.kip]
       ) as mysql.RowDataPacket[][];
-      
+
       if (existingCompany.length > 0) {
         // Update existing company
         companyId = existingCompany[0].id_perusahaan;
-        
         await connection.execute(`
-          UPDATE perusahaan SET
-            nama_perusahaan = ?, badan_usaha = ?, alamat = ?, kec = ?, des = ?,
-            kode_pos = ?, skala = ?, lok_perusahaan = ?, nama_kawasan = ?,
+          UPDATE perusahaan SET 
+            nama_perusahaan = ?, badan_usaha = ?, alamat = ?, kec = ?, des = ?, 
+            kode_pos = ?, skala = ?, lok_perusahaan = ?, nama_kawasan = ?, 
             lat = ?, lon = ?, jarak = ?, produk = ?, KBLI = ?,
-            telp_perusahaan = ?, email_perusahaan = ?, web_perusahaan = ?,
-            tkerja = ?, investasi = ?, omset = ?, nama_narasumber = ?,
-            jbtn_narasumber = ?, email_narasumber = ?, telp_narasumber = ?,
+            telp_perusahaan = ?, email_perusahaan = ?, web_perusahaan = ?, 
+            tkerja = ?, investasi = ?, omset = ?, nama_narasumber = ?, 
+            jbtn_narasumber = ?, email_narasumber = ?, telp_narasumber = ?, 
             pcl_utama = ?, catatan = ?, updated_at = NOW()
           WHERE id_perusahaan = ?
         `, [
@@ -383,8 +377,8 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
         // Insert new company
         const [result] = await connection.execute(`
           INSERT INTO perusahaan (
-            kip, nama_perusahaan, badan_usaha, alamat, kec, des, kode_pos,
-            skala, lok_perusahaan, nama_kawasan, lat, lon, jarak, produk, KBLI,
+            kip, nama_perusahaan, badan_usaha, alamat, kec, des, kode_pos, skala, 
+            lok_perusahaan, nama_kawasan, lat, lon, jarak, produk, KBLI,
             telp_perusahaan, email_perusahaan, web_perusahaan, tkerja, investasi,
             omset, nama_narasumber, jbtn_narasumber, email_narasumber,
             telp_narasumber, pcl_utama, catatan, created_at, updated_at
@@ -401,27 +395,6 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
         
         companyId = result.insertId;
       }
-    } else {
-      // Insert new company (mode replace)
-      const [result] = await connection.execute(`
-        INSERT INTO perusahaan (
-          kip, nama_perusahaan, badan_usaha, alamat, kec, des, kode_pos,
-          skala, lok_perusahaan, nama_kawasan, lat, lon, jarak, produk, KBLI,
-          telp_perusahaan, email_perusahaan, web_perusahaan, tkerja, investasi,
-          omset, nama_narasumber, jbtn_narasumber, email_narasumber,
-          telp_narasumber, pcl_utama, catatan, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `, [
-        data.kip, data.nama_perusahaan, data.badan_usaha, data.alamat, data.kec,
-        data.des, data.kode_pos, data.skala, data.lok_perusahaan, data.nama_kawasan,
-        data.lat, data.lon, data.jarak, data.produk, data.KBLI,
-        data.telp_perusahaan, data.email_perusahaan, data.web_perusahaan,
-        data.tkerja, data.investasi, data.omset, data.nama_narasumber,
-        data.jbtn_narasumber, data.email_narasumber, data.telp_narasumber,
-        data.pcl_utama, data.catatan
-      ]) as mysql.ResultSetHeader[];
-      
-      companyId = result.insertId;
     }
 
     // Handle tahun direktori
@@ -449,6 +422,7 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
 
 export async function POST(request: NextRequest) {
   let connection: mysql.Connection | null = null;
+  const startTime = Date.now();
   
   try {
     console.log('🔄 Starting direktori import process with FULL FIX...');
@@ -487,85 +461,50 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    console.log(`📁 Processing file: ${file.name}, size: ${file.size}, mode: ${mode}`);
+    // Connect to database
+    connection = await createDbConnection();
+    await connection.beginTransaction();
 
-    // Read Excel file
+    // Process file
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRowData[];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+    console.log(`📊 Processing ${jsonData.length} rows from Excel file...`);
 
     if (jsonData.length === 0) {
+      await connection.rollback();
       return NextResponse.json({
         success: false,
         message: 'File Excel kosong atau tidak memiliki data'
       }, { status: 400 });
     }
 
-    // ✅ PERBAIKAN: Validate headers dengan semua 28 kolom
-    const requiredHeaders = [
-      'KIP', 'Nama Perusahaan', 'Badan Usaha', 'Alamat', 'Kecamatan', 'Desa',
-      'Kode Pos', 'Skala', 'Lokasi Perusahaan', 'Nama Kawasan', 'Latitude', 
-      'Longitude', 'Jarak (KM)', 'Produk', 'KBLI', 'Telepon Perusahaan',
-      'Email Perusahaan', 'Website Perusahaan', 'Tenaga Kerja', 'Investasi', 
-      'Omset', 'Nama Narasumber', 'Jabatan Narasumber', 'Email Narasumber',
-      'Telepon Narasumber', 'PCL Utama', 'Catatan', 'Tahun Direktori'
-    ];
-
-    const firstRow = jsonData[0];
-    const actualHeaders = Object.keys(firstRow);
-    const missingHeaders = requiredHeaders.filter(header => !actualHeaders.includes(header));
-
-    // ✅ PERBAIKAN: Enhanced logging untuk debugging
-    console.log('🔍 Header validation with FULL FIX:');
-    console.log('Expected headers count:', requiredHeaders.length);
-    console.log('Actual headers count:', actualHeaders.length);
-    console.log('Expected headers:', requiredHeaders);
-    console.log('Actual headers:', actualHeaders);
-    console.log('Missing headers:', missingHeaders);
-
-    if (missingHeaders.length > 0) {
-      console.error('❌ Missing headers detected:', missingHeaders);
-      
-      return NextResponse.json({
-        success: false,
-        message: `Header yang diperlukan tidak ditemukan: ${missingHeaders.join(', ')}`,
-        details: {
-          expected_count: requiredHeaders.length,
-          actual_count: actualHeaders.length,
-          missing_headers: missingHeaders,
-          expected_headers: requiredHeaders,
-          actual_headers: actualHeaders
-        }
-      }, { status: 400 });
+    // Clear all data if replace mode
+    if (mode === 'replace') {
+      console.log('🗑️ Clearing all existing data (replace mode)...');
+      await connection.execute('DELETE FROM perusahaan_direktori');
+      await connection.execute('DELETE FROM perusahaan');
+      await connection.execute('ALTER TABLE perusahaan AUTO_INCREMENT = 1');
+      await connection.execute('ALTER TABLE perusahaan_direktori AUTO_INCREMENT = 1');
     }
 
-    console.log(`📊 Processing ${jsonData.length} rows with enhanced validation`);
-
-    // Create database connection
-    connection = await createDbConnection();
-    await connection.beginTransaction();
-
-    // Process and validate data
+    // Process each row
     const validData: ProcessedData[] = [];
     const validationErrors: ValidationError[] = [];
     const duplicateData: DuplicateData[] = [];
 
     for (let i = 0; i < jsonData.length; i++) {
-      const rowNumber = i + 2; // Excel row number (header = 1, data starts from 2)
-      const rowData = jsonData[i];
+      const rowNumber = i + 2; // Excel row number (starting from 2, row 1 is header)
+      const rowData = jsonData[i] as ExcelRowData;
 
       try {
-        // Skip empty rows
-        if (!rowData['KIP'] && !rowData['Nama Perusahaan']) {
-          continue;
-        }
-
         // Sanitize data
         const sanitizedData = sanitizeDirectoryData(rowData);
-
-        // Map lookup values (kecamatan dan desa) - Kedua field ini WAJIB
+        
+        // Get kecamatan and desa names for mapping
         const kecamatanName = String(rowData['Kecamatan'] || '').trim();
         const desaName = String(rowData['Desa'] || '').trim();
         
@@ -681,111 +620,96 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: false,
-        message: 'Ditemukan data duplikat',
+        message: 'Ditemukan data duplikasi',
         details: duplicateMessage + additionalInfo,
         total_duplicates: duplicateData.length,
-        duplicates: duplicateData.slice(0, 20) // Kirim maksimal 20 duplikat untuk debugging
+        duplicates: duplicateData.slice(0, 20)
       }, { status: 400 });
     }
 
-    if (validData.length === 0) {
-      await connection.rollback();
-      return NextResponse.json({
-        success: false,
-        message: 'Tidak ada data valid untuk diproses',
-        details: 'Semua baris data memiliki error validasi atau duplikasi'
-      }, { status: 400 });
-    }
-
-    // Clear existing data if replace mode
-    if (mode === 'replace') {
-      console.log('🗑️ Clearing existing data (replace mode)');
-      await connection.execute('DELETE FROM perusahaan_direktori');
-      await connection.execute('DELETE FROM perusahaan');
-    }
-
-    // Save data
-    console.log(`💾 Saving ${validData.length} valid records with FULL FIX`);
+    // Save valid data
+    console.log(`💾 Saving ${validData.length} valid records...`);
     let insertedCount = 0;
     let updatedCount = 0;
 
     for (const data of validData) {
       try {
-        const companyId = await saveCompanyData(connection, data, mode);
-        
-        if (mode === 'append') {
-          // Check if it was an update or insert
-          const [existing] = await connection.execute(
-            'SELECT COUNT(*) as count FROM perusahaan WHERE id_perusahaan = ? AND created_at != updated_at',
-            [companyId]
-          ) as mysql.RowDataPacket[][];
-          
-          if (existing[0].count > 0) {
-            updatedCount++;
-          } else {
-            insertedCount++;
-          }
-        } else {
+        const existingQuery = await connection.execute(
+          'SELECT id_perusahaan FROM perusahaan WHERE kip = ?',
+          [data.kip]
+        ) as mysql.RowDataPacket[][];
+
+        if (mode === 'replace' || existingQuery[0].length === 0) {
+          await saveCompanyData(connection, data, mode);
           insertedCount++;
+        } else {
+          await saveCompanyData(connection, data, 'append');
+          updatedCount++;
         }
       } catch (error) {
-        console.error(`❌ Error saving data:`, error);
+        console.error(`Error saving company data for KIP ${data.kip}:`, error);
         throw error;
       }
     }
 
     await connection.commit();
-    console.log('✅ Import completed successfully with FULL FIX');
+    
+    const endTime = Date.now();
+    const processingTime = `${((endTime - startTime) / 1000).toFixed(2)}s`;
 
-    const result = {
+    console.log(`✅ Import completed successfully in ${processingTime}`);
+
+    return NextResponse.json({
       success: true,
       message: mode === 'replace' 
-        ? `Berhasil mengganti semua data dengan ${insertedCount} data baru`
-        : `Berhasil memproses ${insertedCount + updatedCount} data (${insertedCount} baru, ${updatedCount} diperbarui)`,
+        ? `Berhasil mengganti semua data dengan ${insertedCount} perusahaan baru`
+        : `Berhasil memproses ${insertedCount + updatedCount} perusahaan (${insertedCount} baru, ${updatedCount} diperbarui)`,
       inserted: insertedCount,
       updated: updatedCount,
-      total_processed: validData.length,
-      summary: {
-        total_rows_in_file: jsonData.length,
-        valid_data_processed: validData.length,
-        validation_errors: validationErrors.length,
-        duplicates_found: duplicateData.length,
-        mode: mode,
-        field_wajib_count: 16,
-        field_opsional_count: 12
-      }
-    };
-
-    return NextResponse.json(result, { status: 200 });
+      total: insertedCount + updatedCount,
+      processingTime: processingTime,
+      totalYears: validData.reduce((sum, company) => sum + company.tahun_direktori.length, 0)
+    }, { status: 200 });
 
   } catch (error) {
     if (connection) {
-      try {
-        await connection.rollback();
-      } catch (rollbackError) {
-        console.error('❌ Rollback error:', rollbackError);
-      }
+      await connection.rollback();
     }
     
-    console.error('❌ Import error with FULL FIX:', error);
+    console.error('❌ Import process failed:', error);
     
     return NextResponse.json({
       success: false,
-      message: 'Terjadi kesalahan saat mengimpor data',
-      error: error instanceof Error ? error.message : 'Unknown error',
-      details: process.env.NODE_ENV === 'development' ? {
-        stack: error instanceof Error ? error.stack : undefined,
-        timestamp: new Date().toISOString()
-      } : undefined
+      message: 'Terjadi kesalahan saat memproses file',
+      error: error instanceof Error ? error.message : 'Error tidak dikenal',
+      details: 'Silakan periksa format file dan data, kemudian coba lagi'
     }, { status: 500 });
-    
   } finally {
     if (connection) {
-      try {
-        await connection.end();
-      } catch (closeError) {
-        console.error('❌ Connection close error:', closeError);
-      }
+      await connection.end();
+      console.log('🔌 Database connection closed');
     }
   }
+}
+
+// Handle other methods
+export async function GET() {
+  return NextResponse.json({
+    success: false,
+    message: 'Method GET tidak didukung untuk endpoint ini. Gunakan POST untuk upload.'
+  }, { status: 405 });
+}
+
+export async function PUT() {
+  return NextResponse.json({
+    success: false,
+    message: 'Method PUT tidak didukung untuk endpoint ini. Gunakan POST untuk upload.'
+  }, { status: 405 });
+}
+
+export async function DELETE() {
+  return NextResponse.json({
+    success: false,
+    message: 'Method DELETE tidak didukung untuk endpoint ini. Gunakan POST untuk upload.'
+  }, { status: 405 });
 }
