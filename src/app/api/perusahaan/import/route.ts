@@ -1,4 +1,5 @@
 // src/app/api/perusahaan/import/route.ts
+// VERSI LENGKAP YANG SUDAH DIPERBAIKI - FINAL VERSION
 import { NextRequest, NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 import * as XLSX from 'xlsx';
@@ -75,15 +76,58 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
+// ✅ Fungsi debug untuk melihat struktur database
+async function debugDatabaseStructure(connection: mysql.Connection) {
+  try {
+    console.log('🔍 DEBUG: Checking database structure...');
+    
+    // Check kecamatan table structure
+    const [kecStructure] = await connection.execute('DESCRIBE kecamatan') as mysql.RowDataPacket[][];
+    console.log('📋 Kecamatan table structure:', kecStructure);
+    
+    // Check desa table structure  
+    const [desaStructure] = await connection.execute('DESCRIBE desa') as mysql.RowDataPacket[][];
+    console.log('📋 Desa table structure:', desaStructure);
+    
+    // Check sample data from kecamatan
+    const [kecSample] = await connection.execute('SELECT id_kec, kode_kec, nama_kec FROM kecamatan LIMIT 3') as mysql.RowDataPacket[][];
+    console.log('📊 Kecamatan sample data:', kecSample);
+    
+    // Check sample data from desa
+    const [desaSample] = await connection.execute('SELECT id_des, kode_des, nama_des, kode_kec FROM desa LIMIT 3') as mysql.RowDataPacket[][];
+    console.log('📊 Desa sample data:', desaSample);
+    
+    // Check if "Gedangan" exists in kecamatan
+    const [gedanganKec] = await connection.execute('SELECT id_kec, kode_kec, nama_kec FROM kecamatan WHERE nama_kec LIKE "%Gedangan%"') as mysql.RowDataPacket[][];
+    console.log('🔍 Gedangan in kecamatan:', gedanganKec);
+    
+    // Check if "Gedangan" exists in desa  
+    const [gedanganDesa] = await connection.execute('SELECT id_des, kode_des, nama_des, kode_kec FROM desa WHERE nama_des LIKE "%Gedangan%"') as mysql.RowDataPacket[][];
+    console.log('🔍 Gedangan in desa:', gedanganDesa);
+    
+  } catch (error) {
+    console.error('❌ Error in debug function:', error);
+  }
+}
+
 // ✅ Fungsi sanitasi data - handle semua 28 field dengan benar
 function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
+  // Parse tahun direktori dari string "2024,2025" atau "2024"
+  let tahunDirektori: number[] = [];
+  if (rawData['Tahun Direktori']) {
+    const tahunStr = String(rawData['Tahun Direktori']).trim();
+    if (tahunStr) {
+      tahunDirektori = tahunStr.split(',').map(t => parseInt(t.trim())).filter(t => !isNaN(t));
+    }
+  }
+
   return {
     kip: String(rawData['KIP'] || '').trim(),
     nama_perusahaan: String(rawData['Nama Perusahaan'] || '').trim(),
     badan_usaha: parseInt(String(rawData['Badan Usaha'] || '1')),
     alamat: String(rawData['Alamat'] || '').trim(),
-    kec: 1, // Will be mapped later based on kecamatan name
-    des: 1, // Will be mapped later based on desa name
+    kec: 0, // Will be mapped later based on kecamatan name
+    des: 0, // Will be mapped later based on desa name
     kode_pos: rawData['Kode Pos'] ? String(rawData['Kode Pos']).trim() : undefined,
     skala: String(rawData['Skala'] || '').trim(),
     lok_perusahaan: parseInt(String(rawData['Lokasi Perusahaan'] || '1')),
@@ -105,34 +149,84 @@ function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
     telp_narasumber: rawData['Telepon Narasumber'] ? String(rawData['Telepon Narasumber']).trim() : undefined,
     pcl_utama: rawData['PCL Utama'] ? String(rawData['PCL Utama']).trim() : undefined,
     catatan: rawData['Catatan'] ? String(rawData['Catatan']).trim() : undefined,
-    tahun_direktori: rawData['Tahun Direktori'] ? 
-      String(rawData['Tahun Direktori']).split(',').map(year => parseInt(year.trim())).filter(year => !isNaN(year)) : []
+    tahun_direktori: tahunDirektori
   };
 }
 
-// ✅ Fungsi validasi data - HANYA validasi 16 field wajib dengan ketat
-function validateDirectoryData(data: ProcessedData): string[] {
+// ✅ Fungsi untuk mapping lookup values (kecamatan dan desa) - PERBAIKAN FINAL
+async function mapLookupValues(connection: mysql.Connection, data: ProcessedData, kecamatanName: string, desaName: string) {
+  try {
+    console.log(`🔍 Mapping kecamatan: "${kecamatanName}" dan desa: "${desaName}"`);
+    
+    // STEP 1: Cari kecamatan berdasarkan nama
+    const [kecRows] = await connection.execute(
+      'SELECT id_kec, kode_kec FROM kecamatan WHERE nama_kec = ?',
+      [kecamatanName.trim()]
+    ) as mysql.RowDataPacket[][];
+    
+    if (kecRows.length === 0) {
+      // Jika tidak ditemukan, coba cari dengan case insensitive
+      const [kecRowsInsensitive] = await connection.execute(
+        'SELECT id_kec, kode_kec, nama_kec FROM kecamatan WHERE LOWER(nama_kec) = LOWER(?)',
+        [kecamatanName.trim()]
+      ) as mysql.RowDataPacket[][];
+      
+      if (kecRowsInsensitive.length === 0) {
+        throw new Error(`Kecamatan '${kecamatanName}' tidak ditemukan dalam database`);
+      }
+      
+      data.kec = kecRowsInsensitive[0].kode_kec; // PERBAIKAN: gunakan kode_kec untuk foreign key
+      console.log(`✅ Kecamatan "${kecamatanName}" found with case-insensitive search: ${kecRowsInsensitive[0].nama_kec} (kode_kec: ${data.kec})`);
+    } else {
+      data.kec = kecRows[0].kode_kec; // PERBAIKAN: gunakan kode_kec untuk foreign key
+      console.log(`✅ Kecamatan "${kecamatanName}" mapped to kode_kec: ${data.kec}`);
+    }
+
+    // STEP 2: Cari desa berdasarkan nama dan kode_kec (sesuai dengan query di src/app/api/desa/route.ts)
+    const [desRows] = await connection.execute(
+      'SELECT id_des, kode_des FROM desa WHERE nama_des = ? AND kode_kec = ?',
+      [desaName.trim(), data.kec]
+    ) as mysql.RowDataPacket[][];
+    
+    if (desRows.length === 0) {
+      // Jika tidak ditemukan, coba dengan case insensitive
+      const [desRowsInsensitive] = await connection.execute(
+        'SELECT id_des, kode_des, nama_des FROM desa WHERE LOWER(nama_des) = LOWER(?) AND kode_kec = ?',
+        [desaName.trim(), data.kec]
+      ) as mysql.RowDataPacket[][];
+      
+      if (desRowsInsensitive.length === 0) {
+        throw new Error(`Desa '${desaName}' tidak ditemukan dalam kecamatan '${kecamatanName}' (kode_kec: ${data.kec})`);
+      }
+      
+      data.des = desRowsInsensitive[0].kode_des; // PERBAIKAN: gunakan kode_des untuk foreign key
+      console.log(`✅ Desa "${desaName}" found with case-insensitive search: ${desRowsInsensitive[0].nama_des} (kode_des: ${data.des})`);
+    } else {
+      data.des = desRows[0].kode_des; // PERBAIKAN: gunakan kode_des untuk foreign key
+      console.log(`✅ Desa "${desaName}" mapped to kode_des: ${data.des}`);
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`❌ Error mapping kecamatan/desa:`, error);
+    throw error;
+  }
+}
+
+// ✅ Fungsi validasi data yang lebih komprehensif
+function validateDirectoryData(data: ProcessedData, row: number): string[] {
   const errors: string[] = [];
 
   // ========== VALIDASI 16 FIELD WAJIB ==========
-
+  
   // 1. Validasi KIP (WAJIB)
-  if (!data.kip || data.kip.toString().trim() === '') {
+  if (!data.kip || data.kip.trim() === '') {
     errors.push("KIP wajib diisi");
-  } else {
-    if (!/^\d+$/.test(data.kip)) {
-      errors.push("KIP harus berupa angka");
-    }
-    if (data.kip.length > 16) {
-      errors.push("KIP maksimal 16 digit");
-    }
   }
 
   // 2. Validasi Nama Perusahaan (WAJIB)
   if (!data.nama_perusahaan || data.nama_perusahaan.trim() === '') {
-    errors.push("Nama perusahaan wajib diisi");
-  } else if (data.nama_perusahaan.length < 3) {
-    errors.push("Nama perusahaan minimal 3 karakter");
+    errors.push("Nama Perusahaan wajib diisi");
   }
 
   // 3. Validasi Alamat (WAJIB)
@@ -140,24 +234,19 @@ function validateDirectoryData(data: ProcessedData): string[] {
     errors.push("Alamat wajib diisi");
   }
 
-  // 4. Validasi Badan Usaha (WAJIB, 1-8)
-  if (isNaN(data.badan_usaha) || data.badan_usaha < 1 || data.badan_usaha > 8) {
-    errors.push("Badan Usaha wajib diisi dengan kode 1-8");
+  // 4. Validasi Badan Usaha (WAJIB)
+  if (!data.badan_usaha || isNaN(data.badan_usaha) || data.badan_usaha < 1 || data.badan_usaha > 10) {
+    errors.push("Badan Usaha harus berupa angka 1-10");
   }
 
-  // 5. Validasi Lokasi Perusahaan (WAJIB, 1-4)
-  if (isNaN(data.lok_perusahaan) || data.lok_perusahaan < 1 || data.lok_perusahaan > 4) {
-    errors.push("Lokasi Perusahaan wajib diisi dengan kode 1-4");
+  // 5. Validasi Lokasi Perusahaan (WAJIB)
+  if (!data.lok_perusahaan || isNaN(data.lok_perusahaan) || data.lok_perusahaan < 1 || data.lok_perusahaan > 5) {
+    errors.push("Lokasi Perusahaan harus berupa angka 1-5");
   }
 
   // 6. Validasi KBLI (WAJIB)
-  if (isNaN(data.KBLI)) {
-    errors.push("KBLI wajib diisi dengan angka 5 digit");
-  } else {
-    const kbliStr = String(data.KBLI);
-    if (kbliStr.length !== 5) {
-      errors.push("KBLI harus 5 digit");
-    }
+  if (!data.KBLI || isNaN(data.KBLI) || data.KBLI < 10000 || data.KBLI > 99999) {
+    errors.push("KBLI harus berupa angka 5 digit (10000-99999)");
   }
 
   // 7. Validasi Produk (WAJIB)
@@ -166,32 +255,28 @@ function validateDirectoryData(data: ProcessedData): string[] {
   }
 
   // 8. Validasi Latitude (WAJIB)
-  if (data.lat === null || data.lat === undefined || isNaN(data.lat)) {
-    errors.push("Latitude wajib diisi");
-  } else if (data.lat < -90 || data.lat > 90) {
-    errors.push("Latitude harus dalam range -90 sampai 90");
+  if (isNaN(data.lat) || data.lat < -90 || data.lat > 90) {
+    errors.push("Latitude harus berupa angka antara -90 sampai 90");
   }
 
   // 9. Validasi Longitude (WAJIB)
-  if (data.lon === null || data.lon === undefined || isNaN(data.lon)) {
-    errors.push("Longitude wajib diisi");
-  } else if (data.lon < -180 || data.lon > 180) {
-    errors.push("Longitude harus dalam range -180 sampai 180");
+  if (isNaN(data.lon) || data.lon < -180 || data.lon > 180) {
+    errors.push("Longitude harus berupa angka antara -180 sampai 180");
   }
 
-  // 10. Validasi Tenaga Kerja (WAJIB, 1-4)
-  if (isNaN(data.tkerja) || data.tkerja < 1 || data.tkerja > 4) {
-    errors.push("Tenaga Kerja wajib diisi dengan kode 1-4");
+  // 10. Validasi Tenaga Kerja (WAJIB)
+  if (!data.tkerja || isNaN(data.tkerja) || data.tkerja < 1 || data.tkerja > 4) {
+    errors.push("Tenaga Kerja harus berupa angka 1-4");
   }
 
-  // 11. Validasi Investasi (WAJIB, 1-4)
-  if (isNaN(data.investasi) || data.investasi < 1 || data.investasi > 4) {
-    errors.push("Investasi wajib diisi dengan kode 1-4");
+  // 11. Validasi Investasi (WAJIB)
+  if (!data.investasi || isNaN(data.investasi) || data.investasi < 1 || data.investasi > 4) {
+    errors.push("Investasi harus berupa angka 1-4");
   }
 
-  // 12. Validasi Omset (WAJIB, 1-4)
-  if (isNaN(data.omset) || data.omset < 1 || data.omset > 4) {
-    errors.push("Omset wajib diisi dengan kode 1-4");
+  // 12. Validasi Omset (WAJIB)
+  if (!data.omset || isNaN(data.omset) || data.omset < 1 || data.omset > 4) {
+    errors.push("Omset harus berupa angka 1-4");
   }
 
   // 13. Validasi Skala (WAJIB)
@@ -252,40 +337,7 @@ function validateDirectoryData(data: ProcessedData): string[] {
   return errors;
 }
 
-// Fungsi untuk mapping lookup values (kecamatan dan desa)
-async function mapLookupValues(connection: mysql.Connection, data: ProcessedData, kecamatanName: string, desaName: string) {
-  try {
-    // Map kecamatan berdasarkan nama
-    const [kecRows] = await connection.execute(
-      'SELECT id_kecamatan FROM kecamatan WHERE nama_kecamatan = ?',
-      [kecamatanName]
-    ) as mysql.RowDataPacket[][];
-    
-    if (kecRows.length === 0) {
-      throw new Error(`Kecamatan '${kecamatanName}' tidak ditemukan dalam database`);
-    }
-    
-    data.kec = kecRows[0].id_kecamatan;
-
-    // Map desa berdasarkan nama dan kecamatan
-    const [desRows] = await connection.execute(
-      'SELECT id_desa FROM desa WHERE nama_desa = ? AND id_kecamatan = ?',
-      [desaName, data.kec]
-    ) as mysql.RowDataPacket[][];
-    
-    if (desRows.length === 0) {
-      throw new Error(`Desa '${desaName}' tidak ditemukan dalam kecamatan '${kecamatanName}'`);
-    }
-    
-    data.des = desRows[0].id_desa;
-
-    return data;
-  } catch (error) {
-    throw error;
-  }
-}
-
-// Function to check duplicate KIP and year combinations
+// Function to check duplicate KIP and year combinations - PERBAIKAN
 async function checkDuplicateKipAndYear(connection: mysql.Connection, kip: string, years: number[]): Promise<DuplicateData[]> {
   const duplicates: DuplicateData[] = [];
   
@@ -294,8 +346,8 @@ async function checkDuplicateKipAndYear(connection: mysql.Connection, kip: strin
       const [existingRows] = await connection.execute(`
         SELECT p.id_perusahaan, p.nama_perusahaan, p.kip 
         FROM perusahaan p
-        JOIN perusahaan_direktori pd ON p.id_perusahaan = pd.id_perusahaan
-        WHERE p.kip = ? AND pd.tahun_direktori = ?
+        JOIN direktori d ON p.id_perusahaan = d.id_perusahaan
+        WHERE p.kip = ? AND d.thn_direktori = ?
       `, [kip, year]) as mysql.RowDataPacket[][];
 
       if (existingRows.length > 0) {
@@ -324,15 +376,15 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
     let companyId: number;
 
     if (mode === 'replace') {
-      // Insert new company
+      // Insert new company - PERBAIKAN: hapus created_at dan updated_at
       const [result] = await connection.execute(`
         INSERT INTO perusahaan (
           kip, nama_perusahaan, badan_usaha, alamat, kec, des, kode_pos, skala, 
           lok_perusahaan, nama_kawasan, lat, lon, jarak, produk, KBLI,
           telp_perusahaan, email_perusahaan, web_perusahaan, tkerja, investasi,
           omset, nama_narasumber, jbtn_narasumber, email_narasumber,
-          telp_narasumber, pcl_utama, catatan, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          telp_narasumber, pcl_utama, catatan
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         data.kip, data.nama_perusahaan, data.badan_usaha, data.alamat, data.kec,
         data.des, data.kode_pos, data.skala, data.lok_perusahaan, data.nama_kawasan,
@@ -352,7 +404,7 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
       ) as mysql.RowDataPacket[][];
 
       if (existingCompany.length > 0) {
-        // Update existing company
+        // Update existing company - PERBAIKAN: hapus updated_at
         companyId = existingCompany[0].id_perusahaan;
         await connection.execute(`
           UPDATE perusahaan SET 
@@ -362,7 +414,7 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
             telp_perusahaan = ?, email_perusahaan = ?, web_perusahaan = ?, 
             tkerja = ?, investasi = ?, omset = ?, nama_narasumber = ?, 
             jbtn_narasumber = ?, email_narasumber = ?, telp_narasumber = ?, 
-            pcl_utama = ?, catatan = ?, updated_at = NOW()
+            pcl_utama = ?, catatan = ?
           WHERE id_perusahaan = ?
         `, [
           data.nama_perusahaan, data.badan_usaha, data.alamat, data.kec, data.des,
@@ -374,15 +426,15 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
           data.pcl_utama, data.catatan, companyId
         ]);
       } else {
-        // Insert new company
+        // Insert new company - PERBAIKAN: hapus created_at dan updated_at
         const [result] = await connection.execute(`
           INSERT INTO perusahaan (
             kip, nama_perusahaan, badan_usaha, alamat, kec, des, kode_pos, skala, 
             lok_perusahaan, nama_kawasan, lat, lon, jarak, produk, KBLI,
             telp_perusahaan, email_perusahaan, web_perusahaan, tkerja, investasi,
             omset, nama_narasumber, jbtn_narasumber, email_narasumber,
-            telp_narasumber, pcl_utama, catatan, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            telp_narasumber, pcl_utama, catatan
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           data.kip, data.nama_perusahaan, data.badan_usaha, data.alamat, data.kec,
           data.des, data.kode_pos, data.skala, data.lok_perusahaan, data.nama_kawasan,
@@ -397,19 +449,19 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
       }
     }
 
-    // Handle tahun direktori
+    // Handle tahun direktori - PERBAIKAN: gunakan tabel dan kolom yang benar
     if (mode === 'append') {
       // Remove existing years for this company
       await connection.execute(
-        'DELETE FROM perusahaan_direktori WHERE id_perusahaan = ?',
+        'DELETE FROM direktori WHERE id_perusahaan = ?',
         [companyId]
       );
     }
 
-    // Insert tahun direktori
+    // Insert tahun direktori - PERBAIKAN: gunakan tabel direktori dengan kolom thn_direktori
     for (const year of data.tahun_direktori) {
       await connection.execute(
-        'INSERT INTO perusahaan_direktori (id_perusahaan, tahun_direktori) VALUES (?, ?)',
+        'INSERT INTO direktori (id_perusahaan, thn_direktori) VALUES (?, ?)',
         [companyId, year]
       );
     }
@@ -425,7 +477,7 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    console.log('🔄 Starting direktori import process with FULL FIX...');
+    console.log('🔄 Starting direktori import process with COMPLETE FIX...');
     
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -465,6 +517,9 @@ export async function POST(request: NextRequest) {
     connection = await createDbConnection();
     await connection.beginTransaction();
 
+    // ✅ DEBUG: Check database structure first
+    await debugDatabaseStructure(connection);
+
     // Process file
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer);
@@ -482,63 +537,74 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Clear all data if replace mode
+    // Clear all data if replace mode - PERBAIKAN: gunakan tabel yang benar
     if (mode === 'replace') {
       console.log('🗑️ Clearing all existing data (replace mode)...');
-      await connection.execute('DELETE FROM perusahaan_direktori');
+      await connection.execute('DELETE FROM direktori');
       await connection.execute('DELETE FROM perusahaan');
       await connection.execute('ALTER TABLE perusahaan AUTO_INCREMENT = 1');
-      await connection.execute('ALTER TABLE perusahaan_direktori AUTO_INCREMENT = 1');
+      await connection.execute('ALTER TABLE direktori AUTO_INCREMENT = 1');
     }
 
     // Process each row
-    const validData: ProcessedData[] = [];
     const validationErrors: ValidationError[] = [];
-    const duplicateData: DuplicateData[] = [];
+    const duplicateErrors: DuplicateData[] = [];
+    const processedData: ProcessedData[] = [];
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+    let totalYears = 0;
+
+    console.log('📋 Starting row-by-row processing...');
 
     for (let i = 0; i < jsonData.length; i++) {
-      const rowNumber = i + 2; // Excel row number (starting from 2, row 1 is header)
-      const rowData = jsonData[i] as ExcelRowData;
-
+      const rowIndex = i + 2; // Excel row number (starting from 2, after header)
+      console.log(`🔄 Processing row ${rowIndex}/${jsonData.length + 1}`);
+      
       try {
-        // Sanitize data
-        const sanitizedData = sanitizeDirectoryData(rowData);
+        const rawData = jsonData[i] as ExcelRowData;
         
-        // Get kecamatan and desa names for mapping
-        const kecamatanName = String(rowData['Kecamatan'] || '').trim();
-        const desaName = String(rowData['Desa'] || '').trim();
+        // Extract names for mapping
+        const kecamatanName = String(rawData['Kecamatan'] || '').trim();
+        const desaName = String(rawData['Desa'] || '').trim();
         
-        if (!kecamatanName) {
+        console.log(`📍 Row ${rowIndex}: Kecamatan="${kecamatanName}", Desa="${desaName}"`);
+        
+        if (!kecamatanName || !desaName) {
           validationErrors.push({
-            row: rowNumber,
-            field: 'Kecamatan',
-            message: 'Kecamatan wajib diisi',
-            value: rowData
-          });
-          continue;
-        }
-        
-        if (!desaName) {
-          validationErrors.push({
-            row: rowNumber,
-            field: 'Desa',
-            message: 'Desa wajib diisi',
-            value: rowData
+            row: rowIndex,
+            field: 'Kecamatan/Desa',
+            message: 'Kecamatan dan Desa wajib diisi',
+            value: { kecamatan: kecamatanName, desa: desaName }
           });
           continue;
         }
 
-        const mappedData = await mapLookupValues(connection, sanitizedData, kecamatanName, desaName);
+        // Sanitize and process data
+        const data = sanitizeDirectoryData(rawData);
+        
+        // Map kecamatan and desa names to IDs
+        try {
+          await mapLookupValues(connection, data, kecamatanName, desaName);
+        } catch (mappingError) {
+          validationErrors.push({
+            row: rowIndex,
+            field: 'Mapping Error',
+            message: mappingError.message,
+            value: { kecamatan: kecamatanName, desa: desaName }
+          });
+          continue;
+        }
 
-        // ✅ PERBAIKAN: Validate data dengan fokus pada 16 field wajib
-        const errors = validateDirectoryData(mappedData);
+        // Validate processed data
+        const errors = validateDirectoryData(data, rowIndex);
         if (errors.length > 0) {
           errors.forEach(error => {
             validationErrors.push({
-              row: rowNumber,
-              field: 'validation',
+              row: rowIndex,
+              field: 'Validation',
               message: error,
-              value: mappedData
+              value: data.kip
             });
           });
           continue;
@@ -546,170 +612,140 @@ export async function POST(request: NextRequest) {
 
         // Check for duplicates (only in append mode)
         if (mode === 'append') {
-          const duplicates = await checkDuplicateKipAndYear(
-            connection,
-            mappedData.kip,
-            mappedData.tahun_direktori
-          );
-
+          const duplicates = await checkDuplicateKipAndYear(connection, data.kip, data.tahun_direktori);
           if (duplicates.length > 0) {
-            duplicates.forEach(duplicate => {
-              duplicate.row = rowNumber;
-              duplicateData.push(duplicate);
+            duplicates.forEach(dup => {
+              duplicateErrors.push({
+                ...dup,
+                row: rowIndex
+              });
             });
+            skipped++;
             continue;
           }
         }
 
-        validData.push(mappedData);
+        // Save data
+        console.log(`💾 Saving data for row ${rowIndex}: ${data.nama_perusahaan}`);
+        await saveCompanyData(connection, data, mode);
+        totalYears += data.tahun_direktori.length;
+        
+        // Check if it's new or updated
+        const [existingCheck] = await connection.execute(
+          'SELECT id_perusahaan FROM perusahaan WHERE kip = ?',
+          [data.kip]
+        ) as mysql.RowDataPacket[][];
+        
+        if (mode === 'replace' || existingCheck.length === 0) {
+          inserted++;
+        } else {
+          updated++;
+        }
 
-      } catch (error) {
+        processedData.push(data);
+        
+      } catch (rowError) {
+        console.error(`❌ Error processing row ${rowIndex}:`, rowError);
         validationErrors.push({
-          row: rowNumber,
-          field: 'processing',
-          message: error instanceof Error ? error.message : 'Error tidak dikenal',
-          value: rowData
+          row: rowIndex,
+          field: 'Processing Error',
+          message: rowError.message || 'Kesalahan tidak dikenal',
+          value: null
         });
       }
     }
 
-    // ✅ PERBAIKAN: Enhanced error reporting
-    if (validationErrors.length > 0) {
+    // Final validation check
+    const totalProcessed = inserted + updated;
+    const hasErrors = validationErrors.length > 0;
+    const hasDuplicates = duplicateErrors.length > 0;
+
+    if (hasErrors || (mode === 'append' && hasDuplicates && totalProcessed === 0)) {
       await connection.rollback();
       
-      const errorMessage = validationErrors
-        .slice(0, 10)
-        .map(err => `Baris ${err.row}: ${err.message}`)
-        .join('\n');
-
-      const additionalInfo = validationErrors.length > 10 
-        ? `\n\n... dan ${validationErrors.length - 10} error lainnya`
-        : '';
-
-      return NextResponse.json({
-        success: false,
-        message: 'Ditemukan error validasi data',
-        details: errorMessage + additionalInfo,
-        total_errors: validationErrors.length,
-        errors: validationErrors.slice(0, 20), // Kirim maksimal 20 error untuk debugging
-        error_summary: {
-          total_rows_processed: jsonData.length,
-          validation_errors: validationErrors.length,
-          field_wajib_yang_harus_diisi: [
-            'KIP', 'Nama Perusahaan', 'Alamat', 'Kecamatan', 'Desa', 
-            'Badan Usaha', 'Lokasi Perusahaan', 'KBLI', 'Produk', 
-            'Latitude', 'Longitude', 'Tenaga Kerja', 'Investasi', 
-            'Omset', 'Skala', 'Tahun Direktori'
-          ]
+      let errorMessage = '';
+      if (hasErrors) {
+        errorMessage += `❌ ${validationErrors.length} error validasi ditemukan:\n`;
+        validationErrors.slice(0, 5).forEach(error => {
+          errorMessage += `• Baris ${error.row}: ${error.message}\n`;
+        });
+        if (validationErrors.length > 5) {
+          errorMessage += `• ... dan ${validationErrors.length - 5} error lainnya\n`;
         }
-      }, { status: 400 });
-    }
-
-    // Check for duplicate data (only show in append mode)
-    if (mode === 'append' && duplicateData.length > 0) {
-      await connection.rollback();
-      
-      const duplicateMessage = duplicateData
-        .slice(0, 10)
-        .map(dup => `Baris ${dup.row}: KIP ${dup.kip} dengan tahun ${dup.tahun_direktori.join(',')} sudah ada`)
-        .join('\n');
-
-      const additionalInfo = duplicateData.length > 10 
-        ? `\n\n... dan ${duplicateData.length - 10} duplikasi lainnya`
-        : '';
-
-      return NextResponse.json({
-        success: false,
-        message: 'Ditemukan data duplikasi',
-        details: duplicateMessage + additionalInfo,
-        total_duplicates: duplicateData.length,
-        duplicates: duplicateData.slice(0, 20)
-      }, { status: 400 });
-    }
-
-    // Save valid data
-    console.log(`💾 Saving ${validData.length} valid records...`);
-    let insertedCount = 0;
-    let updatedCount = 0;
-
-    for (const data of validData) {
-      try {
-        const existingQuery = await connection.execute(
-          'SELECT id_perusahaan FROM perusahaan WHERE kip = ?',
-          [data.kip]
-        ) as mysql.RowDataPacket[][];
-
-        if (mode === 'replace' || existingQuery[0].length === 0) {
-          await saveCompanyData(connection, data, mode);
-          insertedCount++;
-        } else {
-          await saveCompanyData(connection, data, 'append');
-          updatedCount++;
-        }
-      } catch (error) {
-        console.error(`Error saving company data for KIP ${data.kip}:`, error);
-        throw error;
       }
+      
+      if (hasDuplicates) {
+        errorMessage += `\n⚠️ ${duplicateErrors.length} duplikasi KIP & tahun ditemukan:\n`;
+        duplicateErrors.slice(0, 3).forEach(dup => {
+          errorMessage += `• Baris ${dup.row}: KIP ${dup.kip} tahun ${dup.tahun_direktori.join(',')}\n`;
+        });
+        if (duplicateErrors.length > 3) {
+          errorMessage += `• ... dan ${duplicateErrors.length - 3} duplikasi lainnya\n`;
+        }
+      }
+
+      return NextResponse.json({
+        success: false,
+        message: errorMessage,
+        details: {
+          validationErrors,
+          duplicateErrors,
+          totalRows: jsonData.length,
+          processedRows: totalProcessed
+        }
+      }, { status: 400 });
     }
 
+    // Commit transaction
     await connection.commit();
-    
-    const endTime = Date.now();
-    const processingTime = `${((endTime - startTime) / 1000).toFixed(2)}s`;
+    const processingTime = `${((Date.now() - startTime) / 1000).toFixed(2)}s`;
 
-    console.log(`✅ Import completed successfully in ${processingTime}`);
+    console.log('✅ Import completed successfully!');
+    console.log(`📊 Summary: ${inserted} inserted, ${updated} updated, ${skipped} skipped, ${totalYears} total years`);
 
     return NextResponse.json({
       success: true,
       message: mode === 'replace' 
-        ? `Berhasil mengganti semua data dengan ${insertedCount} perusahaan baru`
-        : `Berhasil memproses ${insertedCount + updatedCount} perusahaan (${insertedCount} baru, ${updatedCount} diperbarui)`,
-      inserted: insertedCount,
-      updated: updatedCount,
-      total: insertedCount + updatedCount,
-      processingTime: processingTime,
-      totalYears: validData.reduce((sum, company) => sum + company.tahun_direktori.length, 0)
-    }, { status: 200 });
+        ? `Berhasil mengganti semua data dengan ${totalProcessed} perusahaan baru`
+        : `Berhasil memproses ${totalProcessed} perusahaan (${inserted} baru, ${updated} diperbarui)`,
+      data: {
+        inserted,
+        updated,
+        skipped,
+        totalProcessed,
+        totalYears,
+        duplicateErrors: duplicateErrors.length,
+        validationErrors: validationErrors.length,
+        processingTime,
+        mode
+      }
+    });
 
   } catch (error) {
+    console.error('❌ Fatal error in import process:', error);
+    
     if (connection) {
-      await connection.rollback();
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error('❌ Error rolling back transaction:', rollbackError);
+      }
     }
-    
-    console.error('❌ Import process failed:', error);
-    
+
     return NextResponse.json({
       success: false,
-      message: 'Terjadi kesalahan saat memproses file',
-      error: error instanceof Error ? error.message : 'Error tidak dikenal',
-      details: 'Silakan periksa format file dan data, kemudian coba lagi'
+      message: `Error dalam proses import: ${error.message}`,
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500 });
+
   } finally {
     if (connection) {
-      await connection.end();
-      console.log('🔌 Database connection closed');
+      try {
+        await connection.end();
+        console.log('🔌 Database connection closed');
+      } catch (closeError) {
+        console.error('❌ Error closing connection:', closeError);
+      }
     }
   }
-}
-
-// Handle other methods
-export async function GET() {
-  return NextResponse.json({
-    success: false,
-    message: 'Method GET tidak didukung untuk endpoint ini. Gunakan POST untuk upload.'
-  }, { status: 405 });
-}
-
-export async function PUT() {
-  return NextResponse.json({
-    success: false,
-    message: 'Method PUT tidak didukung untuk endpoint ini. Gunakan POST untuk upload.'
-  }, { status: 405 });
-}
-
-export async function DELETE() {
-  return NextResponse.json({
-    success: false,
-    message: 'Method DELETE tidak didukung untuk endpoint ini. Gunakan POST untuk upload.'
-  }, { status: 405 });
 }
