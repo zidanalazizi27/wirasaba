@@ -47,9 +47,9 @@ const Sidebar = ({ children }) => {
           <div className="p-4 flex justify-center">
             <Link href="/">
               <img
-                src="/image/logo_wirasaba_vector_dark.png"
+                src="/image/logo_only.png"
                 className={`overflow-hidden transition-all duration-300 ${
-                  isSidebarOpen ? "w-20" : "w-0"
+                  isSidebarOpen ? "w-24" : "w-0"
                 }`}
                 alt="Logo"
               />

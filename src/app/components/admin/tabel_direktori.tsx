@@ -428,7 +428,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
   const [uploadMode, setUploadMode] = useState<"append" | "replace">("append");
   const [isUploading, setIsUploading] = useState(false);
 
-  // ✅ Enhanced file validation
+  // Enhanced file validation
   const validateFile = (selectedFile: File): boolean => {
     // Check file type
     const allowedTypes = [
@@ -438,9 +438,9 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     ];
 
     if (!allowedTypes.includes(selectedFile.type)) {
-      SweetAlertUtils.error(
-        "Format File Tidak Didukung",
-        "Silakan gunakan file dengan format .xlsx, .xls, atau .csv"
+      SweetAlertUtils.warning(
+        "Format File Tidak Valid",
+        "Silakan pilih file dengan format .xlsx, .xls, atau .csv"
       );
       return false;
     }
@@ -448,16 +448,16 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     // Check file size (max 10MB)
     const maxSize = 10 * 1024 * 1024;
     if (selectedFile.size > maxSize) {
-      SweetAlertUtils.error(
-        "Ukuran File Terlalu Besar",
-        "Ukuran file maksimal 10MB. Silakan kompres file atau kurangi jumlah data."
+      SweetAlertUtils.warning(
+        "File Terlalu Besar",
+        "Ukuran file maksimal 10MB"
       );
       return false;
     }
 
     // Check file name
     if (!selectedFile.name) {
-      SweetAlertUtils.error(
+      SweetAlertUtils.warning(
         "File Tidak Valid",
         "Nama file tidak dapat dibaca. Silakan periksa file Anda."
       );
@@ -472,551 +472,272 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     if (selectedFile) {
       if (validateFile(selectedFile)) {
         setFile(selectedFile);
-        console.log("✅ File valid dipilih:", {
-          name: selectedFile.name,
-          size: `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`,
-          type: selectedFile.type,
-          lastModified: new Date(selectedFile.lastModified).toISOString(),
-        });
       } else {
-        e.target.value = ""; // Reset input
-        setFile(null);
+        e.target.value = "";
       }
     }
   };
 
   const handleDownloadTemplate = async () => {
     try {
-      SweetAlertUtils.loading(
-        "Mengunduh Template",
-        "Mempersiapkan template Excel dengan 16 field wajib dan 12 field opsional..."
-      );
+      SweetAlertUtils.loading("Mengunduh Template", "Mohon tunggu sebentar...");
 
-      console.log("🔄 Requesting template download...");
-
-      const response = await fetch("/api/perusahaan/template", {
-        method: "GET",
+      const response = await fetch("/api/direktori/template", {
+        method: "POST",
         headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({}),
       });
 
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
+        const a = document.createElement("a");
+        a.href = url;
 
-        // Generate filename with timestamp
-        const timestamp = new Date()
-          .toISOString()
-          .slice(0, 19)
-          .replace(/[T:]/g, "-");
-        link.download = `template-direktori-perusahaan-${timestamp}.xlsx`;
+        // Get filename from response header
+        const contentDisposition = response.headers.get("content-disposition");
+        let filename = "template-direktori.xlsx";
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+          if (filenameMatch) {
+            filename = filenameMatch[1];
+          }
+        }
 
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
         window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
 
         SweetAlertUtils.closeLoading();
         SweetAlertUtils.success(
           "Template Berhasil Diunduh",
-          "Template Excel telah diunduh dengan 28 kolom lengkap.\n\n📋 Petunjuk:\n• 🔴 16 field WAJIB harus diisi\n• ⚪ 12 field OPSIONAL boleh kosong\n• Pastikan format KIP dan Tahun Direktori sesuai petunjuk\n• Periksa sheet 'Petunjuk Kolom' dan 'Kode Referensi'"
+          "Silakan isi template sesuai format yang disediakan"
         );
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error("Gagal mengunduh template");
       }
     } catch (error) {
       SweetAlertUtils.closeLoading();
-      console.error("❌ Template download error:", error);
       SweetAlertUtils.error(
         "Gagal Mengunduh Template",
-        `Terjadi kesalahan saat mengunduh template: ${(error as Error).message}\n\n🔧 Solusi:\n1. Periksa koneksi internet\n2. Refresh halaman dan coba lagi\n3. Hubungi admin jika masalah berlanjut`
+        "Terjadi kesalahan saat mengunduh template"
       );
     }
   };
 
-  // Perbaikan untuk handling SweetAlert confirmation
   const handleUpload = async () => {
-    console.log("🚀 [DEBUG] Starting upload process...");
-
     if (!file) {
-      console.log("❌ [DEBUG] No file selected");
       SweetAlertUtils.warning(
         "File Belum Dipilih",
-        "Silakan pilih file terlebih dahulu sebelum melakukan upload."
+        "Silakan pilih file terlebih dahulu"
       );
       return;
     }
 
-    console.log("📄 [DEBUG] File info:", {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      lastModified: new Date(file.lastModified).toISOString(),
-    });
-
-    // Re-validate file before upload
-    if (!validateFile(file)) {
-      console.log("❌ [DEBUG] File validation failed");
-      setFile(null);
-      return;
-    }
-
-    console.log("✅ [DEBUG] File validation passed");
-
-    // Confirmation dialog
+    // Confirm upload action
     const confirmMessage =
       uploadMode === "replace"
-        ? "⚠️ MODE GANTI SEMUA DATA\n\nAksi ini akan:\n• Menghapus SEMUA data direktori yang ada\n• Mengganti dengan data dari file Excel\n• Tidak dapat dibatalkan\n\nApakah Anda yakin ingin melanjutkan?"
-        : "📥 MODE TAMBAH DATA\n\nAksi ini akan:\n• Menambahkan data baru ke database\n• Memperbarui data yang sudah ada\n• Menolak duplikasi KIP & tahun direktori\n\nApakah Anda yakin ingin melanjutkan?";
+        ? "PERINGATAN: Semua data direktori yang ada akan dihapus dan diganti dengan data dari file ini. Aksi ini tidak dapat dibatalkan. Apakah Anda yakin?"
+        : "Data baru akan ditambahkan ke database. Data yang sudah ada akan diperbarui jika ditemukan duplikat. Lanjutkan?";
 
-    console.log("🔔 [DEBUG] Showing confirmation dialog");
+    const confirmed = await SweetAlertUtils.confirm(
+      uploadMode === "replace"
+        ? "Konfirmasi Ganti Semua Data"
+        : "Konfirmasi Upload",
+      confirmMessage,
+      uploadMode === "replace" ? "Ya, Ganti Semua!" : "Ya, Upload!"
+    );
 
-    let confirmResult;
-    try {
-      confirmResult = await SweetAlertUtils.confirm(
-        "Konfirmasi Upload Data",
-        confirmMessage,
-        uploadMode === "replace" ? "Ya, Ganti Semua" : "Ya, Upload",
-        "Tidak, Batal",
-        {
-          icon: uploadMode === "replace" ? "warning" : "question",
-          confirmButtonColor: uploadMode === "replace" ? "#ef4444" : "#22c55e",
-          cancelButtonColor: "#6b7280",
-        }
-      );
-      console.log("✅ [DEBUG] Confirmation result:", confirmResult);
-      console.log("🔍 [DEBUG] Confirmation result type:", typeof confirmResult);
-      console.log(
-        "🔍 [DEBUG] Confirmation result keys:",
-        Object.keys(confirmResult || {})
-      );
-
-      // Debug: check different possible properties
-      console.log(
-        "🔍 [DEBUG] confirmResult.isConfirmed:",
-        confirmResult?.isConfirmed
-      );
-      console.log("🔍 [DEBUG] confirmResult.value:", confirmResult?.value);
-      console.log("🔍 [DEBUG] confirmResult.confirm:", confirmResult?.confirm);
-      console.log("🔍 [DEBUG] confirmResult === true:", confirmResult === true);
-    } catch (error) {
-      console.error("❌ [DEBUG] Confirmation dialog error:", error);
-      return;
-    }
-
-    // ✅ PERBAIKAN: Multiple ways to check confirmation
-    const isConfirmed =
-      confirmResult === true ||
-      confirmResult?.isConfirmed === true ||
-      confirmResult?.value === true ||
-      confirmResult?.confirm === true;
-
-    console.log("🔍 [DEBUG] Final isConfirmed decision:", isConfirmed);
-
-    if (!isConfirmed) {
-      console.log("🚫 [DEBUG] User cancelled upload");
-      return;
-    }
-
-    console.log("🎯 [DEBUG] User confirmed upload, proceeding...");
-    setIsUploading(true);
-    console.log("⏳ [DEBUG] Upload started, isUploading set to true");
+    if (!confirmed) return;
 
     try {
-      console.log("🔄 [DEBUG] Showing loading dialog");
+      setIsUploading(true);
       SweetAlertUtils.loading(
-        "Memproses Upload",
-        uploadMode === "replace"
-          ? "Mengganti semua data direktori..."
-          : "Memvalidasi dan memproses data baru..."
+        "Memproses File",
+        "Sedang memvalidasi dan memproses data..."
       );
 
-      // Prepare form data
       const formData = new FormData();
       formData.append("file", file);
       formData.append("mode", uploadMode);
 
-      console.log("📦 [DEBUG] FormData prepared:", {
-        fileSize: file.size,
-        fileName: file.name,
-        mode: uploadMode,
+      const response = await fetch("/api/direktori/import", {
+        method: "POST",
+        body: formData,
       });
 
-      // Enhanced logging
-      console.log(
-        "🚀 [DEBUG] Starting fetch request to /api/perusahaan/import"
-      );
-
-      // Upload request with timeout and enhanced debugging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.log("⏰ [DEBUG] Request timeout after 5 minutes");
-        controller.abort();
-      }, 300000); // 5 minutes timeout
-
-      console.log("🌐 [DEBUG] Making fetch request...");
-
-      let response;
-      try {
-        response = await fetch("/api/perusahaan/import", {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-          headers: {
-            "X-Upload-Timestamp": new Date().toISOString(),
-            "X-Upload-Mode": uploadMode,
-          },
-        });
-
-        console.log("📡 [DEBUG] Fetch response received:", {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok,
-          headers: Object.fromEntries(response.headers.entries()),
-        });
-      } catch (fetchError) {
-        console.error("❌ [DEBUG] Fetch error:", fetchError);
-        throw fetchError;
-      }
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.log(
-          "❌ [DEBUG] Response not OK:",
-          response.status,
-          response.statusText
-        );
-
-        // Try to get error response body
-        let errorText = "";
-        try {
-          errorText = await response.text();
-          console.log("📄 [DEBUG] Error response body:", errorText);
-        } catch (e) {
-          console.log("❌ [DEBUG] Could not read error response body");
-        }
-
-        throw new Error(
-          `Server Error ${response.status}: ${response.statusText}\nResponse: ${errorText}`
-        );
-      }
-
-      console.log("📥 [DEBUG] Parsing JSON response...");
-      let result;
-      try {
-        result = await response.json();
-        console.log("📊 [DEBUG] Upload result parsed:", result);
-      } catch (jsonError) {
-        console.error("❌ [DEBUG] JSON parsing error:", jsonError);
-        // Try to get raw response
-        const rawText = await response.text();
-        console.log("📄 [DEBUG] Raw response:", rawText);
-        throw new Error("Invalid JSON response from server");
-      }
-
-      if (result.success) {
-        console.log("✅ [DEBUG] Upload successful!");
-        SweetAlertUtils.closeLoading();
-
-        // Success message with detailed info
-        const successMessage =
-          uploadMode === "replace"
-            ? `✅ Berhasil mengganti semua data!\n\n📊 Ringkasan:\n• Data baru: ${result.inserted || 0} perusahaan\n• Total tahun direktori: ${result.totalYears || 0}\n• Waktu proses: ${result.processingTime || "N/A"}`
-            : `✅ Berhasil memproses data!\n\n📊 Ringkasan:\n• Data ditambahkan: ${result.inserted || 0} perusahaan\n• Data diperbarui: ${result.updated || 0} perusahaan\n• Total diproses: ${(result.inserted || 0) + (result.updated || 0)} perusahaan\n• Data diabaikan: ${result.skipped || 0} (duplikasi)\n• Waktu proses: ${result.processingTime || "N/A"}`;
-
-        SweetAlertUtils.success("Upload Berhasil!", successMessage);
-
-        // Reset form
-        setFile(null);
-        setUploadMode("append");
-
-        // Trigger refresh
-        onSuccess();
-
-        // Auto close dialog after success
-        setTimeout(() => {
-          onClose();
-        }, 2000);
-      } else {
-        console.log("❌ [DEBUG] Upload failed with message:", result.message);
-        console.log("📋 [DEBUG] Full error result:", result);
-        throw new Error(result.message || "Upload gagal tanpa pesan error");
-      }
-    } catch (error) {
-      console.error("❌ [DEBUG] Upload error caught:", error);
+      const result = await response.json();
       SweetAlertUtils.closeLoading();
 
-      const errorMessage =
-        error instanceof Error ? error.message : "Error tidak dikenal";
-      console.error("💥 [DEBUG] Final error details:", {
-        error: errorMessage,
-        fileName: file?.name,
-        uploadMode: uploadMode,
-        timestamp: new Date().toISOString(),
-      });
+      if (result.success) {
+        const message =
+          uploadMode === "replace"
+            ? `Berhasil mengganti semua data dengan ${result.inserted || 0} data baru`
+            : `Berhasil memproses ${(result.inserted || 0) + (result.updated || 0)} data`;
 
-      // Enhanced error handling
-      let userFriendlyMessage = "Terjadi kesalahan saat mengupload file.";
-
-      if (errorMessage.includes("abort")) {
-        userFriendlyMessage =
-          "Upload dibatalkan karena timeout (lebih dari 5 menit).";
-      } else if (errorMessage.includes("Network")) {
-        userFriendlyMessage =
-          "Masalah koneksi jaringan. Periksa koneksi internet Anda.";
-      } else if (errorMessage.includes("Server Error 5")) {
-        userFriendlyMessage =
-          "Kesalahan server internal. Silakan coba lagi atau hubungi admin.";
-      } else if (errorMessage.includes("413")) {
-        userFriendlyMessage = "File terlalu besar untuk diproses server.";
-      } else if (errorMessage.includes("404")) {
-        userFriendlyMessage =
-          "Endpoint upload tidak ditemukan. Hubungi administrator.";
+        await SweetAlertUtils.success("Upload Berhasil!", message);
+        onSuccess();
+        onClose();
+      } else {
+        throw new Error(result.message || "Upload gagal");
       }
-
-      SweetAlertUtils.error(
+    } catch (error) {
+      setIsUploading(false);
+      SweetAlertUtils.closeLoading();
+      console.error("Error uploading file:", error);
+      await SweetAlertUtils.error(
         "Upload Gagal",
-        `${userFriendlyMessage}\n\n🔍 Detail Error:\n${errorMessage}\n\n💡 Solusi:\n1. Periksa format file (harus .xlsx, .xls, atau .csv)\n2. Pastikan semua 16 field wajib terisi\n3. Periksa koneksi internet\n4. Coba dengan file yang lebih kecil\n5. Buka Developer Console (F12) untuk detail error`
+        `Terjadi kesalahan: ${(error as Error).message}`
       );
     } finally {
-      console.log(
-        "🏁 [DEBUG] Upload process finished, setting isUploading to false"
-      );
       setIsUploading(false);
     }
   };
 
   const handleCancel = () => {
-    if (isUploading) {
-      SweetAlertUtils.warning(
-        "Upload Sedang Berlangsung",
-        "Tidak dapat menutup dialog saat upload sedang berlangsung. Silakan tunggu proses selesai."
-      );
-      return;
-    }
-
+    onClose();
     setFile(null);
     setUploadMode("append");
-    onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-lg">
-          <h2 className="text-xl font-semibold text-center">
-            📊 Upload Data Direktori Perusahaan
-          </h2>
-          <p className="text-blue-100 text-sm text-center mt-1">
-            Sistem Terintegrasi - Validasi 16 Field Wajib + 12 Field Opsional
-          </p>
-        </div>
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-xl font-medium mb-4 text-center">
+          Upload Data Direktori
+        </h2>
 
-        <div className="p-6 space-y-6">
-          {/* Instructions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-medium text-blue-900 mb-2">
-              📋 Petunjuk Upload:
-            </h3>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>
-                • 🔴 <strong>16 field WAJIB</strong> harus diisi lengkap
-              </li>
-              <li>
-                • ⚪ <strong>12 field OPSIONAL</strong> boleh dikosongkan
-              </li>
-              <li>• 📄 Format file: .xlsx, .xls, atau .csv (max 10MB)</li>
-              <li>• 🔢 KIP harus format TEXT, bukan angka</li>
-              <li>• 📅 Tahun Direktori format: "2024,2025" atau "2024"</li>
-            </ul>
-          </div>
+        <div className="space-y-4">
+          {/* Download Template Button */}
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            disabled={isUploading}
+            className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            Unduh Template
+          </button>
 
-          {/* Download Template */}
+          {/* File Upload */}
           <div>
-            <button
-              onClick={handleDownloadTemplate}
-              disabled={isUploading}
-              className="w-full px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-md"
-            >
-              📥 Unduh Template Excel (28 Kolom Lengkap)
-            </button>
-            <p className="text-xs text-gray-600 mt-2 text-center">
-              Template sudah termasuk petunjuk lengkap dan kode referensi
-            </p>
-          </div>
-
-          {/* File Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              📂 Pilih File Excel/CSV
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pilih File Excel (.xlsx, .xls, .csv)
             </label>
             <input
               type="file"
               onChange={handleFileChange}
               accept=".xlsx,.xls,.csv"
+              className="w-full p-2 border border-gray-300 rounded-md text-sm"
               disabled={isUploading}
-              className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
-
             {file && (
-              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <span className="text-green-600">✅</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-green-700">
-                      File dipilih: {file.name}
-                    </p>
-                    <div className="flex space-x-4 text-xs text-green-600 mt-1">
-                      <span>📏 {(file.size / 1024 / 1024).toFixed(2)} MB</span>
-                      <span>📄 {file.type || "Unknown type"}</span>
-                      <span>
-                        🕒 {new Date(file.lastModified).toLocaleString("id-ID")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <p className="mt-2 text-sm text-gray-600">
+                File terpilih: {file.name} ({(file.size / 1024).toFixed(1)} KB)
+              </p>
             )}
           </div>
 
-          {/* Upload Mode Selection */}
+          {/* Upload Mode */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              ⚙️ Mode Upload
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Mode Upload
             </label>
-            <div className="space-y-3">
-              <label className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+            <div className="space-y-2">
+              <div className="flex items-start">
                 <input
                   type="radio"
+                  id="append"
                   name="uploadMode"
                   value="append"
                   checked={uploadMode === "append"}
                   onChange={() => setUploadMode("append")}
+                  className="h-4 w-4 text-blue-600 mt-0.5"
                   disabled={isUploading}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mt-0.5"
                 />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">
-                    📥 Tambah Data (Direkomendasikan)
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    Menambahkan data baru dan memperbarui data yang sudah ada.
-                    Duplikasi KIP & tahun direktori akan ditolak.
-                  </div>
-                </div>
-              </label>
-
-              <label className="flex items-start space-x-3 p-3 border border-red-200 rounded-lg hover:bg-red-50 cursor-pointer transition-colors">
+                <label htmlFor="append" className="ml-2 text-sm text-gray-700">
+                  <span className="font-medium">Tambah Data</span> — Menambahkan
+                  data baru, memperbarui data yang sudah ada
+                </label>
+              </div>
+              <div className="flex items-start">
                 <input
                   type="radio"
+                  id="replace"
                   name="uploadMode"
                   value="replace"
                   checked={uploadMode === "replace"}
                   onChange={() => setUploadMode("replace")}
+                  className="h-4 w-4 text-red-600 mt-0.5"
                   disabled={isUploading}
-                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 mt-0.5"
                 />
-                <div className="flex-1">
-                  <div className="font-medium text-red-900">
-                    🔄 Ganti Semua Data (Hati-hati!)
-                  </div>
-                  <div className="text-sm text-red-600">
-                    ⚠️ Menghapus SEMUA data direktori yang ada dan menggantinya
-                    dengan data dari file Excel. Tidak dapat dibatalkan!
-                  </div>
-                </div>
-              </label>
+                <label htmlFor="replace" className="ml-2 text-sm text-gray-700">
+                  <span className="font-medium text-red-600">
+                    Ganti Semua Data
+                  </span>{" "}
+                  — Menghapus semua data dan menggantinya dengan data dari file
+                </label>
+              </div>
             </div>
           </div>
 
+          {/* Informasi Penting */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <h4 className="text-sm font-medium text-gray-800 mb-2">
+              Informasi Penting :
+            </h4>
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li>
+                • <strong>Field Wajib:</strong> KIP, Nama Perusahaan, Alamat,
+                Kecamatan, Desa, Badan Usaha, Lokasi Perusahaan, KBLI, Produk,
+                Latitude, Longitude, Tenaga Kerja, Investasi, Omset, Skala,
+                Tahun Direktori (16 field harus diisi)
+              </li>
+              <li>
+                • <strong>Field Opsional:</strong> Kode Pos, Nama Kawasan,
+                Jarak, Telepon/Email/Website Perusahaan, Data Narasumber, PCL
+                Utama, Catatan (12 field boleh kosong)
+              </li>
+              <li>
+                • <strong>Format KIP:</strong> Harus unik, tidak boleh duplikat
+                untuk tahun yang sama
+              </li>
+              <li>
+                • <strong>Koordinat:</strong> Latitude dan Longitude harus dalam
+                format decimal degrees (-7.xxx, 112.xxx)
+              </li>
+            </ul>
+          </div>
+
           {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4 border-t border-gray-200">
+          <div className="flex space-x-3 pt-4">
             <button
               onClick={handleCancel}
               disabled={isUploading}
-              className="flex-1 px-4 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isUploading ? "Upload Berlangsung..." : "❌ Batal"}
+              Batal
             </button>
 
             <button
               onClick={handleUpload}
               disabled={!file || isUploading}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+              className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
                 uploadMode === "replace"
-                  ? "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-              } disabled:opacity-50 disabled:cursor-not-allowed shadow-md`}
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              {isUploading ? (
-                <span className="flex items-center justify-center space-x-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  <span>Memproses...</span>
-                </span>
-              ) : uploadMode === "replace" ? (
-                "🔄 Ganti Semua Data"
-              ) : (
-                "📤 Upload Data"
-              )}
+              {isUploading
+                ? "Memproses..."
+                : uploadMode === "replace"
+                  ? "Ganti Semua"
+                  : "Upload"}
             </button>
           </div>
-
-          {/* Upload Progress Info */}
-          {isUploading && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-center space-x-2">
-                <svg
-                  className="animate-spin h-5 w-5 text-yellow-600"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-yellow-800">
-                    Upload sedang berlangsung...
-                  </p>
-                  <p className="text-xs text-yellow-700">
-                    Sedang memvalidasi {file?.name} • Mode:{" "}
-                    {uploadMode === "replace" ? "Ganti Semua" : "Tambah Data"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
