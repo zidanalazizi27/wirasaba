@@ -1439,22 +1439,17 @@ const TabelDirektori = () => {
       SweetAlertUtils.closeLoading();
 
       if (result.success) {
-        // Success message seperti di PCL
         await SweetAlertUtils.success(
           "Berhasil Dihapus!",
           `Data "${business.nama_perusahaan}" berhasil dihapus!`
         );
-
-        // ✅ ADOPSI PCL: Simple fetchData() - tidak perlu manual state management
-        fetchData(); // <-- Ini saja sudah cukup! fetchData akan handle semua
+        await fetchData();
       } else {
         throw new Error(result.message || "Gagal menghapus data");
       }
     } catch (error) {
       console.error("Error deleting data:", error);
       SweetAlertUtils.closeLoading();
-
-      // Error handling seperti di PCL
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
       await SweetAlertUtils.error(
