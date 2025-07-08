@@ -604,12 +604,66 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
       SweetAlertUtils.closeLoading();
 
       if (result.success) {
-        const message =
-          uploadMode === "replace"
-            ? `Berhasil mengganti semua data dengan ${result.inserted || 0} data baru`
-            : `Berhasil memproses ${(result.inserted || 0) + (result.updated || 0)} data`;
+        // DEBUG: Log untuk melihat struktur response
+        console.log("📊 API Response:", result);
+        console.log("📊 Response Data:", result.data);
 
-        await SweetAlertUtils.success("Upload Berhasil!", message);
+        // PERBAIKAN: Ambil data dari nested object result.data
+        const responseData = result.data || {};
+
+        const inserted = responseData.inserted || 0;
+        const updated = responseData.updated || 0;
+        const totalProcessed =
+          responseData.totalProcessed || inserted + updated;
+        const skipped = responseData.skipped || 0;
+        const totalYears = responseData.totalYears || 0;
+
+        // Buat pesan yang lebih informatif
+        let message = "";
+        let detailInfo = "";
+
+        if (uploadMode === "replace") {
+          if (totalProcessed > 0) {
+            message = `Berhasil mengganti semua data dengan ${totalProcessed} perusahaan baru`;
+            if (totalYears > 0) {
+              detailInfo = `Total ${totalYears} data direktori tahun telah disimpan`;
+            }
+          } else {
+            message =
+              "Berhasil memproses file, namun tidak ada data baru yang ditambahkan";
+            detailInfo = "Kemungkinan file kosong atau semua data tidak valid";
+          }
+        } else {
+          if (totalProcessed > 0) {
+            const parts = [];
+            if (inserted > 0) parts.push(`${inserted} perusahaan baru`);
+            if (updated > 0) parts.push(`${updated} perusahaan diperbarui`);
+            if (skipped > 0) parts.push(`${skipped} data dilewati (duplikat)`);
+
+            message = `Berhasil memproses ${totalProcessed} perusahaan`;
+            detailInfo = parts.length > 0 ? `(${parts.join(", ")})` : "";
+
+            if (totalYears > 0) {
+              detailInfo += `\nTotal ${totalYears} data direktori tahun`;
+            }
+          } else {
+            if (skipped > 0) {
+              message = `Tidak ada data baru yang diproses`;
+              detailInfo = `${skipped} data dilewati karena sudah ada di database`;
+            } else {
+              message =
+                "File berhasil diproses, namun tidak ada data yang valid";
+              detailInfo = "Periksa format dan isi file Excel Anda";
+            }
+          }
+        }
+
+        // Gabungkan pesan utama dengan detail
+        const fullMessage = detailInfo
+          ? `${message}\n\n${detailInfo}`
+          : message;
+
+        await SweetAlertUtils.success("Upload Berhasil!", fullMessage);
         onSuccess();
         onClose();
       } else {
@@ -1443,6 +1497,7 @@ const TabelDirektori = () => {
           "Berhasil Dihapus!",
           `Data "${business.nama_perusahaan}" berhasil dihapus!`
         );
+        setHasLoadedAll(false);
         await fetchData();
       } else {
         throw new Error(result.message || "Gagal menghapus data");

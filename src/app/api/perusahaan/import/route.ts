@@ -1,5 +1,5 @@
 // src/app/api/perusahaan/import/route.ts
-// VERSI LENGKAP YANG SUDAH DIPERBAIKI - FINAL VERSION
+// VERSI LENGKAP YANG SUDAH DIPERBAIKI - FINAL VERSION (FIXED)
 import { NextRequest, NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 import * as XLSX from 'xlsx';
@@ -621,25 +621,38 @@ export async function POST(request: NextRequest) {
               });
             });
             skipped++;
+            console.log(`⏭️ Row ${rowIndex} skipped due to duplicates`);
             continue;
           }
         }
 
-        // Save data
-        console.log(`💾 Saving data for row ${rowIndex}: ${data.nama_perusahaan}`);
-        await saveCompanyData(connection, data, mode);
-        totalYears += data.tahun_direktori.length;
-        
-        // Check if it's new or updated
-        const [existingCheck] = await connection.execute(
+        // PERBAIKAN: Cek apakah perusahaan sudah ada SEBELUM menyimpan
+        const [existingCompanyCheck] = await connection.execute(
           'SELECT id_perusahaan FROM perusahaan WHERE kip = ?',
           [data.kip]
         ) as mysql.RowDataPacket[][];
-        
-        if (mode === 'replace' || existingCheck.length === 0) {
+
+        const isExistingCompany = existingCompanyCheck.length > 0;
+
+        // Save data (HANYA SEKALI!)
+        console.log(`💾 Saving data for row ${rowIndex}: ${data.nama_perusahaan}`);
+        const savedCompanyId = await saveCompanyData(connection, data, mode);
+        totalYears += data.tahun_direktori.length;
+
+        // PERBAIKAN: Hitung berdasarkan kondisi yang tepat
+        if (mode === 'replace') {
+          // Dalam mode replace, semua adalah inserted (karena data sudah dihapus di awal)
           inserted++;
+          console.log(`✅ Row ${rowIndex}: INSERTED (replace mode) - total inserted: ${inserted}`);
         } else {
-          updated++;
+          // Dalam mode append, cek apakah ini perusahaan baru atau update
+          if (isExistingCompany) {
+            updated++;
+            console.log(`✅ Row ${rowIndex}: UPDATED existing company - total updated: ${updated}`);
+          } else {
+            inserted++;
+            console.log(`✅ Row ${rowIndex}: INSERTED new company - total inserted: ${inserted}`);
+          }
         }
 
         processedData.push(data);
@@ -655,8 +668,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Final validation check
+    // PERBAIKAN: Tambahkan logging untuk debug
     const totalProcessed = inserted + updated;
+    console.log(`📊 FINAL COUNTS:`);
+    console.log(`   - Inserted: ${inserted}`);
+    console.log(`   - Updated: ${updated}`);
+    console.log(`   - Skipped: ${skipped}`);
+    console.log(`   - Total Processed: ${totalProcessed}`);
+    console.log(`   - Total Years: ${totalYears}`);
+    console.log(`   - Validation Errors: ${validationErrors.length}`);
+    console.log(`   - Duplicate Errors: ${duplicateErrors.length}`);
+
+    // Final validation check
     const hasErrors = validationErrors.length > 0;
     const hasDuplicates = duplicateErrors.length > 0;
 
@@ -703,21 +726,29 @@ export async function POST(request: NextRequest) {
     console.log('✅ Import completed successfully!');
     console.log(`📊 Summary: ${inserted} inserted, ${updated} updated, ${skipped} skipped, ${totalYears} total years`);
 
+    // PERBAIKAN: Response structure yang konsisten
     return NextResponse.json({
       success: true,
       message: mode === 'replace' 
         ? `Berhasil mengganti semua data dengan ${totalProcessed} perusahaan baru`
         : `Berhasil memproses ${totalProcessed} perusahaan (${inserted} baru, ${updated} diperbarui)`,
       data: {
-        inserted,
-        updated,
-        skipped,
-        totalProcessed,
-        totalYears,
+        // Properti utama yang digunakan frontend
+        inserted: inserted,
+        updated: updated,
+        totalProcessed: totalProcessed,
+        
+        // Properti tambahan untuk informasi detail  
+        skipped: skipped,
+        totalYears: totalYears,
         duplicateErrors: duplicateErrors.length,
         validationErrors: validationErrors.length,
-        processingTime,
-        mode
+        
+        // Metadata
+        totalRows: jsonData.length,
+        validRows: processedData.length,
+        processingTime: processingTime,
+        mode: mode
       }
     });
 
