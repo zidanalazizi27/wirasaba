@@ -12,8 +12,8 @@ export default function Profil() {
 
   // State untuk form profil
   const [profileForm, setProfileForm] = useState({
-    name: "Fungsi Produksi",
-    email: "produksi_3515@bps.go.id",
+    name: "bps3515",
+    email: "bps3515@bps.go.id",
     institution: "BPS Kabupaten Sidoarjo",
   });
 
