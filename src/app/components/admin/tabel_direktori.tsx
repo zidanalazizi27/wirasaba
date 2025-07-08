@@ -692,7 +692,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
         <h2 className="text-xl font-medium mb-4 text-center">
-          Upload Data Direktori
+          Upload Data Perusahaan
         </h2>
 
         <div className="space-y-4">
@@ -775,15 +775,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
             </h4>
             <ul className="text-xs text-gray-600 space-y-1">
               <li>
-                • <strong>Field Wajib:</strong> KIP, Nama Perusahaan, Alamat,
-                Kecamatan, Desa, Badan Usaha, Lokasi Perusahaan, KBLI, Produk,
-                Latitude, Longitude, Tenaga Kerja, Investasi, Omset, Skala,
-                Tahun Direktori (16 field harus diisi)
-              </li>
-              <li>
-                • <strong>Field Opsional:</strong> Kode Pos, Nama Kawasan,
-                Jarak, Telepon/Email/Website Perusahaan, Data Narasumber, PCL
-                Utama, Catatan (12 field boleh kosong)
+                • Perhatikan file yang wajib diisi dan tidak pada template yang tersedia.
               </li>
               <li>
                 • <strong>Format KIP:</strong> Harus unik, tidak boleh duplikat
