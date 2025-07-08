@@ -38,8 +38,8 @@ export async function GET() {
       duplicateCount: row.duplicate_count,
       // Label yang informatif untuk dropdown
       displayLabel: row.duplicate_count > 1 
-        ? `${row.nama_perusahaan} (KIP: ${row.kip}) - ${row.duplicate_count} entries`
-        : `${row.nama_perusahaan} (KIP: ${row.kip})`
+        ? `${row.kip} - ${row.nama_perusahaan} `
+        : `${row.kip} - ${row.nama_perusahaan}`
     }));
 
     return NextResponse.json({ 
