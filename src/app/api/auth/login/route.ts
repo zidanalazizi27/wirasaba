@@ -1,3 +1,4 @@
+// src/app/api/auth/login/route.ts (Updated)
 import { NextRequest, NextResponse } from "next/server";
 import mysql from "mysql2/promise";
 import bcrypt from "bcryptjs";
@@ -45,11 +46,43 @@ export async function POST(request: NextRequest) {
 
     const user = (rows as any[])[0];
 
-    // Verifikasi password
-    // Catatan: Dalam database sebenarnya, password seharusnya di-hash menggunakan bcrypt
-    // Kode di bawah ini mengasumsikan password disimpan langsung (tidak di-hash)
-    // Untuk keamanan yang lebih baik, kita perlu mengubahnya nanti
-    const isPasswordValid = password === user.password;
+    // Verifikasi password dengan dukungan bcrypt dan backward compatibility
+    let isPasswordValid = false;
+    
+    // Cek apakah password di database sudah di-hash dengan bcrypt
+    if (user.password.startsWith('$2a') || user.password.startsWith('$2b')) {
+      // Password sudah di-hash, gunakan bcrypt.compare
+      isPasswordValid = await bcrypt.compare(password, user.password);
+    } else {
+      // Password masih plain text (untuk backward compatibility)
+      // Dalam implementasi production, sebaiknya semua password di-hash
+      isPasswordValid = password === user.password;
+      
+      // Optional: Auto-hash password lama saat login berhasil
+      if (isPasswordValid) {
+        try {
+          const connectionUpdate = await mysql.createConnection({
+            host: process.env.DB_HOST || "localhost",
+            user: process.env.DB_USER || "root",
+            password: process.env.DB_PASSWORD || "",
+            database: process.env.DB_NAME || "wirasaba",
+          });
+          
+          const saltRounds = 10;
+          const hashedPassword = await bcrypt.hash(password, saltRounds);
+          
+          await connectionUpdate.execute(
+            "UPDATE akun SET password = ? WHERE id_akun = ?",
+            [hashedPassword, user.id_akun]
+          );
+          
+          await connectionUpdate.end();
+        } catch (updateError) {
+          console.error("Error auto-hashing password:", updateError);
+          // Jangan gagalkan login jika update password gagal
+        }
+      }
+    }
     
     // Jika password tidak valid
     if (!isPasswordValid) {

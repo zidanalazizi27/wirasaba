@@ -1,20 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import SidebarLayout from "@/app/components/admin/sidebar_layout";
 import Breadcrumb from "@/app/components/admin/breadcrumb";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
-import Image from "next/image";
+import { useAuth } from "@/app/context/AuthContext";
 
 export default function Profil() {
+  const { user } = useAuth();
+
   // State untuk tab aktif
-  const [activeTab, setActiveTab] = useState("profile"); // 'profile' atau 'password'
+  const [activeTab, setActiveTab] = useState("profile");
 
   // State untuk form profil
   const [profileForm, setProfileForm] = useState({
-    name: "bps3515",
-    email: "bps3515@bps.go.id",
-    institution: "BPS Kabupaten Sidoarjo",
+    name: "",
+    email: "",
+    institution: "",
   });
 
   // State untuk form password
@@ -30,6 +32,42 @@ export default function Profil() {
     new: false,
     confirm: false,
   });
+
+  // State untuk loading dan error
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: "", text: "" });
+
+  // Load data profil saat komponen mount
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
+  // Fetch data profil dari API
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch("/api/profile", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("wirasaba_auth_token")}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setProfileForm({
+            name: data.username || "",
+            email: data.email || "",
+            institution: data.institution || "",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    }
+  };
 
   // Handler untuk form profil
   const handleProfileChange = (e) => {
@@ -57,30 +95,119 @@ export default function Profil() {
     });
   };
 
-  // Submit handlers
-  const handleProfileSubmit = (e) => {
+  // Submit handler untuk update profil
+  const handleProfileSubmit = async (e) => {
     e.preventDefault();
-    // Implementasi API call untuk update profil
-    alert("Profil berhasil diperbarui");
+    setLoading(true);
+    setMessage({ type: "", text: "" });
+
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("wirasaba_auth_token")}`,
+        },
+        body: JSON.stringify({
+          action: "update-profile",
+          username: profileForm.name,
+          email: profileForm.email,
+          institution: profileForm.institution,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: "success", text: "Profil berhasil diperbarui" });
+        // Update form dengan data terbaru
+        setProfileForm({
+          name: data.username || profileForm.name,
+          email: data.email || profileForm.email,
+          institution: data.institution || profileForm.institution,
+        });
+      } else {
+        setMessage({
+          type: "error",
+          text: data.message || "Gagal memperbarui profil",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      setMessage({
+        type: "error",
+        text: "Terjadi kesalahan saat memperbarui profil",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handlePasswordSubmit = (e) => {
+  // Submit handler untuk update password
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setMessage({ type: "", text: "" });
+
+    // Validasi password
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert("Password baru dan konfirmasi tidak sama");
+      setMessage({
+        type: "error",
+        text: "Password baru dan konfirmasi tidak sama",
+      });
+      setLoading(false);
       return;
     }
-    // Implementasi API call untuk update password
-    alert("Password berhasil diperbarui");
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
+
+    if (passwordForm.newPassword.length < 6) {
+      setMessage({ type: "error", text: "Password baru minimal 6 karakter" });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("wirasaba_auth_token")}`,
+        },
+        body: JSON.stringify({
+          action: "change-password",
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: "success", text: "Password berhasil diperbarui" });
+        setPasswordForm({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      } else {
+        setMessage({
+          type: "error",
+          text: data.message || "Gagal memperbarui password",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating password:", error);
+      setMessage({
+        type: "error",
+        text: "Terjadi kesalahan saat memperbarui password",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Generate inisial dari nama
   const getInitials = (name) => {
+    if (!name) return "??";
     return name
       .split(" ")
       .map((word) => word[0])
@@ -91,8 +218,21 @@ export default function Profil() {
 
   return (
     <SidebarLayout>
-      <div className="bg-base min-h-screen p-4 md:p-6  font-roboto font-medium">
+      <div className="bg-base min-h-screen p-4 md:p-6 font-roboto font-medium">
         <Breadcrumb items={[{ label: "Profil" }]} />
+
+        {/* Message Alert */}
+        {message.text && (
+          <div
+            className={`mt-4 p-4 rounded-md ${
+              message.type === "success"
+                ? "bg-green-100 border border-green-400 text-green-700"
+                : "bg-red-100 border border-red-400 text-red-700"
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
 
         <div className="flex flex-col md:flex-row gap-6 mt-4">
           {/* Kartu Profil Kiri */}
@@ -118,7 +258,9 @@ export default function Profil() {
                       />
                     </svg>
                   </div>
-                  <span className="text-cdark">{profileForm.name}</span>
+                  <span className="text-sm font-medium text-cdark truncate">
+                    {profileForm.name || "Nama belum diisi"}
+                  </span>
                 </div>
 
                 <div className="flex items-center bg-base p-2 rounded">
@@ -133,7 +275,9 @@ export default function Profil() {
                       <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                     </svg>
                   </div>
-                  <span className="text-cdark">{profileForm.email}</span>
+                  <span className="text-sm font-medium text-cdark truncate">
+                    {profileForm.email || "Email belum diisi"}
+                  </span>
                 </div>
 
                 <div className="flex items-center bg-base p-2 rounded">
@@ -144,23 +288,40 @@ export default function Profil() {
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                      <path
+                        fillRule="evenodd"
+                        d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                   </div>
-                  <span className="text-cdark">{profileForm.institution}</span>
+                  <span className="text-sm font-medium text-cdark truncate">
+                    {profileForm.institution || "Instansi belum diisi"}
+                  </span>
                 </div>
               </div>
 
-              <div className="mt-6 w-full flex flex-col gap-2">
+              {/* Tab Navigation */}
+              <div className="flex bg-gray-100 rounded-lg p-1 mt-6 w-full">
                 <button
+                  type="button"
                   onClick={() => setActiveTab("profile")}
-                  className={`w-full py-2 px-4 rounded-md ${activeTab === "profile" ? "bg-clightbrown text-white" : "bg-gray-100 text-cdark"}`}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "profile"
+                      ? "bg-clightbrown text-white"
+                      : "bg-gray-100 text-cdark"
+                  }`}
                 >
                   Ubah Profil
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab("password")}
-                  className={`w-full py-2 px-4 rounded-md ${activeTab === "password" ? "bg-clightbrown text-white" : "bg-gray-100 text-cdark"}`}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "password"
+                      ? "bg-clightbrown text-white"
+                      : "bg-gray-100 text-cdark"
+                  }`}
                 >
                   Ubah Password
                 </button>
@@ -179,7 +340,7 @@ export default function Profil() {
                       htmlFor="name"
                       className="block text-base text-cdark mb-1"
                     >
-                      Nama
+                      Nama <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -189,6 +350,7 @@ export default function Profil() {
                       onChange={handleProfileChange}
                       className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       required
+                      disabled={loading}
                     />
                   </div>
 
@@ -197,7 +359,7 @@ export default function Profil() {
                       htmlFor="email"
                       className="block text-base text-cdark mb-1"
                     >
-                      Email
+                      Email <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="email"
@@ -207,6 +369,7 @@ export default function Profil() {
                       onChange={handleProfileChange}
                       className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       required
+                      disabled={loading}
                     />
                   </div>
 
@@ -215,7 +378,7 @@ export default function Profil() {
                       htmlFor="institution"
                       className="block text-base font-medium text-cdark mb-1"
                     >
-                      Asal Instansi
+                      Asal Instansi <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -225,15 +388,17 @@ export default function Profil() {
                       onChange={handleProfileChange}
                       className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       required
+                      disabled={loading}
                     />
                   </div>
 
                   <div className="pt-4">
                     <button
                       type="submit"
-                      className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600 transition-colors"
+                      disabled={loading}
+                      className="bg-clightbrown text-white py-2 px-6 rounded-md hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Simpan
+                      {loading ? "Menyimpan..." : "Simpan Profil"}
                     </button>
                   </div>
                 </form>
@@ -247,7 +412,7 @@ export default function Profil() {
                       htmlFor="currentPassword"
                       className="block text-base text-cdark mb-1"
                     >
-                      Password Lama
+                      Password Lama <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -258,6 +423,7 @@ export default function Profil() {
                         onChange={handlePasswordChange}
                         className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
                         required
+                        disabled={loading}
                       />
                       <button
                         type="button"
@@ -278,7 +444,7 @@ export default function Profil() {
                       htmlFor="newPassword"
                       className="block text-base text-cdark mb-1"
                     >
-                      Password Baru
+                      Password Baru <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -289,6 +455,8 @@ export default function Profil() {
                         onChange={handlePasswordChange}
                         className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
                         required
+                        minLength={6}
+                        disabled={loading}
                       />
                       <button
                         type="button"
@@ -302,6 +470,9 @@ export default function Profil() {
                         )}
                       </button>
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Password minimal 6 karakter
+                    </p>
                   </div>
 
                   <div>
@@ -309,7 +480,8 @@ export default function Profil() {
                       htmlFor="confirmPassword"
                       className="block text-base text-cdark mb-1"
                     >
-                      Konfirmasi Password Baru
+                      Konfirmasi Password Baru{" "}
+                      <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -320,6 +492,7 @@ export default function Profil() {
                         onChange={handlePasswordChange}
                         className="text-sm font-medium w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
                         required
+                        disabled={loading}
                       />
                       <button
                         type="button"
@@ -338,9 +511,10 @@ export default function Profil() {
                   <div className="pt-4">
                     <button
                       type="submit"
-                      className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600 transition-colors"
+                      disabled={loading}
+                      className="bg-clightbrown text-white py-2 px-6 rounded-md hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Simpan
+                      {loading ? "Mengubah..." : "Ubah Password"}
                     </button>
                   </div>
                 </form>
