@@ -482,12 +482,13 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
     try {
       SweetAlertUtils.loading("Mengunduh Template", "Mohon tunggu sebentar...");
 
-      const response = await fetch("/api/direktori/template", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
+      // ✅ PERBAIKAN:
+      // 1. Ubah endpoint dari "/api/direktori/template" ke "/api/perusahaan/template"
+      // 2. Ubah method dari "POST" ke "GET"
+      // 3. Hilangkan headers dan body karena menggunakan GET
+      const response = await fetch("/api/perusahaan/template", {
+        method: "GET", // ✅ UBAH: POST → GET
+        // ✅ HAPUS: headers dan body tidak diperlukan untuk GET request
       });
 
       if (response.ok) {
@@ -498,7 +499,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
 
         // Get filename from response header
         const contentDisposition = response.headers.get("content-disposition");
-        let filename = "template-direktori.xlsx";
+        let filename = "template-direktori-perusahaan.xlsx"; // ✅ PERBAIKI: nama file yang lebih sesuai
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename="(.+)"/);
           if (filenameMatch) {
@@ -515,16 +516,45 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
         SweetAlertUtils.closeLoading();
         SweetAlertUtils.success(
           "Template Berhasil Diunduh",
-          "Silakan isi template sesuai format yang disediakan"
+          "Template Excel telah berhasil diunduh dengan 28 kolom dan 4 sheet. Silakan isi sesuai format yang disediakan."
         );
       } else {
-        throw new Error("Gagal mengunduh template");
+        // ✅ TAMBAHAN: Error handling yang lebih baik
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.message ||
+            `HTTP ${response.status}: ${response.statusText || "Gagal mengunduh template"}`
+        );
       }
     } catch (error) {
       SweetAlertUtils.closeLoading();
+      console.error("Error downloading template:", error);
+
+      // ✅ TAMBAHAN: Pesan error yang lebih informatif
+      let errorMessage = "Terjadi kesalahan saat mengunduh template";
+      let suggestions = "Silakan coba lagi atau hubungi administrator.";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        // Berikan saran berdasarkan jenis error
+        if (error.message.includes("405")) {
+          suggestions =
+            "Method request tidak didukung. Pastikan endpoint mendukung GET request.";
+        } else if (error.message.includes("404")) {
+          suggestions =
+            "Endpoint template tidak ditemukan. Periksa konfigurasi API.";
+        } else if (error.message.includes("500")) {
+          suggestions = "Terjadi kesalahan server. Coba lagi beberapa saat.";
+        } else if (error.message.includes("fetch")) {
+          suggestions =
+            "Periksa koneksi internet dan pastikan server dapat diakses.";
+        }
+      }
+
       SweetAlertUtils.error(
         "Gagal Mengunduh Template",
-        "Terjadi kesalahan saat mengunduh template"
+        `${errorMessage}\n\n${suggestions}`
       );
     }
   };
@@ -565,7 +595,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
       formData.append("file", file);
       formData.append("mode", uploadMode);
 
-      const response = await fetch("/api/direktori/import", {
+      const response = await fetch("/api/perusahaan/import", {
         method: "POST",
         body: formData,
       });
@@ -1374,20 +1404,30 @@ const TabelDirektori = () => {
 
   // Handle delete business with SweetAlert
   const handleDeleteBusiness = async (business: Business) => {
-    try {
-      // Konfirmasi penghapusan dengan SweetAlert
-      const confirmResult = await SweetAlertUtils.confirm(
-        "Hapus Data Perusahaan",
-        `Apakah Anda yakin ingin menghapus "${business.nama_perusahaan}"? Tindakan ini akan menghapus semua data terkait termasuk tahun direktori dan tidak dapat dibatalkan.`,
-        "danger"
+    // Input validation
+    if (!business?.id_perusahaan) {
+      await SweetAlertUtils.error(
+        "Error",
+        "Data perusahaan tidak valid. Silakan refresh halaman."
       );
+      return;
+    }
 
-      if (!confirmResult.isConfirmed) return;
+    // Konfirmasi menggunakan confirmDelete seperti di PCL
+    const confirmDelete = await SweetAlertUtils.confirmDelete(
+      "Hapus Data Perusahaan",
+      `Apakah Anda yakin ingin menghapus data "${business.nama_perusahaan}" (KIP: ${business.kip})?\n\nTindakan ini tidak dapat dibatalkan dan akan menghapus semua data terkait.`,
+      "Ya, Hapus",
+      "Batal"
+    );
 
-      // Tampilkan loading
-      SweetAlertUtils.loading("Menghapus data...", "Mohon tunggu sebentar");
+    if (!confirmDelete) return;
 
-      // Call the DELETE API endpoint
+    try {
+      // Loading state seperti di PCL
+      SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
+
+      // API call
       const response = await fetch(
         `/api/perusahaan/${business.id_perusahaan}`,
         {
@@ -1395,39 +1435,31 @@ const TabelDirektori = () => {
         }
       );
 
-      const deleteResult = await response.json();
-
-      // Close loading
+      const result = await response.json();
       SweetAlertUtils.closeLoading();
 
-      if (deleteResult.success) {
-        // Tampilkan pesan sukses
+      if (result.success) {
+        // Success message seperti di PCL
         await SweetAlertUtils.success(
           "Berhasil Dihapus!",
-          `"${business.nama_perusahaan}" berhasil dihapus dari database.`
+          `Data "${business.nama_perusahaan}" berhasil dihapus!`
         );
 
-        // Refresh data after successful deletion
-        fetchData();
-        setCurrentPage(1);
-        setHasLoadedAll(false);
+        // ✅ ADOPSI PCL: Simple fetchData() - tidak perlu manual state management
+        fetchData(); // <-- Ini saja sudah cukup! fetchData akan handle semua
       } else {
-        // Tampilkan error dari server
-        SweetAlertUtils.error(
-          "Gagal Menghapus",
-          deleteResult.message || "Terjadi kesalahan saat menghapus data"
-        );
+        throw new Error(result.message || "Gagal menghapus data");
       }
     } catch (error) {
       console.error("Error deleting data:", error);
-
-      // Close loading jika masih terbuka
       SweetAlertUtils.closeLoading();
 
-      // Tampilkan error umum
-      SweetAlertUtils.error(
-        "Error",
-        "Terjadi kesalahan saat menghapus data. Silakan coba lagi."
+      // Error handling seperti di PCL
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      await SweetAlertUtils.error(
+        "Gagal Menghapus",
+        `Terjadi kesalahan saat menghapus data: ${errorMessage}`
       );
     }
   };
@@ -1543,7 +1575,15 @@ const TabelDirektori = () => {
               <Tooltip color="danger" content="Hapus">
                 <span
                   onClick={() => handleDeleteBusiness(business)}
-                  className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-red-500"
+                  className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-red-500 transition-colors"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleDeleteBusiness(business);
+                    }
+                  }}
                 >
                   <DeleteIcon />
                 </span>

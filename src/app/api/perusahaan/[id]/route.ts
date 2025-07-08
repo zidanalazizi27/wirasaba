@@ -194,49 +194,132 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   const id = params.id;
+  
+  // Input validation (adopsi best practice)
+  if (!id || isNaN(Number(id))) {
+    return NextResponse.json({ 
+      success: false, 
+      message: "ID perusahaan tidak valid" 
+    }, { status: 400 });
+  }
+
+  let connection;
+  
   try {
-    // Buat koneksi ke database
-    const connection = await mysql.createConnection({
+    // Database connection
+    connection = await mysql.createConnection({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
     });
-    
-    // Hapus terlebih dahulu data terkait di tabel direktori (karena ada foreign key)
-    await connection.execute(
-      `DELETE FROM direktori WHERE id_perusahaan = ?`,
+
+    // Begin transaction untuk data integrity (perbaikan utama)
+    await connection.beginTransaction();
+
+    // Check apakah perusahaan ada
+    const [companyCheck] = await connection.execute(
+      `SELECT nama_perusahaan FROM perusahaan WHERE id_perusahaan = ?`,
       [id]
     );
-    
-    // Hapus data perusahaan
-    const [result] = await connection.execute(
-      `DELETE FROM perusahaan WHERE id_perusahaan = ?`,
-      [id]
-    );
-    
-    // Tutup koneksi
-    await connection.end();
-    
-    // Cek apakah ada baris yang dihapus
-    const rowsAffected = (result as any).affectedRows;
-    
-    if (rowsAffected === 0) {
+
+    if ((companyCheck as any[]).length === 0) {
+      await connection.rollback();
       return NextResponse.json({ 
         success: false, 
         message: "Data perusahaan tidak ditemukan" 
       }, { status: 404 });
     }
+
+    const companyName = (companyCheck as any[])[0].nama_perusahaan;
+
+    // Check dan hapus riwayat survei terkait
+    const [surveyCheck] = await connection.execute(
+      `SELECT COUNT(*) as count FROM riwayat_survei WHERE id_perusahaan = ?`,
+      [id]
+    );
+
+    const surveyCount = (surveyCheck as any)[0].count;
+    
+    if (surveyCount > 0) {
+      console.log(`Menghapus ${surveyCount} riwayat survei untuk perusahaan ID ${id}`);
+      await connection.execute(
+        `DELETE FROM riwayat_survei WHERE id_perusahaan = ?`,
+        [id]
+      );
+    }
+
+    // Hapus data direktori terkait (seperti implementasi asli)
+    await connection.execute(
+      `DELETE FROM direktori WHERE id_perusahaan = ?`,
+      [id]
+    );
+    
+    // Hapus data perusahaan utama
+    const [result] = await connection.execute(
+      `DELETE FROM perusahaan WHERE id_perusahaan = ?`,
+      [id]
+    );
+    
+    const rowsAffected = (result as any).affectedRows;
+    
+    if (rowsAffected === 0) {
+      await connection.rollback();
+      return NextResponse.json({ 
+        success: false, 
+        message: "Gagal menghapus data perusahaan" 
+      }, { status: 500 });
+    }
+
+    // Commit transaction jika semua berhasil
+    await connection.commit();
+    
+    console.log(`✅ Perusahaan "${companyName}" (ID: ${id}) berhasil dihapus beserta ${surveyCount} riwayat survei`);
     
     return NextResponse.json({ 
       success: true, 
-      message: "Data perusahaan berhasil dihapus" 
+      message: `Data perusahaan "${companyName}" berhasil dihapus${surveyCount > 0 ? ` beserta ${surveyCount} riwayat survei` : ''}`,
+      deletedRelatedCount: surveyCount
     });
+    
   } catch (error) {
-    console.error("Database error:", error);
+    console.error("❌ Database error saat menghapus perusahaan:", error);
+    
+    // Rollback transaction jika ada error
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Error during rollback:", rollbackError);
+      }
+    }
+    
+    // Enhanced error handling
+    let errorMessage = "Error saat menghapus data: ";
+    
+    if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+      errorMessage += "Data tidak dapat dihapus karena masih digunakan oleh data lain";
+    } else if (error.code === 'ER_LOCK_WAIT_TIMEOUT') {
+      errorMessage += "Database sedang sibuk, silakan coba lagi";
+    } else if (error.code === 'ECONNREFUSED') {
+      errorMessage += "Tidak dapat terhubung ke database";
+    } else {
+      errorMessage += error.message || "Unknown database error";
+    }
+    
     return NextResponse.json({ 
       success: false, 
-      message: "Error saat menghapus data: " + error.message 
+      message: errorMessage 
     }, { status: 500 });
+    
+  } finally {
+    // Pastikan koneksi ditutup
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (closeError) {
+        console.error("Error closing connection:", closeError);
+      }
+    }
   }
 }
