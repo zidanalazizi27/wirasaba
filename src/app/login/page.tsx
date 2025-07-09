@@ -1,10 +1,9 @@
 import { Metadata } from "next";
 import Login from "../components/login";
-import Map from "../components/map";
 
 export const metadata: Metadata = {
   title: "Login | Kahuripan",
-  description: "",
+  description: "Masuk ke admin Kahuripan, platform untuk mengelola dan berbagi pengetahuan.",
 };
 
 export default function Login_Page() {
