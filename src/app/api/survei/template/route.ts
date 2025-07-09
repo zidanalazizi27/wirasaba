@@ -135,10 +135,8 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ Survei template generated successfully');
 
-    // Get current date for filename
-    const currentDate = new Date();
-    const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const filename = `template_data_survei_${dateString}.xlsx`;
+    // Get filename
+    const filename = `template_data_survei.xlsx`;
 
     // Create response with proper headers
     const response = new NextResponse(excelBuffer, {

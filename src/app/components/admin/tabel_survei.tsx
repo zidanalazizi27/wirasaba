@@ -1037,8 +1037,7 @@ const TabelSurvei = () => {
         const link = document.createElement("a");
         link.href = url;
 
-        const currentDate = new Date().toISOString().split("T")[0];
-        link.download = `template_data_survei_${currentDate}.xlsx`;
+        link.download = `template_data_survei.xlsx`;
 
         document.body.appendChild(link);
         link.click();

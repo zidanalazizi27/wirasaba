@@ -176,11 +176,8 @@ export async function GET(request: NextRequest) {
 
     console.log("✅ Excel buffer generated, size:", excelBuffer.length);
 
-    // Generate filename dengan timestamp dan filter info
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
-    
-    let filename = `data-survei-${timestamp}`;
+    // Generate filename dengan filter info
+    let filename = `data-survei`;
     if (tahun && tahun !== "all") filename += `-tahun-${tahun}`;
     if (search) filename += `-search-${search.substring(0, 10).replace(/[^a-zA-Z0-9]/g, '')}`;
     if (fungsi && fungsi !== "all") filename += `-fungsi-${fungsi.substring(0, 10).replace(/[^a-zA-Z0-9]/g, '')}`;
