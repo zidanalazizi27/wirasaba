@@ -29,27 +29,27 @@ interface ProcessedData {
   alamat: string;
   kec: number;
   des: number;
-  kode_pos?: string;
+  kode_pos: string | null;
   skala: string;
   lok_perusahaan: number;
-  nama_kawasan?: string;
+  nama_kawasan: string | null;
   lat: number;
   lon: number;
-  jarak?: number;
+  jarak: number | null;
   produk: string;
   KBLI: number;
-  telp_perusahaan?: string;
-  email_perusahaan?: string;
-  web_perusahaan?: string;
+  telp_perusahaan: string | null;
+  email_perusahaan: string | null;
+  web_perusahaan: string | null;
   tkerja: number;
   investasi: number;
   omset: number;
-  nama_narasumber?: string;
-  jbtn_narasumber?: string;
-  email_narasumber?: string;
-  telp_narasumber?: string;
-  pcl_utama?: string;
-  catatan?: string;
+  nama_narasumber: string | null;
+  jbtn_narasumber: string | null;
+  email_narasumber: string | null;
+  telp_narasumber: string | null;
+  pcl_utama: string | null;
+  catatan: string | null;
   tahun_direktori: number[];
 }
 
@@ -128,27 +128,27 @@ function sanitizeDirectoryData(rawData: ExcelRowData): ProcessedData {
     alamat: String(rawData['Alamat'] || '').trim(),
     kec: 0, // Will be mapped later based on kecamatan name
     des: 0, // Will be mapped later based on desa name
-    kode_pos: rawData['Kode Pos'] ? String(rawData['Kode Pos']).trim() : undefined,
+    kode_pos: rawData['Kode Pos'] ? String(rawData['Kode Pos']).trim() : null, // ✅ PERBAIKAN: undefined → null
     skala: String(rawData['Skala'] || '').trim(),
     lok_perusahaan: parseInt(String(rawData['Lokasi Perusahaan'] || '1')),
-    nama_kawasan: rawData['Nama Kawasan'] ? String(rawData['Nama Kawasan']).trim() : undefined,
+    nama_kawasan: rawData['Nama Kawasan'] ? String(rawData['Nama Kawasan']).trim() : null, // ✅ PERBAIKAN: undefined → null
     lat: Number(rawData['Latitude']),
     lon: Number(rawData['Longitude']),
-    jarak: rawData['Jarak (KM)'] ? Number(rawData['Jarak (KM)']) : undefined,
+    jarak: rawData['Jarak (KM)'] ? Number(rawData['Jarak (KM)']) : null, // ✅ PERBAIKAN: undefined → null
     produk: String(rawData['Produk'] || '').trim(),
     KBLI: Number(rawData['KBLI']),
-    telp_perusahaan: rawData['Telepon Perusahaan'] ? String(rawData['Telepon Perusahaan']).trim() : undefined,
-    email_perusahaan: rawData['Email Perusahaan'] ? String(rawData['Email Perusahaan']).trim() : undefined,
-    web_perusahaan: rawData['Website Perusahaan'] ? String(rawData['Website Perusahaan']).trim() : undefined,
+    telp_perusahaan: rawData['Telepon Perusahaan'] ? String(rawData['Telepon Perusahaan']).trim() : null, // ✅ PERBAIKAN: undefined → null
+    email_perusahaan: rawData['Email Perusahaan'] ? String(rawData['Email Perusahaan']).trim() : null, // ✅ PERBAIKAN: undefined → null
+    web_perusahaan: rawData['Website Perusahaan'] ? String(rawData['Website Perusahaan']).trim() : null, // ✅ PERBAIKAN: undefined → null
     tkerja: parseInt(String(rawData['Tenaga Kerja'] || '1')),
     investasi: parseInt(String(rawData['Investasi'] || '1')),
     omset: parseInt(String(rawData['Omset'] || '1')),
-    nama_narasumber: rawData['Nama Narasumber'] ? String(rawData['Nama Narasumber']).trim() : undefined,
-    jbtn_narasumber: rawData['Jabatan Narasumber'] ? String(rawData['Jabatan Narasumber']).trim() : undefined,
-    email_narasumber: rawData['Email Narasumber'] ? String(rawData['Email Narasumber']).trim() : undefined,
-    telp_narasumber: rawData['Telepon Narasumber'] ? String(rawData['Telepon Narasumber']).trim() : undefined,
-    pcl_utama: rawData['PCL Utama'] ? String(rawData['PCL Utama']).trim() : undefined,
-    catatan: rawData['Catatan'] ? String(rawData['Catatan']).trim() : undefined,
+    nama_narasumber: rawData['Nama Narasumber'] ? String(rawData['Nama Narasumber']).trim() : null, // ✅ PERBAIKAN: undefined → null
+    jbtn_narasumber: rawData['Jabatan Narasumber'] ? String(rawData['Jabatan Narasumber']).trim() : null, // ✅ PERBAIKAN: undefined → null
+    email_narasumber: rawData['Email Narasumber'] ? String(rawData['Email Narasumber']).trim() : null, // ✅ PERBAIKAN: undefined → null
+    telp_narasumber: rawData['Telepon Narasumber'] ? String(rawData['Telepon Narasumber']).trim() : null, // ✅ PERBAIKAN: undefined → null
+    pcl_utama: rawData['PCL Utama'] ? String(rawData['PCL Utama']).trim() : null, // ✅ PERBAIKAN: undefined → null
+    catatan: rawData['Catatan'] ? String(rawData['Catatan']).trim() : null, // ✅ PERBAIKAN: undefined → null
     tahun_direktori: tahunDirektori
   };
 }

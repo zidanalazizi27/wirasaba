@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
         'Badan Usaha': '1',
         'Alamat': 'Jl. Teknologi No. 789, Taman',
         'Kecamatan': 'Taman',
-        'Desa': 'Wonoayu',
+        'Desa': 'Taman',
         'Kode Pos': '61261',
         'Skala': 'Besar',
         'Lokasi Perusahaan': '2',
@@ -397,10 +397,8 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ Template generated successfully with 28 columns and 4 sheets');
 
-    // Generate filename with timestamp
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
-    const filename = `template-direktori-perusahaan-${timestamp}.xlsx`;
+    // Generate filename
+    const filename = `template-direktori-perusahaan.xlsx`;
 
     return new NextResponse(excelBuffer, {
       status: 200,

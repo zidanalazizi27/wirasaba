@@ -341,11 +341,9 @@ export async function GET(request: NextRequest) {
 
     console.log("Excel buffer generated, size:", excelBuffer.length);
 
-    // Generate filename dengan timestamp dan filter info
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    // Generate filename dengan filter info
     
-    let filename = `direktori-perusahaan-${timestamp}`;
+    let filename = `direktori-perusahaan`;
     if (year && year !== "all") filename += `-tahun-${year}`;
     if (search) filename += `-search-${search.substring(0, 10)}`;
     if (status && status !== "all") filename += `-status-${status}`;
