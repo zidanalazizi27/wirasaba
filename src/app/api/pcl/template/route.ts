@@ -64,10 +64,8 @@ export async function POST(request: NextRequest) {
       bookType: "xlsx" 
     });
 
-    // Generate filename with timestamp
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace(/[:-]/g, '');
-    const filename = `template-pcl-${timestamp}.xlsx`;
+    // Generate filename
+    const filename = `template-pcl.xlsx`;
 
     return new NextResponse(excelBuffer, {
       status: 200,

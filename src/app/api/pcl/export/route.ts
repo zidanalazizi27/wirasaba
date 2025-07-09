@@ -139,15 +139,12 @@ export async function GET(request: NextRequest) {
       bookType: "xlsx" 
     });
 
-    // Generate filename dengan timestamp dan filter info
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace(/[:-]/g, '');
-    
+    // Generate filename dengan filter info
     let filenamePrefix = "data-pcl";
     if (searchTerm || status !== "all") {
       filenamePrefix += "-filtered";
     }
-    const filename = `${filenamePrefix}-${timestamp}.xlsx`;
+    const filename = `${filenamePrefix}.xlsx`;
 
     // Return Excel file sebagai response
     return new NextResponse(excelBuffer, {
