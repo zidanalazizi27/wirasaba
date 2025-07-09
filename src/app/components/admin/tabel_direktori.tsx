@@ -775,7 +775,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
             </h4>
             <ul className="text-xs text-gray-600 space-y-1">
               <li>
-                • Perhatikan file yang wajib diisi dan tidak pada template yang tersedia.
+                • Perhatikan file yang wajib diisi dan tidak pada template yang
+                tersedia.
               </li>
               <li>
                 • <strong>Format KIP:</strong> Harus unik, tidak boleh duplikat
@@ -1462,7 +1463,7 @@ const TabelDirektori = () => {
     // Konfirmasi menggunakan confirmDelete seperti di PCL
     const confirmDelete = await SweetAlertUtils.confirmDelete(
       "Hapus Data Perusahaan",
-      `Apakah Anda yakin ingin menghapus data "${business.nama_perusahaan}" (KIP: ${business.kip})?\n\nTindakan ini tidak dapat dibatalkan dan akan menghapus semua data terkait.`,
+      `Anda akan menghapus data "${business.kip} - ${business.nama_perusahaan}". Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan perusahaan ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
       "Ya, Hapus",
       "Batal"
     );

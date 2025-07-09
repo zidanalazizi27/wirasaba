@@ -779,7 +779,7 @@ const TabelSurvei = () => {
       // Konfirmasi penghapusan dengan SweetAlert
       const confirmed = await SweetAlertUtils.confirmDelete(
         "Hapus Data Survei",
-        `Apakah Anda yakin ingin menghapus survei "${survey.nama_survei}" (${survey.tahun})?\n\nTindakan ini tidak dapat dibatalkan dan akan menghapus semua data terkait.`,
+        `Anda akan menghapus survei "${survey.nama_survei}" (${survey.tahun}). Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan survei ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
         "Ya, Hapus",
         "Batal"
       );

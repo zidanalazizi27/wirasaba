@@ -232,11 +232,11 @@ const MapComponent = () => {
   const markersRef = useRef({});
 
   // Tambahkan fungsi handler untuk popup close event
-  const handlePopupOpen = (company : any) => {
+  const handlePopupOpen = (company: any) => {
     setActiveMarkerId(company.id_perusahaan);
   };
 
-  const handlePopupClose = (company : any) => {
+  const handlePopupClose = (company: any) => {
     if (activeMarkerId === company.id_perusahaan) {
       setActiveMarkerId(null);
     }
@@ -1609,7 +1609,7 @@ const MapComponent = () => {
                   }
                   className="mt-1 block w-full pl-2 pr-2 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                 >
-                  <option value="all">Semua Tahun</option>
+                  {/* <option value="all">Semua Tahun</option> */}
                   {uniqueYears.map((year) => (
                     <option key={year} value={year}>
                       {year}

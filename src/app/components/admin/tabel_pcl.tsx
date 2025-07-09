@@ -1189,7 +1189,7 @@ const TabelPCL = () => {
     // Gunakan SweetAlert untuk konfirmasi hapus
     const confirmDelete = await SweetAlertUtils.confirmDelete(
       "Hapus Data PCL",
-      `Apakah Anda yakin ingin menghapus data PCL "${pcl.nama_pcl}"? Tindakan ini tidak dapat dibatalkan.`,
+      `Anda akan menghapus PCL "${pcl.nama_pcl}". Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan PCL ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
       "Ya, Hapus",
       "Batal"
     );
