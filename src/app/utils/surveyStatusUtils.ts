@@ -21,8 +21,7 @@ export function determineSurveyStatus(completedSurvei: number, totalSurvei: numb
   
   if (percentage >= 80) return "tinggi";
   if (percentage >= 50) return "sedang";
-  if (percentage > 0) return "rendah";
-  return "kosong";
+  return "rendah";
 }
 
 /**

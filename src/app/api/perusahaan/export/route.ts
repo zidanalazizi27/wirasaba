@@ -20,6 +20,7 @@ async function createDbConnection() {
 
 // ✅ FIXED: Fungsi untuk menghitung status survei (sama dengan tabel direktori)
 function calculateSurveyStatus(completedSurvei: number, totalSurvei: number) {
+  // ✅ PERBAIKAN: Jika tidak ada survei sama sekali = KOSONG
   if (totalSurvei === 0) {
     return {
       status: "kosong",
@@ -39,12 +40,11 @@ function calculateSurveyStatus(completedSurvei: number, totalSurvei: number) {
   } else if (percentage >= 50) {
     status = "sedang";
     status_text = "Sedang";
-  } else if (percentage > 0) {
+  } else {
+    // ✅ PERBAIKAN: Jika ada survei tapi belum selesai = RENDAH
+    // Tidak peduli percentage 0% atau > 0%, selama totalSurvei > 0 = RENDAH
     status = "rendah";
     status_text = "Rendah";
-  } else {
-    status = "kosong";
-    status_text = "Kosong";
   }
 
   return {
