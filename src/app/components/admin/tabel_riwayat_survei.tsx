@@ -1191,8 +1191,8 @@ const TabelRiwayatSurvei = () => {
         errors.push("KIP wajib diisi");
       } else {
         const kip = data.kip.toString().trim();
-        if (kip.length > 16) {
-          errors.push("KIP maksimal 16 digit");
+        if (kip.length > 10) {
+          errors.push("KIP maksimal 10 digit");
         }
         if (!/^\d+$/.test(kip)) {
           errors.push("KIP harus berupa angka");
@@ -1537,7 +1537,7 @@ const TabelRiwayatSurvei = () => {
               </h4>
               <ul className="text-xs text-blue-700 space-y-1">
                 <li>
-                  • <strong>KIP:</strong> Wajib diisi, maksimal 16 digit
+                  • <strong>KIP:</strong> Wajib diisi, maksimal 10 digit
                 </li>
                 <li>
                   • <strong>Nama Perusahaan:</strong> Wajib diisi, tidak boleh

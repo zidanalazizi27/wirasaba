@@ -209,13 +209,10 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ Excel file generated successfully');
 
-    // Get current date for filename
-    const currentDate = new Date();
-    const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const timeString = currentDate.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS format
-    
+    // Get filename
+
     // Create descriptive filename based on filters
-    let filename = `riwayat_survei_${dateString}_${timeString}`;
+    let filename = `riwayat_survei`;
     
     if (search || surveiFilter !== 'all' || pclFilter !== 'all' || selesaiFilter !== 'all' || tahunFilter !== 'all') {
       filename += '_filtered';
