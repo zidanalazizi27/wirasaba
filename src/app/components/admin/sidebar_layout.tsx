@@ -49,7 +49,11 @@ function SidebarLayout({ children }) {
     {
       icon: <ImportContactsRoundedIcon />,
       text: "Buku Panduan",
-      to: "/admin/panduan",
+      action: () =>
+        window.open(
+          "https://docs.google.com/document/d/1ywDYVbq6y588HRl6jSY5w9BbwhdC9-4FOlb1JIjOdBk/edit?usp=sharing",
+          "_blank"
+        ),
       submenu: [],
     },
     {
