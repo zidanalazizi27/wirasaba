@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
+import Image from "next/image";
 
 // Import Material UI icons
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -25,7 +26,7 @@ const Login = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (isLoggedIn) {
-      router.push("/admin/direktori"); 
+      router.push("/admin/direktori");
     }
   }, [isLoggedIn, router]);
 
@@ -33,7 +34,7 @@ const Login = () => {
     setShowPassword(!showPassword);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
@@ -103,7 +104,13 @@ const Login = () => {
       <div className="w-80 bg-white rounded-md shadow-md p-6">
         {/* Logo */}
         <div className="flex justify-center mb-6">
-          <img className="h-20" src="/image/logo_only.png" alt="Logo" />
+          <Image
+            className="h-20 w-auto"
+            src="/image/logo_only.png"
+            alt="Logo"
+            width={80}
+            height={80}
+          />
         </div>
 
         {/* Form */}

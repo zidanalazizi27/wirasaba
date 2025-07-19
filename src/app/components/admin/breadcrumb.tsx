@@ -53,7 +53,7 @@ export default function Breadcrumb({
         <li className="inline-flex items-center">
           <Link
             href={homeHref}
-            className="text-sm font-medium text-cdark hover:text-blue-600"
+            className="text-sm font-semibold text-cdark hover:text-blue-600"
           >
             {homeLabel}
           </Link>
@@ -66,12 +66,12 @@ export default function Breadcrumb({
               {item.href ? (
                 <Link
                   href={item.href}
-                  className="text-sm font-medium text-cdark hover:text-blue-600"
+                  className="text-sm font-semibold text-cdark hover:text-blue-600"
                 >
                   {item.label}
                 </Link>
               ) : (
-                <span className="text-sm font-medium text-cdark">
+                <span className="text-sm font-semibold text-cdark">
                   {item.label}
                 </span>
               )}

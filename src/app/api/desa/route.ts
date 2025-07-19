@@ -3,15 +3,26 @@ import mysql from 'mysql2/promise';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const kecId = searchParams.get('kec_id');
+  const kecId = searchParams.get('kec') || searchParams.get('kec_id'); // Support both parameter names
   
+  let connection;
   try {
-    const dbConnection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'wirasaba',
+    // Validasi environment variables
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbUser = process.env.DB_USER || 'root';
+    const dbPassword = process.env.DB_PASSWORD || '';
+    const dbName = process.env.DB_NAME || 'wirasaba';
+
+    console.log('Connecting to database for desa:', { host: dbHost, user: dbUser, database: dbName });
+
+    connection = await mysql.createConnection({
+      host: dbHost,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName,
     });
+
+    console.log('Database connected successfully for desa');
 
     let query = `
       SELECT id_des, kode_des, nama_des 
@@ -27,20 +38,39 @@ export async function GET(request: NextRequest) {
     
     query += ` ORDER BY nama_des`;
 
-    const [rows] = await dbConnection.execute(query, queryParams);
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
+      query,
+      queryParams
+    );
 
-    await dbConnection.end();
+    const desaData = rows as mysql.RowDataPacket[];
+    console.log('Desa data fetched:', desaData.length, 'records for kecamatan:', kecId);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true, 
-      count: (rows as any[]).length,
-      data: rows 
+      count: desaData.length,
+      data: desaData,
     });
   } catch (error) {
-    console.error('Database error:', error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Database error in desa API:', errorMessage);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { 
+        success: false, 
+        message: "Gagal mengambil data desa",
+        error: errorMessage 
+      },
       { status: 500 }
     );
+  } finally {
+    // Pastikan koneksi selalu ditutup
+    if (connection) {
+      try {
+        await connection.end();
+        console.log('Database connection closed for desa');
+      } catch (closeError) {
+        console.error('Error closing database connection for desa:', closeError);
+      }
+    }
   }
 }

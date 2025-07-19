@@ -56,56 +56,73 @@ export default function PD() {
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      animate={controls}
-      transition={{ duration: 0.8, ease: "easeOut" }}
-      className="mx-[5%] font-roboto pb-10"
-    >
-      <h1 className="text-2xl font-bold text-cdark text-center mt-10 mb-6">
-        Publikasi Direktori
-      </h1>
+    <div className="mx-[5%] font-roboto pb-10">
       <motion.div
         initial={{ opacity: 0, y: 50 }}
         animate={controls}
-        transition={{ duration: 1, delay: 0.4 }}
-        className="w-full text-cdark text-sm text-justify font-medium"
+        transition={{ duration: 0.8, ease: "easeOut" }}
       >
-        <p className="indent-8">
-          Merupakan publikasi tahunan yang berisi daftar nama, alamat, produk
-          utama, dan nomor telepon seluruh perusahaan industri besar dan sedang
-          yang masih aktif. Direktori ini dikelompokkan ke dalam 24 kategori
-          sesuai dengan KBLI 2020. BPS Kabupaten Sidoarjo secara rutin
-          memperbarui direktori IBS secara sistematis untuk menyesuaikan dengan
-          perubahan jumlah perusahaan yang baru, pindah, atau tutup.
-          Pemutakhiran dilakukan dengan mencocokkan data perusahaan dari
-          instansi terkait, seperti Dinas Perindustrian, BKPMD, dan Dinas
-          Perizinan, dengan direktori terbaru BPS. Direktori ini dapat pengguna
-          akses melaui file dan menu pada peta tematik.
-        </p>
+        <h1 className="text-2xl font-bold text-cdark text-center mt-10 mb-6">
+          Publikasi Direktori
+        </h1>
+        <div className="w-full text-cdark text-sm leading-relaxed text-justify font-semibold">
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={controls}
+            transition={{ duration: 1, delay: 0.4 }}
+          >
+            <p className="indent-8">
+              Merupakan publikasi tahunan yang berisi daftar nama, alamat,
+              produk utama, dan nomor telepon seluruh perusahaan industri besar
+              dan sedang yang masih aktif. Direktori ini dikelompokkan ke dalam
+              24 kategori sesuai dengan KBLI 2020. BPS Kabupaten Sidoarjo secara
+              rutin memperbarui direktori IBS secara sistematis untuk
+              menyesuaikan dengan perubahan jumlah perusahaan yang baru, pindah,
+              atau tutup. Pemutakhiran dilakukan dengan mencocokkan data
+              perusahaan dari instansi terkait, seperti Dinas Perindustrian,
+              BKPMD, dan Dinas Perizinan, dengan direktori terbaru BPS.
+              Direktori ini dapat pengguna akses melaui file berikut maupun menu
+              <a
+                href="/peta_tematik"
+                className="text-cdarkbrown hover:text-cdark transition-colors cursor-pointer"
+              >
+                {" "}
+                "Peta tematik"
+              </a>
+              .
+            </p>
 
-        {/* Card Sampul Buku */}
-        <div className="flex justify-center gap-10 mt-6">
-          {covers.map((cover, index) => (
-            <motion.div
-              key={index}
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.3 }}
-              className="shadow-lg rounded-lg overflow-hidden"
-            >
-              <Link href={cover.link} target="_blank" rel="noopener noreferrer">
-                <Image
-                  src={cover.src}
-                  alt={cover.alt}
-                  width={140}
-                  height={210}
-                  className="rounded-lg cursor-pointer"
-                />
-              </Link>
-            </motion.div>
-          ))}
+            {/* Card Sampul Buku */}
+            <div className="flex justify-center gap-10 mt-6">
+              {covers.map((cover, index) => (
+                <div
+                  key={index}
+                  className="shadow-lg rounded-lg overflow-hidden"
+                >
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Link
+                      href={cover.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Image
+                        src={cover.src}
+                        alt={cover.alt}
+                        width={140}
+                        height={210}
+                        className="rounded-lg cursor-pointer"
+                      />
+                    </Link>
+                  </motion.div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         </div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }

@@ -1,6 +1,10 @@
 import { Metadata } from "next";
 import Navbar from "../components/navbar";
-import Map from "../components/map";
+import dynamic from "next/dynamic";
+
+const Map = dynamic(() => import("../components/map"), {
+  ssr: false,
+});
 
 export const metadata: Metadata = {
   title: "Peta Tematik | Kahuripan",

@@ -15,7 +15,7 @@ export async function GET(
       database: process.env.DB_NAME,
     });
     // Query data perusahaan berdasarkan id
-    const [perusahaanRows] = await connection.execute(
+    const [perusahaanRows] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT 
         p.id_perusahaan, p.kip, p.nama_perusahaan, 
         p.badan_usaha, bu.ket_bu AS badan_usaha_nama,
@@ -42,11 +42,11 @@ export async function GET(
       WHERE p.id_perusahaan = ?`,
       [id]
     );
-    if (!perusahaanRows || (perusahaanRows as any[]).length === 0) {
+    if (!perusahaanRows || perusahaanRows.length === 0) {
       return NextResponse.json({ error: "Perusahaan tidak ditemukan" }, { status: 404 });
     }
     // Query tahun direktori
-    const [direktoriRows] = await connection.execute(
+    const [direktoriRows] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT thn_direktori FROM direktori WHERE id_perusahaan = ?`,
       [id]
     );
@@ -55,8 +55,8 @@ export async function GET(
     await connection.end();
     
     // Prepare response data
-    const perusahaan = (perusahaanRows as any[])[0];
-    const tahun_direktori = (direktoriRows as any[]).map(row => row.thn_direktori);
+    const perusahaan = perusahaanRows[0];
+    const tahun_direktori = direktoriRows.map(row => row.thn_direktori);
     
     return NextResponse.json({
       ...perusahaan,
@@ -163,7 +163,7 @@ export async function PUT(
       
       // Tambahkan tahun direktori baru
       if (data.tahun_direktori.length > 0) {
-        const direktoriValues = data.tahun_direktori.map(year => [id, year]);
+        const direktoriValues = data.tahun_direktori.map((year: number) => [id, year]);
         
         await connection.query(
           `INSERT INTO direktori (id_perusahaan, thn_direktori) VALUES ?`,
@@ -181,9 +181,9 @@ export async function PUT(
     });
   } catch (error) {
     console.error("Database error:", error);
-    return NextResponse.json({ 
-      success: false, 
-      message: "Error saat memperbarui data: " + error.message 
+    return NextResponse.json({
+      success: false,
+      message: "Error saat memperbarui data: " + (error instanceof Error ? error.message : "Unknown error")
     }, { status: 500 });
   }
 }
@@ -218,12 +218,12 @@ export async function DELETE(
     await connection.beginTransaction();
 
     // Check apakah perusahaan ada
-    const [companyCheck] = await connection.execute(
+    const [companyCheck] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT nama_perusahaan FROM perusahaan WHERE id_perusahaan = ?`,
       [id]
     );
 
-    if ((companyCheck as any[]).length === 0) {
+    if (companyCheck.length === 0) {
       await connection.rollback();
       return NextResponse.json({ 
         success: false, 
@@ -231,15 +231,15 @@ export async function DELETE(
       }, { status: 404 });
     }
 
-    const companyName = (companyCheck as any[])[0].nama_perusahaan;
+    const companyName = companyCheck[0].nama_perusahaan;
 
     // Check dan hapus riwayat survei terkait
-    const [surveyCheck] = await connection.execute(
+    const [surveyCheck] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT COUNT(*) as count FROM riwayat_survei WHERE id_perusahaan = ?`,
       [id]
     );
 
-    const surveyCount = (surveyCheck as any)[0].count;
+    const surveyCount = surveyCheck[0].count;
     
     if (surveyCount > 0) {
       console.log(`Menghapus ${surveyCount} riwayat survei untuk perusahaan ID ${id}`);
@@ -249,19 +249,19 @@ export async function DELETE(
       );
     }
 
-    // Hapus data direktori terkait (seperti implementasi asli)
+    // Hapus data dari tabel direktori
     await connection.execute(
       `DELETE FROM direktori WHERE id_perusahaan = ?`,
       [id]
     );
     
-    // Hapus data perusahaan utama
-    const [result] = await connection.execute(
+    // Hapus data dari tabel perusahaan
+    const [deleteResult] = await connection.execute<mysql.ResultSetHeader>(
       `DELETE FROM perusahaan WHERE id_perusahaan = ?`,
       [id]
     );
     
-    const rowsAffected = (result as any).affectedRows;
+    const rowsAffected = deleteResult.affectedRows;
     
     if (rowsAffected === 0) {
       await connection.rollback();
@@ -297,14 +297,14 @@ export async function DELETE(
     // Enhanced error handling
     let errorMessage = "Error saat menghapus data: ";
     
-    if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+    if (error instanceof Error && 'code' in error && error.code === 'ER_ROW_IS_REFERENCED_2') {
       errorMessage += "Data tidak dapat dihapus karena masih digunakan oleh data lain";
-    } else if (error.code === 'ER_LOCK_WAIT_TIMEOUT') {
+    } else if (error instanceof Error && 'code' in error && error.code === 'ER_LOCK_WAIT_TIMEOUT') {
       errorMessage += "Database sedang sibuk, silakan coba lagi";
-    } else if (error.code === 'ECONNREFUSED') {
-      errorMessage += "Tidak dapat terhubung ke database";
+    } else if (error instanceof Error && 'code' in error && error.code === 'ER_NO_REFERENCED_ROW_2') {
+      errorMessage += "Data yang direferensikan tidak ditemukan";
     } else {
-      errorMessage += error.message || "Unknown database error";
+      errorMessage += (error instanceof Error ? error.message : "Unknown database error") || "Unknown database error";
     }
     
     return NextResponse.json({ 

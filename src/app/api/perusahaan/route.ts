@@ -1,6 +1,6 @@
 //src\app\api\perusahaan\route.ts
 import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import mysql, { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 // Fungsi untuk menentukan status berdasarkan persentase penyelesaian
 function determineStatus(completedCount: number, totalCount: number): string {
@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
   const searchTerm = searchParams.get("search") || "";
   const status = searchParams.get("status") || "all";
   const pcl = searchParams.get("pcl") || "all";
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "10");
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "10", 10);
   const offset = (page - 1) * limit;
 
   // Parse sorting parameters
@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
     });
 
     // Buat kondisi WHERE untuk query
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions: string[] = [];
+    const queryParams: (string | number)[] = [];
     
     // Filter berdasarkan tahun direktori
     whereConditions.push("d.thn_direktori = ?");
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Query untuk menghitung total data dan data survei berdasarkan KIP
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<RowDataPacket[]>(
       `SELECT 
         p.id_perusahaan, 
         p.kip, 
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Format and calculate status for each company
-    const formattedRows = (rows as any[]).map((row, index) => {
+    const formattedRows = (rows as RowDataPacket[]).map((row) => {
       const totalSurvei = row.total_survei || 0;
       const completedSurvei = row.completed_survei || 0;
       const calcStatus = determineStatus(completedSurvei, totalSurvei);
@@ -176,11 +176,12 @@ export async function GET(request: NextRequest) {
       message: `Data berhasil diambil. Menampilkan ${paginatedRows.length} dari ${total} perusahaan.`
     });
   } catch (error) {
-    console.error("Database error:", error);
-    return NextResponse.json({ 
-      success: false, 
-      message: "Error saat mengambil data perusahaan: " + error.message 
-    }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error('Error saat mengambil data perusahaan:', errorMessage);
+    return NextResponse.json(
+      { success: false, message: "Error saat mengambil data perusahaan: " + errorMessage },
+      { status: 500 }
+    );
   }
 }
 
@@ -241,7 +242,7 @@ export async function POST(request: NextRequest) {
     console.log("Hasil INSERT perusahaan:", resultPerusahaan);
     
     // Ambil ID perusahaan yang baru saja dimasukkan
-    const newPerusahaanId = (resultPerusahaan as any).insertId;
+    const newPerusahaanId = (resultPerusahaan as ResultSetHeader).insertId;
     
     if (!newPerusahaanId) {
       // Tambahkan logging untuk debugging
@@ -252,7 +253,7 @@ export async function POST(request: NextRequest) {
     // 2. Insert ke tabel direktori untuk tahun-tahun yang dipilih
     if (data.tahun_direktori && Array.isArray(data.tahun_direktori) && data.tahun_direktori.length > 0) {
       // Prepare values for bulk insert
-      const direktoriValues = data.tahun_direktori.map(year => [newPerusahaanId, year]);
+      const direktoriValues = data.tahun_direktori.map((year: number) => [newPerusahaanId, year]);
       
       // Gunakan prepared statement untuk menyisipkan data direktori
       await connection.query(
@@ -269,10 +270,11 @@ export async function POST(request: NextRequest) {
       id: newPerusahaanId
     });
   } catch (error) {
-    console.error("Database error:", error);
-    return NextResponse.json({ 
-      success: false, 
-      message: "Error saat menyimpan data: " + error.message 
-    }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error('Error saat menyimpan data:', errorMessage);
+    return NextResponse.json(
+      { success: false, message: "Error saat menyimpan data: " + errorMessage },
+      { status: 500 }
+    );
   }
 }

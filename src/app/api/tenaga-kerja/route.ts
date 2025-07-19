@@ -3,32 +3,58 @@ import { NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 
 export async function GET() {
+  let connection;
   try {
-    const dbConnection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'wirasaba',
+    // Validasi environment variables
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbUser = process.env.DB_USER || 'root';
+    const dbPassword = process.env.DB_PASSWORD || '';
+    const dbName = process.env.DB_NAME || 'wirasaba';
+
+    console.log('Connecting to database:', { host: dbHost, user: dbUser, database: dbName });
+
+    connection = await mysql.createConnection({
+      host: dbHost,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName,
     });
 
-    const [rows] = await dbConnection.execute(`
-      SELECT id_tkerja, ket_tkerja 
-      FROM tenaga_kerja
-      ORDER BY id_tkerja
-    `);
+    console.log('Database connected successfully');
 
-    await dbConnection.end();
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
+      'SELECT * FROM tenaga_kerja ORDER BY id_tenaga_kerja ASC'
+    );
+    
+    const tenagaKerja = rows as mysql.RowDataPacket[];
+    console.log('Tenaga kerja data fetched:', tenagaKerja.length, 'records');
 
     return NextResponse.json({ 
       success: true, 
-      count: rows.length,
-      data: rows 
+      count: tenagaKerja.length,
+      data: tenagaKerja 
     });
   } catch (error) {
-    console.error('Database error:', error.message);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error('Database error in tenaga-kerja API:', errorMessage);
+    
     return NextResponse.json(
-      { success: false, message: error.message },
+      { 
+        success: false, 
+        message: "Gagal mengambil data tenaga kerja",
+        error: errorMessage 
+      },
       { status: 500 }
     );
+  } finally {
+    // Pastikan koneksi selalu ditutup
+    if (connection) {
+      try {
+        await connection.end();
+        console.log('Database connection closed');
+      } catch (closeError) {
+        console.error('Error closing database connection:', closeError);
+      }
+    }
   }
 }

@@ -1,8 +1,8 @@
 // src/app/api/perusahaan/template/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('🔄 Generating perusahaan template with FULL FIX (28 columns)...');
 
@@ -413,11 +413,13 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Template generation error:', error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error('Error generating template:', errorMessage);
+    
     return NextResponse.json({
       success: false,
-      message: 'Error saat membuat template: ' + (error instanceof Error ? error.message : 'Unknown error'),
-      details: 'Gagal membuat template Excel dengan 28 kolom'
+      message: 'Error saat membuat template: ' + errorMessage,
+      error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
     }, { status: 500 });
   }
 }

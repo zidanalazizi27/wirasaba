@@ -1,5 +1,5 @@
 // src/app/utils/sweetAlert.ts
-import Swal, { SweetAlertIcon, SweetAlertOptions } from 'sweetalert2';
+import Swal, { SweetAlertIcon } from 'sweetalert2';
 
 // Konfigurasi custom Sweet Alert dengan styling yang konsisten
 export const customSwal = Swal.mixin({
@@ -9,7 +9,6 @@ export const customSwal = Swal.mixin({
     denyButton: 'bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg mx-2 transition-colors',
     popup: 'rounded-lg shadow-xl border-0',
     title: 'text-gray-800 font-semibold text-lg',
-    content: 'text-gray-600 text-sm',
     htmlContainer: 'text-gray-600 text-sm',
     closeButton: 'text-gray-400 hover:text-gray-600',
     input: 'border border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200',
@@ -25,12 +24,13 @@ export const customSwal = Swal.mixin({
 });
 
 // Interface untuk opsi alert
-interface AlertOptions extends Partial<SweetAlertOptions> {
+interface AlertOptions {
   title?: string;
   text?: string;
   icon?: SweetAlertIcon;
   timer?: number;
   showConfirmButton?: boolean;
+  [key: string]: unknown;
 }
 
 // Utility functions untuk berbagai jenis alert
@@ -215,7 +215,7 @@ export const SweetAlertUtils = {
       icon: 'warning',
       confirmButtonText: 'OK',
       customClass: {
-        content: 'text-left whitespace-pre-line'
+        htmlContainer: 'text-left whitespace-pre-line'
       }
     });
   },

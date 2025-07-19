@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
+import mysql, { RowDataPacket } from 'mysql2/promise';
 
 export async function GET() {
   try {
@@ -11,17 +11,17 @@ export async function GET() {
     });
 
     // Query untuk mendapatkan jumlah perusahaan
-    const [perusahaanRows] = await dbConnection.execute(
+    const [perusahaanRows] = await dbConnection.execute<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM perusahaan'
     );
 
     // Query untuk mendapatkan jumlah PCL
-    const [pclRows] = await dbConnection.execute(
+    const [pclRows] = await dbConnection.execute<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM pcl'
     );
 
     // Query untuk mendapatkan jumlah survei
-    const [surveiRows] = await dbConnection.execute(
+    const [surveiRows] = await dbConnection.execute<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM survei'
     );
 
@@ -30,15 +30,15 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        perusahaan: (perusahaanRows as any[])[0].count,
-        pcl: (pclRows as any[])[0].count,
-        survei: (surveiRows as any[])[0].count
+        perusahaan: perusahaanRows[0].count,
+        pcl: pclRows[0].count,
+        survei: surveiRows[0].count
       }
     });
   } catch (error) {
-    console.error('Database error:', error.message);
+    console.error('Database error:', (error as Error).message);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: (error as Error).message },
       { status: 500 }
     );
   }

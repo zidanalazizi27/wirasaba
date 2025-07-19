@@ -1,17 +1,17 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import AddLocationRoundedIcon from "@mui/icons-material/AddLocationRounded";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
-import { renderToString } from "react-dom/server";
 import { useRouter } from "next/navigation";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
+import L, { Map, Marker } from "leaflet";
 
 interface DetailDirektoriProps {
   id_perusahaan: string | string[] | null;
   mode?: "view" | "edit" | "add"; // Tambahkan prop mode
   onSave?: (data: PerusahaanData) => Promise<void>; // Handler untuk tombol simpan
   onCancel?: () => void; // Handler untuk tombol batalkan
+  isSaving?: boolean; // Prop untuk status saving
 }
 
 //intrface untuk validasi input
@@ -70,6 +70,16 @@ interface PerusahaanData {
   pcl_utama: string;
 }
 
+// Helper function untuk mendapatkan nama dari ID
+const getOptionName = (
+  options: { value: number | string; label: string }[],
+  id: number | string | null
+): string => {
+  if (id === null || id === undefined) return "Tidak Diketahui";
+  const option = options.find((opt) => opt.value == id);
+  return option ? option.label : "Tidak Diketahui";
+};
+
 const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   id_perusahaan,
   mode = "view", // Berikan nilai default 'view'
@@ -82,24 +92,35 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PerusahaanData | null>(null);
   const [editedData, setEditedData] = useState<PerusahaanData | null>(null);
-  const [map, setMap] = useState(null);
-  const [marker, setMarker] = useState(null);
   const [isAddingYear, setIsAddingYear] = useState(false);
   const [newYear, setNewYear] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const leafletMap = useRef<any>(null);
-  const leafletMarker = useRef<any>(null);
+  const leafletMap = useRef<Map | null>(null);
+  const leafletMarker = useRef<Marker | null>(null);
   const mapInitialized = useRef<boolean>(false);
 
+  interface DropdownOption {
+    value: number | string;
+    label: string;
+    id_des?: number;
+  }
+
   // State untuk opsi dropdown
-  const [badanUsahaOptions, setBadanUsahaOptions] = useState<any[]>([]);
-  const [kecamatanOptions, setKecamatanOptions] = useState<any[]>([]);
-  const [desaOptions, setDesaOptions] = useState<any[]>([]);
-  const [lokasiOptions, setLokasiOptions] = useState<any[]>([]);
-  const [tenagaKerjaOptions, setTenagaKerjaOptions] = useState<any[]>([]);
-  const [investasiOptions, setInvestasiOptions] = useState<any[]>([]);
-  const [omsetOptions, setOmsetOptions] = useState<any[]>([]);
-  const [pclOptions, setPclOptions] = useState<any[]>([]);
+  const [badanUsahaOptions, setBadanUsahaOptions] = useState<DropdownOption[]>(
+    []
+  );
+  const [kecamatanOptions, setKecamatanOptions] = useState<DropdownOption[]>(
+    []
+  );
+  const [desaOptions, setDesaOptions] = useState<DropdownOption[]>([]);
+  const [lokasiOptions, setLokasiOptions] = useState<DropdownOption[]>([]);
+  const [tenagaKerjaOptions, setTenagaKerjaOptions] = useState<
+    DropdownOption[]
+  >([]);
+  const [investasiOptions, setInvestasiOptions] = useState<DropdownOption[]>(
+    []
+  );
+  const [omsetOptions, setOmsetOptions] = useState<DropdownOption[]>([]);
+  const [pclOptions, setPclOptions] = useState<DropdownOption[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
 
   // State untuk validasi
@@ -115,40 +136,42 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   const BPS_LON = 112.7039002;
 
   // Fungsi untuk menghitung jarak
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const calculateDistance = useCallback(
+    (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      if (
+        !lat1 ||
+        !lon1 ||
+        !lat2 ||
+        !lon2 ||
+        isNaN(lat1) ||
+        isNaN(lon1) ||
+        isNaN(lat2) ||
+        isNaN(lon2)
+      )
+        return null;
 
-    // Konversi ke number jika input berupa string
-    lat1 = Number(lat1);
-    lon1 = Number(lon1);
-    lat2 = Number(lat2);
-    lon2 = Number(lon2);
+      // Konversi ke radian
+      const lat1Rad = (Math.PI * lat1) / 180;
+      const lon1Rad = (Math.PI * lon1) / 180;
+      const lat2Rad = (Math.PI * lat2) / 180;
+      const lon2Rad = (Math.PI * lon2) / 180;
 
-    // Konversi ke radian
-    const lat1Rad = (Math.PI * lat1) / 180;
-    const lon1Rad = (Math.PI * lon1) / 180;
-    const lat2Rad = (Math.PI * lat2) / 180;
-    const lon2Rad = (Math.PI * lon2) / 180;
+      // Rumus Haversine untuk menghitung jarak
+      const distance =
+        6371 *
+        Math.acos(
+          Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.cos(lon2Rad - lon1Rad) +
+            Math.sin(lat1Rad) * Math.sin(lat2Rad)
+        );
 
-    // Rumus Haversine untuk menghitung jarak
-    const distance =
-      6371 *
-      Math.acos(
-        Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.cos(lon2Rad - lon1Rad) +
-          Math.sin(lat1Rad) * Math.sin(lat2Rad)
-      );
-
-    // Pembulatan ke 2 angka di belakang koma
-    return Math.round(distance * 100) / 100;
-  };
+      // Pembulatan ke 2 angka di belakang koma
+      return Math.round(distance * 100) / 100;
+    },
+    []
+  );
 
   //Fungsi untuk menentukan skala
-  const determineScale = (tkerja, investasi, omset) => {
-    // Konversi ke number jika input berupa string
-    tkerja = Number(tkerja);
-    investasi = Number(investasi);
-    omset = Number(omset);
-
+  const determineScale = (tkerja: number, investasi: number, omset: number) => {
     // Jika tkerja = 4 (>99 orang) ATAU investasi = 4 (>10M) ATAU omset = 4 (>50M)
     if (tkerja === 4 || investasi === 4 || omset === 4) {
       return "Besar";
@@ -158,7 +181,10 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   };
 
   // Fungsi validasi field
-  const validateField = (field: string, value: any): string => {
+  const validateField = (
+    field: string,
+    value: string | number | null | undefined
+  ): string => {
     const errors: string[] = [];
 
     switch (field) {
@@ -202,7 +228,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         if (!value || value === "" || value.toString().trim() === "") {
           errors.push("Latitude wajib diisi");
         } else {
-          const lat = parseFloat(value);
+          const lat = parseFloat(value.toString());
           if (isNaN(lat)) {
             errors.push("Latitude harus berupa angka desimal");
           } else if (lat < -90 || lat > 90) {
@@ -216,7 +242,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
         if (!value || value === "" || value.toString().trim() === "") {
           errors.push("Longitude wajib diisi");
         } else {
-          const lon = parseFloat(value);
+          const lon = parseFloat(value.toString());
           if (isNaN(lon)) {
             errors.push("Longitude harus berupa angka desimal");
           } else if (lon < -180 || lon > 180) {
@@ -228,13 +254,15 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       case "nama_perusahaan":
       case "alamat":
       case "produk":
-        if (!value || value.toString().trim() === "") {
-          const fieldNames = {
+        if (!value || String(value).trim() === "") {
+          const fieldNames: Record<string, string> = {
             nama_perusahaan: "Nama perusahaan",
             alamat: "Alamat",
             produk: "Produk",
           };
-          errors.push(`${fieldNames[field]} tidak boleh kosong`);
+          if (typeof field === "string" && field in fieldNames) {
+            errors.push(`${fieldNames[field]} tidak boleh kosong`);
+          }
         }
         break;
 
@@ -257,7 +285,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
       case "omset":
       case "skala":
         if (!value || value === "") {
-          const fieldNames = {
+          const fieldNames: Record<string, string> = {
             badan_usaha: "Badan Usaha",
             lok_perusahaan: "Lokasi Perusahaan",
             tkerja: "Tenaga Kerja",
@@ -265,7 +293,9 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
             omset: "Omset",
             skala: "Skala",
           };
-          errors.push(`${fieldNames[field]} tidak boleh kosong`);
+          if (typeof field === "string" && field in fieldNames) {
+            errors.push(`${fieldNames[field]} tidak boleh kosong`);
+          }
         }
         break;
     }
@@ -276,7 +306,7 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
   // Fungsi validasi lengkap
   const validateAllFields = (): boolean => {
     const errors: ValidationErrors = {};
-    const requiredFields = [
+    const requiredFields: (keyof PerusahaanData)[] = [
       "kip",
       "nama_perusahaan",
       "alamat",
@@ -296,7 +326,15 @@ const DetailDirektori: React.FC<DetailDirektoriProps> = ({
 
     requiredFields.forEach((field) => {
       const value = editedData?.[field];
-      const error = validateField(field, value);
+      // Handle different types of values
+      if (Array.isArray(value)) {
+        // Skip array fields for individual validation
+        return;
+      }
+      const error = validateField(
+        field,
+        value as string | number | null | undefined
+      );
 
       if (error) {
         errors[field] = error;
@@ -404,35 +442,38 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
   // Handler input dengan validasi
   const handleInputChangeWithValidation = (
     field: keyof PerusahaanData,
-    value: any
+    value: string | number
   ) => {
     let processedValue = value;
 
     // Filter input berdasarkan field
     if (field === "kip") {
-      if (!value || value.toString().trim() === "") {
+      const valueStr = value.toString();
+      if (!value || valueStr.trim() === "") {
         showFieldTooltip("kip", "KIP tidak boleh kosong");
         return;
       }
-      const numericValue = value.replace(/\D/g, "");
+      const numericValue = valueStr.replace(/\D/g, "");
       if (numericValue.length > 10) {
         showFieldTooltip("kip", "KIP maksimal 10 digit");
         return;
       }
-      if (value && !/^\d*$/.test(value)) {
+      if (value && !/^\d*$/.test(valueStr)) {
         showFieldTooltip("kip", "KIP harus berupa angka saja");
         return;
       }
       processedValue = numericValue;
     } else if (field === "kode_pos") {
-      const numericValue = value.replace(/\D/g, "");
+      const valueStr = value.toString();
+      const numericValue = valueStr.replace(/\D/g, "");
       if (numericValue.length > 5) {
         showFieldTooltip("kode_pos", "Kode pos maksimal 5 digit");
         return;
       }
       processedValue = numericValue;
     } else if (field === "KBLI") {
-      const numericValue = value.replace(/\D/g, "");
+      const valueStr = value.toString();
+      const numericValue = valueStr.replace(/\D/g, "");
       if (numericValue.length > 5) {
         showFieldTooltip("KBLI", "KBLI maksimal 5 digit");
         return;
@@ -440,11 +481,12 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
       processedValue = numericValue;
     } else if (field === "lat") {
       const latPattern = /^-?\d*\.?\d*$/;
-      if (!value || value === "") {
+      const valueStr = value.toString();
+      if (!value || valueStr === "") {
         showFieldTooltip("lat", "Latitude tidak boleh kosong");
         return;
       }
-      if (value && !latPattern.test(value)) {
+      if (value && !latPattern.test(valueStr)) {
         showFieldTooltip(
           "lat",
           "Latitude harus berupa angka desimal (bisa negatif)"
@@ -452,7 +494,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
         return;
       }
       if (value) {
-        const lat = parseFloat(value);
+        const lat = parseFloat(value.toString());
         if (!isNaN(lat) && (lat < -90 || lat > 90)) {
           showFieldTooltip("lat", "Latitude harus dalam rentang -90 sampai 90");
           return;
@@ -461,16 +503,17 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
       processedValue = value;
     } else if (field === "lon") {
       const lonPattern = /^-?\d*\.?\d*$/;
-      if (!value || value === "") {
+      const valueStr = value.toString();
+      if (!value || valueStr === "") {
         showFieldTooltip("lon", "Longitude tidak boleh kosong");
         return;
       }
-      if (value && !lonPattern.test(value)) {
+      if (value && !lonPattern.test(valueStr)) {
         showFieldTooltip("lon", "Longitude harus berupa angka desimal");
         return;
       }
       if (value) {
-        const lon = parseFloat(value);
+        const lon = parseFloat(value.toString());
         if (!isNaN(lon) && (lon < -180 || lon > 180)) {
           showFieldTooltip(
             "lon",
@@ -486,7 +529,8 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
     if (
       field === "des" &&
       processedValue &&
-      (!editedData?.kec || editedData.kec === "")
+      editedData &&
+      (!editedData.kec || editedData.kec === 0)
     ) {
       showFieldTooltip(
         "des",
@@ -602,12 +646,12 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
       }
 
       // Jika tidak ada duplikasi, lanjutkan penyimpanan
-      if (mode === "add") {
+      if (mode === "add" && onSave) {
         const dataToSave = { ...editedData };
-        delete dataToSave.id_perusahaan;
-        onSave && onSave(dataToSave);
-      } else {
-        onSave && onSave(editedData);
+        delete (dataToSave as Partial<PerusahaanData>).id_perusahaan;
+        onSave(dataToSave as PerusahaanData);
+      } else if (onSave) {
+        onSave(editedData);
       }
     } catch (error) {
       console.error("Error during validation:", error);
@@ -714,14 +758,16 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
         setIsAddingYear(false);
       } catch (error) {
         console.error("Error adding year:", error);
-        SweetAlertUtils.error("Error", `Error: ${error.message}`);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error occurred";
+        SweetAlertUtils.error("Error", `Error: ${errorMessage}`);
       }
     }
   };
 
   // Fungsi untuk menghapus tahun
   // Fungsi untuk menghapus tahun
-  const handleRemoveYear = async (yearToRemove) => {
+  const handleRemoveYear = async (yearToRemove: number) => {
     if (editedData) {
       // For new company (mode === "add"), simply update the local state
       if (mode === "add") {
@@ -795,593 +841,413 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
         );
       } catch (error) {
         console.error("Error removing year:", error);
-        SweetAlertUtils.error("Error", `Error: ${error.message}`);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error occurred";
+        SweetAlertUtils.error("Error", `Error: ${errorMessage}`);
       }
     }
   };
 
-  const fetchDropdownOptions = async () => {
-    try {
-      // Set loading state ketika mulai fetch
-      setIsLoadingOptions(true);
+  const handleInputChange = useCallback(
+    (
+      field: keyof PerusahaanData,
+      value: string | number | string[] | number[]
+    ) => {
+      setEditedData((prev) => {
+        if (!prev) return null;
 
-      // Fetch badan usaha options
-      const buResponse = await fetch("/api/badan-usaha");
-      if (buResponse.ok) {
-        const buData = await buResponse.json();
-        setBadanUsahaOptions(buData.data || []);
-      }
+        const newData = { ...prev, [field]: value };
 
-      // Fetch kecamatan data
-      const kecResponse = await fetch("/api/kecamatan");
-      if (kecResponse.ok) {
-        const kecData = await kecResponse.json();
-        setKecamatanOptions(kecData.data || []);
-      }
-
-      // Fetch lokasi perusahaan
-      const lokasiResponse = await fetch("/api/lokasi-perusahaan");
-      if (lokasiResponse.ok) {
-        const lokasiData = await lokasiResponse.json();
-        setLokasiOptions(lokasiData.data || []);
-      }
-
-      // Fetch tenaga kerja
-      const tkerjaResponse = await fetch("/api/tenaga-kerja");
-      if (tkerjaResponse.ok) {
-        const tkerjaData = await tkerjaResponse.json();
-        setTenagaKerjaOptions(tkerjaData.data || []);
-      }
-
-      // Fetch investasi
-      const investasiResponse = await fetch("/api/investasi");
-      if (investasiResponse.ok) {
-        const investasiData = await investasiResponse.json();
-        setInvestasiOptions(investasiData.data || []);
-      }
-
-      // Fetch omset
-      const omsetResponse = await fetch("/api/omset");
-      if (omsetResponse.ok) {
-        const omsetData = await omsetResponse.json();
-        setOmsetOptions(omsetData.data || []);
-      }
-
-      // Fetch PCL options
-      const pclResponse = await fetch("/api/pcl?format=dropdown");
-      if (pclResponse.ok) {
-        const pclData = await pclResponse.json();
-        // Periksa struktur pclData untuk menangani format lama dan baru
-        if (Array.isArray(pclData)) {
-          setPclOptions(pclData);
-        } else if (pclData.data && Array.isArray(pclData.data)) {
-          // Tangani format API baru
-          setPclOptions(
-            pclData.data.map((item) => ({
-              name: `${item.nama_pcl} (${item.status_pcl})`,
-              uid: item.nama_pcl,
-            }))
+        // Jika field yang berubah adalah tkerja, investasi, atau omset
+        if (["tkerja", "investasi", "omset"].includes(field)) {
+          // Tentukan skala baru berdasarkan nilai-nilai
+          newData.skala = determineScale(
+            newData.tkerja,
+            newData.investasi,
+            newData.omset
           );
         }
+
+        // Jika field yang berubah adalah lat atau lon
+        if (field === "lat" || field === "lon") {
+          // Hitung jarak baru
+          if (newData.lat !== null && newData.lon !== null) {
+            newData.jarak = calculateDistance(
+              newData.lat,
+              newData.lon,
+              BPS_LAT,
+              BPS_LON
+            );
+          } else {
+            newData.jarak = null;
+          }
+        }
+
+        // Jika field yang berubah adalah kecamatan
+        if (field === "kec") {
+          // Reset desa
+          newData.des = 0;
+        }
+        return newData;
+      });
+    },
+    [calculateDistance, BPS_LAT, BPS_LON]
+  );
+
+  // Fetch dropdown options - menggunakan pola yang sama seperti di repositori referensi
+  const fetchOptions = useCallback(async () => {
+    setIsLoadingOptions(true);
+    setError(null);
+
+    try {
+      const responses = await Promise.all([
+        fetch("/api/badan-usaha"),
+        fetch("/api/kecamatan"),
+        fetch("/api/lokasi-perusahaan"),
+        fetch("/api/tenaga-kerja"),
+        fetch("/api/investasi"),
+        fetch("/api/omset"),
+        fetch("/api/perusahaan/pcl_utama"),
+      ]);
+
+      // Validasi semua responses
+      const responsePromises = responses.map(async (response, index) => {
+        if (!response.ok) {
+          throw new Error(
+            `HTTP error! Status: ${response.status} for API ${index}`
+          );
+        }
+        return response.json();
+      });
+
+      const [
+        badanUsahaRes,
+        kecamatanRes,
+        lokasiRes,
+        tenagaKerjaRes,
+        investasiRes,
+        omsetRes,
+        pclRes,
+      ] = await Promise.all(responsePromises);
+
+      // Validasi response dan set data dengan error handling
+      if (badanUsahaRes.success) {
+        setBadanUsahaOptions(badanUsahaRes.data || []);
+      } else {
+        console.error("Error fetching badan usaha:", badanUsahaRes.message);
+        setBadanUsahaOptions([]);
       }
-    } catch (error) {
-      console.error("Error fetching dropdown options:", error);
+
+      if (kecamatanRes.success) {
+        setKecamatanOptions(kecamatanRes.data || []);
+      } else {
+        console.error("Error fetching kecamatan:", kecamatanRes.message);
+        setKecamatanOptions([]);
+      }
+
+      if (lokasiRes.success) {
+        setLokasiOptions(lokasiRes.data || []);
+      } else {
+        console.error("Error fetching lokasi:", lokasiRes.message);
+        setLokasiOptions([]);
+      }
+
+      if (tenagaKerjaRes.success) {
+        setTenagaKerjaOptions(tenagaKerjaRes.data || []);
+      } else {
+        console.error("Error fetching tenaga kerja:", tenagaKerjaRes.message);
+        setTenagaKerjaOptions([]);
+      }
+
+      if (investasiRes.success) {
+        setInvestasiOptions(investasiRes.data || []);
+      } else {
+        console.error("Error fetching investasi:", investasiRes.message);
+        setInvestasiOptions([]);
+      }
+
+      if (omsetRes.success) {
+        setOmsetOptions(omsetRes.data || []);
+      } else {
+        console.error("Error fetching omset:", omsetRes.message);
+        setOmsetOptions([]);
+      }
+
+      if (pclRes.success) {
+        setPclOptions(pclRes.data || []);
+      } else {
+        console.error("Error fetching PCL:", pclRes.message);
+        setPclOptions([]);
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("Error fetching options:", errorMessage);
+      setError(`Gagal memuat opsi: ${errorMessage}`);
     } finally {
       setIsLoadingOptions(false);
     }
-  };
-
-  // Panggil fungsi fetch dropdown saat komponen dimuat dalam mode edit
-  // Jika dalam mode add, selalu fetch dropdown options
-  useEffect(() => {
-    if (mode === "edit" || mode === "add") {
-      fetchDropdownOptions();
-    }
-  }, [mode]);
-
-  useEffect(() => {
-    if ((mode === "edit" || mode === "add") && editedData?.kec) {
-      const fetchDesa = async () => {
-        try {
-          setIsLoadingOptions(true);
-          const response = await fetch(`/api/desa?kec_id=${editedData.kec}`);
-          if (response.ok) {
-            const result = await response.json();
-            setDesaOptions(result.data || []);
-          }
-        } catch (error) {
-          console.error("Error fetching desa:", error);
-        } finally {
-          setIsLoadingOptions(false);
-        }
-      };
-
-      fetchDesa();
-    }
-  }, [editedData?.kec, mode]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        // Jika mode add, tidak perlu fetch data
-        if (mode === "add") {
-          const emptyData = {
-            id_perusahaan: null,
-            kip: "",
-            nama_perusahaan: "",
-            badan_usaha: "",
-            badan_usaha_nama: "",
-            alamat: "",
-            kec: "",
-            kec_nama: "",
-            des: "",
-            des_nama: "",
-            kode_pos: "",
-            skala: "",
-            lok_perusahaan: "",
-            lok_perusahaan_nama: "",
-            nama_kawasan: "",
-            lat: null,
-            lon: null,
-            jarak: null,
-            produk: "",
-            KBLI: "",
-            telp_perusahaan: "",
-            email_perusahaan: "",
-            web_perusahaan: "",
-            tkerja: "",
-            tkerja_nama: "",
-            investasi: "",
-            investasi_nama: "",
-            omset: "",
-            omset_nama: "",
-            nama_narasumber: "",
-            jbtn_narasumber: "",
-            email_narasumber: "",
-            telp_narasumber: "",
-            catatan: "",
-            tahun_direktori: [new Date().getFullYear()], // Default tahun saat ini
-            pcl_utama: "", // PCL Utama kosong
-          };
-          setData(emptyData);
-          setEditedData(emptyData);
-          setLoading(false);
-          return;
-        }
-
-        // Untuk mode view dan edit, fetch data seperti biasa
-        if (id_perusahaan) {
-          const response = await fetch(`/api/perusahaan/${id_perusahaan}`);
-          if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
-          }
-          const result = await response.json();
-          setData(result);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        setError("Gagal memuat data perusahaan");
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [id_perusahaan, mode]);
-
-  // Inisialisasi data edit saat data asli berubah
-  useEffect(() => {
-    if (data) {
-      setEditedData({ ...data });
-    }
-  }, [data]);
-
-  // Handler untuk perubahan input
-  const handleInputChange = (field: keyof PerusahaanData, value: any) => {
-    if (editedData) {
-      // Proses nilai sesuai tipe data yang diharapkan
-      let processedValue = value;
-
-      // Proses tipe data agar sesuai dengan ekspektasi database
-      if (field === "kip") {
-        // Pastikan KIP adalah number atau null
-        processedValue = value
-          ? value.trim() === ""
-            ? null
-            : isNaN(Number(value))
-              ? null
-              : Number(value)
-          : null;
-      } else if (
-        [
-          "badan_usaha",
-          "kec",
-          "des",
-          "lok_perusahaan",
-          "tkerja",
-          "investasi",
-          "omset",
-        ].includes(field)
-      ) {
-        // Pastikan field numerik adalah number atau null
-        processedValue = value
-          ? value === ""
-            ? null
-            : isNaN(Number(value))
-              ? null
-              : Number(value)
-          : null;
-      } else if (["lat", "lon", "jarak"].includes(field)) {
-        // Pastikan field floating point adalah number atau null
-        // Juga mengizinkan penggantian komma dengan titik untuk desimal
-        const normalizedValue =
-          typeof value === "string" ? value.replace(",", ".") : value;
-        processedValue = normalizedValue
-          ? normalizedValue === ""
-            ? null
-            : isNaN(parseFloat(normalizedValue))
-              ? null
-              : parseFloat(normalizedValue)
-          : null;
-      } else if (["telp_perusahaan", "telp_narasumber"].includes(field)) {
-        // Pastikan nomor telepon hanya berisi angka, +, dan -
-        processedValue = value ? value.replace(/[^\d+\-]/g, "") : null;
-      }
-
-      const newData = { ...editedData, [field]: processedValue };
-
-      // Jika kecamatan berubah, kosongkan pilihan desa
-      if (field === "kec") {
-        newData.des = null;
-        newData.des_nama = "";
-      }
-
-      // Logging untuk debugging
-      console.log(`Field ${field} changed to:`, processedValue);
-
-      // Hanya proses pengisian otomatis dalam mode edit atau add
-      if (mode === "edit" || mode === "add") {
-        // 1. Pengisian otomatis jarak saat lat atau lon berubah
-        if (field === "lat" || field === "lon") {
-          const lat = field === "lat" ? processedValue : editedData.lat;
-          const lon = field === "lon" ? processedValue : editedData.lon;
-
-          // Hitung jarak jika kedua koordinat tersedia
-          if (lat && lon) {
-            const distance = calculateDistance(lat, lon, BPS_LAT, BPS_LON);
-            if (distance !== null) {
-              newData.jarak = distance;
-              console.log(`Jarak diperbarui otomatis: ${distance}`);
-            }
-          }
-        }
-
-        // 2. Pengisian otomatis skala saat tkerja, investasi, atau omset berubah
-        if (field === "tkerja" || field === "investasi" || field === "omset") {
-          const tkerja =
-            field === "tkerja" ? processedValue : editedData.tkerja;
-          const investasi =
-            field === "investasi" ? processedValue : editedData.investasi;
-          const omset = field === "omset" ? processedValue : editedData.omset;
-
-          // Tentukan skala jika setidaknya salah satu kriteria tersedia
-          if (tkerja || investasi || omset) {
-            const newScale = determineScale(tkerja, investasi, omset);
-            newData.skala = newScale;
-            console.log(`Skala diperbarui otomatis: ${newScale}`);
-          }
-        }
-      }
-
-      setEditedData(newData);
-    }
-  };
-
-  // Effect hooks untuk mengatur pengisian otomatis saat data pertama kali dimuat
-  useEffect(() => {
-    if (data && mode === "edit") {
-      // Clone data untuk menghindari referensi langsung
-      const newData = { ...data };
-
-      // Hitung jarak jika koordinat tersedia
-      if (newData.lat && newData.lon) {
-        const distance = calculateDistance(
-          newData.lat,
-          newData.lon,
-          BPS_LAT,
-          BPS_LON
-        );
-        if (distance !== null && !newData.jarak) {
-          newData.jarak = distance;
-        }
-      }
-
-      // Tentukan skala berdasarkan kriteria
-      if (newData.tkerja || newData.investasi || newData.omset) {
-        const autoScale = determineScale(
-          newData.tkerja,
-          newData.investasi,
-          newData.omset
-        );
-        if (!newData.skala) {
-          newData.skala = autoScale;
-        }
-      }
-
-      // Update editedData dengan kalkulasi otomatis
-      setEditedData(newData);
-    }
-  }, [data, mode]);
-
-  //fungsi validasi sebelum menyimpan perubahan
-  const validateData = (): boolean => {
-    // Reset pesan error
-    const errors: Record<string, string> = {};
-    // Validasi KIP
-    if (!editedData?.kip || editedData.kip.toString().trim() === "") {
-      errors.kip = "KIP tidak boleh kosong";
-    }
-
-    // Validasi nama perusahaan
-    if (!editedData?.nama_perusahaan?.trim()) {
-      errors.nama_perusahaan = "Nama perusahaan tidak boleh kosong";
-    }
-
-    // Validasi alamat
-    if (!editedData?.alamat?.trim()) {
-      errors.alamat = "Alamat tidak boleh kosong";
-    }
-
-    // Validasi Latitude
-    if (
-      !editedData?.lat ||
-      editedData.lat === null ||
-      editedData.lat === undefined
-    ) {
-      errors.lat = "Latitude tidak boleh kosong";
-    }
-
-    // Validasi Longitude
-    if (
-      !editedData?.lon ||
-      editedData.lon === null ||
-      editedData.lon === undefined
-    ) {
-      errors.lon = "Longitude tidak boleh kosong";
-    }
-
-    // Validasi tahun direktori
-    if (
-      !editedData?.tahun_direktori ||
-      editedData.tahun_direktori.length === 0
-    ) {
-      errors.tahun_direktori = "Minimal satu tahun direktori diperlukan";
-    }
-
-    // Tampilkan error jika ada
-    if (Object.keys(errors).length > 0) {
-      SweetAlertUtils.warning(
-        "Mohon Perbaiki Input",
-        "Terdapat kesalahan pada form input. Silakan periksa kembali data yang Anda masukkan."
-      );
-      return false;
-    }
-    return true;
-  };
-
-  const handleSave = async () => {
-    if (!editedData || !validateData()) return;
-
-    const confirmed = await SweetAlertUtils.confirmSave(
-      "Konfirmasi Penyimpanan",
-      mode === "add"
-        ? "Apakah Anda yakin ingin menyimpan data perusahaan baru?"
-        : "Apakah Anda yakin ingin menyimpan perubahan data?"
-    );
-
-    if (confirmed) {
-      if (mode === "add") {
-        const dataToSave = { ...editedData };
-        delete dataToSave.id_perusahaan;
-        onSave && onSave(dataToSave);
-      } else {
-        onSave && onSave(editedData);
-      }
-    }
-  };
-
-  const handleCancel = async () => {
-    const hasChanges = JSON.stringify(data) !== JSON.stringify(editedData);
-
-    if (hasChanges || mode === "add") {
-      const confirmed = await SweetAlertUtils.confirmCancel();
-      if (!confirmed) return;
-    }
-
-    onCancel && onCancel();
-  };
-
-  // Fungsi inisialisasi peta
-  const initializeMap = async () => {
-    // Skip if not on client side or no mapRef
-    if (typeof window === "undefined" || !mapRef.current) return;
-
-    try {
-      // Dynamically import Leaflet
-      const L = (await import("leaflet")).default;
-      await import("leaflet/dist/leaflet.css");
-
-      // Get coordinates based on mode and available data
-      let latitude = -7.4483396; // Default to BPS Sidoarjo coordinates
-      let longitude = 112.7039002;
-
-      if (
-        (mode === "edit" || mode === "add") &&
-        editedData?.lat &&
-        editedData?.lon
-      ) {
-        latitude = Number(editedData.lat);
-        longitude = Number(editedData.lon);
-      } else if (mode === "view" && data?.lat && data?.lon) {
-        latitude = Number(data.lat);
-        longitude = Number(data.lon);
-      } else {
-        // If no coordinates, don't initialize map
-        return;
-      }
-
-      // Create icon
-      const iconSVG = renderToString(
-        <AddLocationRoundedIcon
-          style={{
-            color: "#E52020",
-            fontSize: 30,
-            filter: "drop-shadow(0px 3px 3px rgba(0, 0, 0, 1))",
-          }}
-        />
-      );
-
-      const customIcon = L.divIcon({
-        html: iconSVG,
-        className: "",
-        iconSize: [36, 36],
-        iconAnchor: [18, 36],
-      });
-
-      // Remove existing map if any
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
-        leafletMarker.current = null;
-      }
-
-      // Create new map instance
-      const map = L.map(mapRef.current).setView([latitude, longitude], 17);
-
-      L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
-        maxZoom: 20,
-        subdomains: ["mt0", "mt1", "mt2", "mt3"],
-        attribution: "&copy; Google Maps",
-      }).addTo(map);
-
-      const marker = L.marker([latitude, longitude], {
-        icon: customIcon,
-      }).addTo(map);
-
-      // Store references
-      leafletMap.current = map;
-      leafletMarker.current = marker;
-      mapInitialized.current = true;
-
-      // Add click handler for edit mode
-      if (mode === "edit" || mode === "add") {
-        map.on("click", (e: any) => {
-          const { lat, lng } = e.latlng;
-          marker.setLatLng([lat, lng]);
-
-          if (editedData) {
-            const newData = { ...editedData };
-            newData.lat = parseFloat(lat.toFixed(5));
-            newData.lon = parseFloat(lng.toFixed(5));
-
-            // Calculate distance
-            const distance = calculateDistance(lat, lng, BPS_LAT, BPS_LON);
-            if (distance !== null) {
-              newData.jarak = distance;
-            }
-
-            setEditedData(newData);
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Error initializing map:", error);
-    }
-  };
-
-  // Fungsi untuk update posisi marker saat koordinat berubah
-  const updateMarkerPosition = () => {
-    if (!leafletMap.current || !leafletMarker.current) return;
-
-    let lat, lon;
-
-    if (mode === "edit" || mode === "add") {
-      lat = editedData?.lat;
-      lon = editedData?.lon;
-    } else {
-      lat = data?.lat;
-      lon = data?.lon;
-    }
-
-    if (lat && lon) {
-      try {
-        const numLat = Number(lat);
-        const numLon = Number(lon);
-
-        if (!isNaN(numLat) && !isNaN(numLon)) {
-          leafletMarker.current.setLatLng([numLat, numLon]);
-          leafletMap.current.setView(
-            [numLat, numLon],
-            leafletMap.current.getZoom()
-          );
-        }
-      } catch (error) {
-        console.error("Error updating marker position:", error);
-      }
-    }
-  };
-
-  // Effect untuk inisialisasi peta
-  useEffect(() => {
-    if (mapRef.current && !mapInitialized.current) {
-      const timer = setTimeout(() => {
-        initializeMap();
-      }, 100); // Delay pendek untuk memastikan DOM siap
-
-      return () => clearTimeout(timer);
-    }
-  }, [mapRef.current, data, editedData, mode]);
-
-  // Effect untuk update posisi marker
-  useEffect(() => {
-    if (mapInitialized.current) {
-      updateMarkerPosition();
-    }
-  }, [editedData?.lat, editedData?.lon, data?.lat, data?.lon]);
-
-  // Effect untuk cleanup saat unmount
-  useEffect(() => {
-    return () => {
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
-        leafletMarker.current = null;
-        mapInitialized.current = false;
-      }
-    };
   }, []);
 
-  // Effect untuk reinisialisasi peta saat mode berubah
+  // Fetch dropdown options on mount
   useEffect(() => {
-    // Reset map initialization flag when mode changes
-    mapInitialized.current = false;
+    void fetchOptions();
+  }, [fetchOptions]);
 
-    // Remove existing map
-    if (leafletMap.current) {
-      leafletMap.current.remove();
-      leafletMap.current = null;
-      leafletMarker.current = null;
+  useEffect(() => {
+    if (editedData?.kec) {
+      const fetchDesa = async () => {
+        try {
+          const response = await fetch(`/api/desa?kec=${editedData.kec}`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const desaRes = await response.json();
+
+          if (desaRes.success) {
+            setDesaOptions(desaRes.data || []);
+          } else {
+            console.error("Error fetching desa options:", desaRes.message);
+            setDesaOptions([]);
+          }
+        } catch (error: unknown) {
+          if (error instanceof Error) {
+            console.error("Error fetching desa options:", error.message);
+          } else {
+            console.error("Error fetching desa options:", error);
+          }
+          setDesaOptions([]);
+        }
+      };
+      fetchDesa();
+    } else {
+      setDesaOptions([]);
+    }
+  }, [editedData?.kec]);
+
+  const handleCancel = async () => {
+    // Tampilkan konfirmasi SweetAlert jika ada perubahan
+    if (JSON.stringify(data) !== JSON.stringify(editedData)) {
+      const confirmed = await SweetAlertUtils.confirmCancel(
+        "Anda yakin ingin membatalkan?",
+        "Semua perubahan yang belum disimpan akan hilang."
+      );
+      if (confirmed) {
+        // Jika mode add, panggil onCancel dari props
+        if (mode === "add" && onCancel) {
+          onCancel();
+        }
+        // Jika mode edit, kembali ke halaman detail
+        if (mode === "edit") {
+          router.push(`/admin/direktori/${id_perusahaan}`);
+        }
+      }
+    } else {
+      // Jika tidak ada perubahan, langsung kembali
+      // Jika mode add, panggil onCancel dari props
+      if (mode === "add" && onCancel) {
+        onCancel();
+      }
+      // Jika mode edit, kembali ke halaman detail
+      if (mode === "edit") {
+        router.push(`/admin/direktori/${id_perusahaan}`);
+      }
+    }
+  };
+
+  const initializeMap = useCallback(() => {
+    if (mapRef.current && !leafletMap.current && data) {
+      const { lat, lon } = data;
+      const initialView: L.LatLngExpression =
+        lat && lon ? [lat, lon] : [BPS_LAT, BPS_LON];
+
+      const map = L.map(mapRef.current).setView(initialView, 15);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
+
+      // Icon kustom untuk BPS
+      const bpsIcon = L.icon({
+        iconUrl: "/image/pcl.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+      });
+
+      // Marker untuk BPS
+      L.marker([BPS_LAT, BPS_LON], { icon: bpsIcon })
+        .addTo(map)
+        .bindPopup("<b>BPS Kabupaten Sidoarjo</b>");
+
+      // Marker untuk perusahaan
+      if (lat && lon) {
+        leafletMarker.current = L.marker([lat, lon], {
+          draggable: mode === "edit",
+        })
+          .addTo(map)
+          .bindPopup(`<b>${data.nama_perusahaan}</b>`);
+
+        leafletMarker.current.on("dragend", (e: L.DragEndEvent) => {
+          const newLatLng = e.target.getLatLng();
+          handleInputChange("lat", newLatLng.lat);
+          handleInputChange("lon", newLatLng.lng);
+        });
+      }
+
+      leafletMap.current = map;
+      mapInitialized.current = true;
+    }
+  }, [data, mode, BPS_LAT, BPS_LON, handleInputChange]);
+
+  const updateMapPosition = useCallback(() => {
+    if (leafletMap.current && editedData?.lat && editedData?.lon) {
+      const newPos: L.LatLngExpression = [editedData.lat, editedData.lon];
+      leafletMap.current.setView(newPos, leafletMap.current.getZoom());
+      if (leafletMarker.current) {
+        leafletMarker.current.setLatLng(newPos);
+      } else {
+        // Jika marker belum ada, buat baru
+        leafletMarker.current = L.marker(newPos, {
+          draggable: mode === "edit",
+        })
+          .addTo(leafletMap.current)
+          .bindPopup(`<b>${editedData.nama_perusahaan}</b>`);
+
+        leafletMarker.current.on("dragend", (e: L.DragEndEvent) => {
+          const newLatLng = e.target.getLatLng();
+          handleInputChange("lat", newLatLng.lat);
+          handleInputChange("lon", newLatLng.lng);
+        });
+      }
+    }
+  }, [editedData, mode, handleInputChange]);
+
+  useEffect(() => {
+    if (mode !== "add" && !mapInitialized.current) {
+      initializeMap();
+    }
+  }, [initializeMap, mode]);
+
+  useEffect(() => {
+    if (mode === "edit" || mode === "add") {
+      updateMapPosition();
+    }
+  }, [editedData?.lat, editedData?.lon, mode, updateMapPosition]);
+
+  // Efek untuk memuat data perusahaan - menggunakan pola yang sama seperti di repositori referensi
+  const fetchData = useCallback(async () => {
+    if (!id_perusahaan) {
+      setLoading(false);
+      setError("ID Perusahaan tidak ditemukan.");
+      return;
     }
 
-    // Delay untuk memastikan state bersih
-    const timer = setTimeout(() => {
-      initializeMap();
-    }, 200);
+    // Jika mode 'add', siapkan data kosong
+    if (mode === "add") {
+      const initialData: PerusahaanData = {
+        id_perusahaan: 0,
+        kip: "",
+        nama_perusahaan: "",
+        badan_usaha: 0,
+        badan_usaha_nama: "",
+        alamat: "",
+        kec: 0,
+        kec_nama: "",
+        des: 0,
+        des_nama: "",
+        kode_pos: "",
+        skala: "Sedang",
+        lok_perusahaan: 0,
+        lok_perusahaan_nama: "",
+        nama_kawasan: null,
+        lat: null,
+        lon: null,
+        jarak: null,
+        produk: "",
+        KBLI: 0,
+        telp_perusahaan: null,
+        email_perusahaan: null,
+        web_perusahaan: null,
+        tkerja: 0,
+        tkerja_nama: "",
+        investasi: 0,
+        investasi_nama: "",
+        omset: 0,
+        omset_nama: "",
+        nama_narasumber: "",
+        jbtn_narasumber: "",
+        email_narasumber: null,
+        telp_narasumber: null,
+        catatan: null,
+        tahun_direktori: [new Date().getFullYear()], // Default tahun saat ini
+        pcl_utama: "",
+      };
+      setData(initialData);
+      setEditedData(initialData);
+      setLoading(false);
+      return;
+    }
 
-    return () => clearTimeout(timer);
-  }, [mode]);
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`/api/perusahaan/${id_perusahaan}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Hitung jarak saat data pertama kali dimuat
+        const initialData = { ...result.data };
+        if (initialData.lat && initialData.lon) {
+          initialData.jarak = calculateDistance(
+            initialData.lat,
+            initialData.lon,
+            BPS_LAT,
+            BPS_LON
+          );
+        }
+
+        setData(initialData);
+        setEditedData(initialData);
+      } else {
+        throw new Error(result.message || "Data tidak ditemukan");
+      }
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Unknown error occurred";
+      console.error("Error fetching company data:", errorMessage);
+      setError(`Gagal memuat data perusahaan: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [id_perusahaan, mode, calculateDistance, BPS_LAT, BPS_LON]);
+
+  // Initial data load
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    initializeMap();
+  }, [initializeMap]);
+
+  useEffect(() => {
+    updateMapPosition();
+  }, [updateMapPosition]);
+
+  // Efek untuk mengupdate posisi marker saat lat/lon berubah di form
+  useEffect(() => {
+    if (leafletMarker.current && editedData?.lat && editedData?.lon) {
+      const newLatLng = new L.LatLng(editedData.lat, editedData.lon);
+      leafletMarker.current.setLatLng(newLatLng);
+    }
+  }, [editedData?.lat, editedData?.lon]);
 
   if (loading) {
     return <div className="p-4 text-center">Memuat data...</div>;
@@ -1421,7 +1287,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "kip",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.kip || ""}
+                    value={String(editedData?.kip ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation("kip", e.target.value)
                     }
@@ -1446,7 +1312,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "nama_perusahaan",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.nama_perusahaan || ""}
+                    value={String(editedData?.nama_perusahaan ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "nama_perusahaan",
@@ -1474,7 +1340,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     "alamat",
                     "border font-medium text-sm p-2 rounded-lg w-full"
                   )}
-                  value={editedData?.alamat || ""}
+                  value={String(editedData?.alamat ?? "")}
                   onChange={(e) =>
                     handleInputChangeWithValidation("alamat", e.target.value)
                   }
@@ -1499,7 +1365,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "kec",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.kec || ""}
+                    value={String(editedData?.kec ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "kec",
@@ -1510,10 +1376,10 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     <option value="">Pilih Kecamatan *</option>
                     {kecamatanOptions.map((option, index) => (
                       <option
-                        key={`kec-${option.kode_kec || index}`}
-                        value={option.kode_kec}
+                        key={`kec-${option.value || index}`}
+                        value={option.value}
                       >
-                        {option.kode_kec}. {option.nama_kec}
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1535,7 +1401,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "des",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.des || ""}
+                    value={String(editedData?.des ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "des",
@@ -1550,13 +1416,13 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     ) : (
                       // Urutkan desaOptions berdasarkan id_des sebelum mapping
                       [...desaOptions]
-                        .sort((a, b) => a.id_des - b.id_des)
+                        .sort((a, b) => Number(a.value) - Number(b.value))
                         .map((option, index) => (
                           <option
-                            key={`desa-${option.kode_des || option.id_des || index}`}
-                            value={option.kode_des}
+                            key={`desa-${option.value || option.id_des || index}`}
+                            value={option.value}
                           >
-                            {option.kode_des}. {option.nama_des}
+                            {option.label}
                           </option>
                         ))
                     )}
@@ -1581,7 +1447,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "badan_usaha",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.badan_usaha || ""}
+                    value={String(editedData?.badan_usaha ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "badan_usaha",
@@ -1592,10 +1458,10 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     <option value="">Pilih Badan Usaha *</option>
                     {badanUsahaOptions.map((option, index) => (
                       <option
-                        key={`badan-${option.id_bu || index}`}
-                        value={option.id_bu}
+                        key={`badan-${option.value || index}`}
+                        value={option.value}
                       >
-                        {option.id_bu}. {option.ket_bu}
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1617,7 +1483,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "lok_perusahaan",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.lok_perusahaan || ""}
+                    value={String(editedData?.lok_perusahaan ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "lok_perusahaan",
@@ -1628,10 +1494,10 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     <option value="">Pilih Lokasi Perusahaan *</option>
                     {lokasiOptions.map((option, index) => (
                       <option
-                        key={`lokasi-${option.id_lok || index}`}
-                        value={option.id_lok}
+                        key={`lokasi-${option.value || index}`}
+                        value={option.value}
                       >
-                        {option.id_lok}. {option.ket_lok}
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1651,7 +1517,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
               <input
                 type="text"
                 className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.nama_kawasan || ""}
+                value={String(editedData?.nama_kawasan ?? "")}
                 onChange={(e) =>
                   handleInputChange("nama_kawasan", e.target.value)
                 }
@@ -1674,7 +1540,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "kode_pos",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.kode_pos || ""}
+                    value={String(editedData?.kode_pos ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "kode_pos",
@@ -1703,7 +1569,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "KBLI",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.KBLI || ""}
+                    value={String(editedData?.KBLI ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation("KBLI", e.target.value)
                     }
@@ -1730,7 +1596,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     "produk",
                     "border font-medium text-sm p-2 rounded-lg w-full"
                   )}
-                  value={editedData?.produk || ""}
+                  value={String(editedData?.produk ?? "")}
                   onChange={(e) =>
                     handleInputChangeWithValidation("produk", e.target.value)
                   }
@@ -1752,7 +1618,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                 <input
                   type="text"
                   className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.telp_perusahaan || ""}
+                  value={String(editedData?.telp_perusahaan ?? "")}
                   onChange={(e) =>
                     handleInputChange("telp_perusahaan", e.target.value)
                   }
@@ -1770,7 +1636,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                 <input
                   type="email"
                   className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.email_perusahaan || ""}
+                  value={String(editedData?.email_perusahaan ?? "")}
                   onChange={(e) =>
                     handleInputChange("email_perusahaan", e.target.value)
                   }
@@ -1789,7 +1655,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
               <input
                 type="text"
                 className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.web_perusahaan || ""}
+                value={String(editedData?.web_perusahaan ?? "")}
                 onChange={(e) =>
                   handleInputChange("web_perusahaan", e.target.value)
                 }
@@ -1801,18 +1667,21 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
             <p className="text-sm font-semibold">PCL Utama :</p>
             {mode === "view" ? (
               <div className="bg-gray-200 font-medium text-sm p-2 rounded-lg">
-                <p>{data.pcl_utama || "-"}</p>
+                <p>{getOptionName(pclOptions, data.pcl_utama)}</p>
               </div>
             ) : (
               <select
                 className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.pcl_utama || ""}
+                value={String(editedData?.pcl_utama ?? "")}
                 onChange={(e) => handleInputChange("pcl_utama", e.target.value)}
               >
                 <option value="">-- Pilih PCL --</option>
                 {pclOptions.map((option, index) => (
-                  <option key={`pcl-${option.uid || index}`} value={option.uid}>
-                    {option.name}
+                  <option
+                    key={`pcl-${option.value || index}`}
+                    value={option.value}
+                  >
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -1837,7 +1706,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "lat",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.lat || ""}
+                    value={String(editedData?.lat ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation("lat", e.target.value)
                     }
@@ -1862,7 +1731,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "lon",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.lon || ""}
+                    value={String(editedData?.lon ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation("lon", e.target.value)
                     }
@@ -1883,7 +1752,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                 <input
                   type="text"
                   className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.jarak || ""}
+                  value={String(editedData?.jarak ?? "")}
                   onChange={(e) => handleInputChange("jarak", e.target.value)}
                 />
               )}
@@ -1904,7 +1773,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     const coordinates =
                       mode === "view"
                         ? `${data.lat},${data.lon}`
-                        : `${editedData.lat},${editedData.lon}`;
+                        : `${editedData?.lat ?? 0},${editedData?.lon ?? 0}`;
                     window.open(
                       `https://www.google.com/maps?q=${coordinates}&z=17&t=k`,
                       "_blank"
@@ -1941,7 +1810,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "tkerja",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.tkerja || ""}
+                    value={String(editedData?.tkerja ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "tkerja",
@@ -1952,10 +1821,10 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     <option value="">Pilih Tenaga Kerja *</option>
                     {tenagaKerjaOptions.map((option, index) => (
                       <option
-                        key={`tkerja-${option.id_tkerja || index}`}
-                        value={option.id_tkerja}
+                        key={`tkerja-${option.value || index}`}
+                        value={option.value}
                       >
-                        {option.id_tkerja}. {option.ket_tkerja}
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1977,7 +1846,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "investasi",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.investasi || ""}
+                    value={String(editedData?.investasi ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "investasi",
@@ -1988,10 +1857,10 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     <option value="">Pilih Investasi *</option>
                     {investasiOptions.map((option, index) => (
                       <option
-                        key={`investasi-${option.id_investasi || index}`}
-                        value={option.id_investasi}
+                        key={`investasi-${option.value || index}`}
+                        value={option.value}
                       >
-                        {option.id_investasi}. {option.ket_investasi}
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -2015,7 +1884,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "omset",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.omset || ""}
+                    value={String(editedData?.omset ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation(
                         "omset",
@@ -2026,10 +1895,10 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                     <option value="">Pilih Omset *</option>
                     {omsetOptions.map((option, index) => (
                       <option
-                        key={`omset-${option.id_omset || index}`}
-                        value={option.id_omset}
+                        key={`omset-${option.value || index}`}
+                        value={option.value}
                       >
-                        {option.id_omset}. {option.ket_omset}
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -2051,7 +1920,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                       "skala",
                       "border font-medium text-sm p-2 rounded-lg w-full"
                     )}
-                    value={editedData?.skala || ""}
+                    value={String(editedData?.skala ?? "")}
                     onChange={(e) =>
                       handleInputChangeWithValidation("skala", e.target.value)
                     }
@@ -2077,7 +1946,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                 <input
                   type="text"
                   className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.nama_narasumber || ""}
+                  value={String(editedData?.nama_narasumber ?? "")}
                   onChange={(e) =>
                     handleInputChange("nama_narasumber", e.target.value)
                   }
@@ -2095,7 +1964,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                 <input
                   type="text"
                   className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.jbtn_narasumber || ""}
+                  value={String(editedData?.jbtn_narasumber ?? "")}
                   onChange={(e) =>
                     handleInputChange("jbtn_narasumber", e.target.value)
                   }
@@ -2115,7 +1984,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                 <input
                   type="text"
                   className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.telp_narasumber || ""}
+                  value={String(editedData?.telp_narasumber ?? "")}
                   onChange={(e) =>
                     handleInputChange("telp_narasumber", e.target.value)
                   }
@@ -2133,7 +2002,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
                 <input
                   type="email"
                   className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                  value={editedData?.email_narasumber || ""}
+                  value={String(editedData?.email_narasumber ?? "")}
                   onChange={(e) =>
                     handleInputChange("email_narasumber", e.target.value)
                   }
@@ -2151,7 +2020,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
             ) : (
               <input
                 className="border border-gray-300 font-medium text-sm p-2 rounded-lg w-full"
-                value={editedData?.catatan || ""}
+                value={String(editedData?.catatan ?? "")}
                 onChange={(e) => handleInputChange("catatan", e.target.value)}
               />
             )}
@@ -2278,7 +2147,7 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
       </div>
 
       {/* Tombol aksi (edit/add) */}
-      {(mode === "edit" || mode === "add") && editedData && (
+      {(mode === "edit" || mode === "add") && editedData !== null && (
         <div className="mt-4 flex justify-end space-x-3 text-sm">
           <button
             onClick={handleCancel}
@@ -2289,9 +2158,9 @@ Sistem tidak mengizinkan duplikasi data ini. Silakan:
           <button
             onClick={handleSaveWithValidation}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400"
-            disabled={isSaving}
+            disabled={!editedData}
           >
-            {isSaving ? "Menyimpan..." : "Simpan"}
+            {loading ? "Menyimpan..." : "Simpan"}
           </button>
         </div>
       )}

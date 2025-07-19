@@ -1,6 +1,6 @@
 // src/app/api/riwayat-survei/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import mysql, { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 // GET a specific riwayat by ID
 export async function GET(
@@ -19,7 +19,7 @@ export async function GET(
     });
     
     // Query to get riwayat survei by ID
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<RowDataPacket[]>(
       `SELECT r.id_riwayat, r.id_survei, r.id_perusahaan, r.id_pcl, r.selesai, r.ket_survei
        FROM riwayat_survei r
        WHERE r.id_riwayat = ?`,
@@ -28,7 +28,7 @@ export async function GET(
     
     await connection.end();
     
-    if ((rows as any[]).length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json({ 
         success: false, 
         message: "Riwayat survei tidak ditemukan" 
@@ -37,7 +37,7 @@ export async function GET(
     
     return NextResponse.json({
       success: true,
-      data: (rows as any[])[0]
+      data: rows[0]
     });
   } catch (error) {
     console.error("Database error:", error);
@@ -75,14 +75,14 @@ export async function PUT(
     });
     
     // Update riwayat survei data
-    const [result] = await connection.execute(
+    const [result] = await connection.execute<ResultSetHeader>(
       `UPDATE riwayat_survei 
        SET id_survei = ?, id_perusahaan = ?, id_pcl = ?, selesai = ?, ket_survei = ?
        WHERE id_riwayat = ?`,
       [data.id_survei, data.id_perusahaan, data.id_pcl, data.selesai, data.ket_survei || "", id]
     );
     
-    const affectedRows = (result as any).affectedRows;
+    const affectedRows = result.affectedRows;
     
     await connection.end();
     
@@ -123,12 +123,12 @@ export async function DELETE(
     });
     
     // Delete riwayat survei
-    const [result] = await connection.execute(
+    const [result] = await connection.execute<ResultSetHeader>(
       `DELETE FROM riwayat_survei WHERE id_riwayat = ?`,
       [id]
     );
     
-    const affectedRows = (result as any).affectedRows;
+    const affectedRows = result.affectedRows;
     
     await connection.end();
     

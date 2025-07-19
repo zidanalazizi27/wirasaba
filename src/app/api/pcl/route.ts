@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       await connection.end();
       
       // Format untuk dropdown
-      const formattedData = (rows as any[]).map(pcl => ({
+      const formattedData = (rows as mysql.RowDataPacket[]).map(pcl => ({
         name: `${pcl.nama_pcl} (${pcl.status_pcl})`,
         uid: pcl.nama_pcl
       }));
@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
     
     // Selain itu, gunakan format lengkap untuk tabel PCL
     // Buat kondisi WHERE untuk query
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions: string[] = [];
+    const queryParams: (string | number)[] = [];
     
     // Filter berdasarkan pencarian
     if (searchTerm) {
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Query data pcl dengan pagination
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT id_pcl, nama_pcl, status_pcl, telp_pcl
        FROM pcl
        ${whereClause}
@@ -118,12 +118,12 @@ export async function GET(request: NextRequest) {
     await connection.end();
 
     // Format the response
-    const total = (totalRows as any[])[0].total;
+    const total = (totalRows as mysql.RowDataPacket[])[0].total;
     
     return NextResponse.json({
       success: true,
       count: total,
-      data: rows
+      data: rows as mysql.RowDataPacket[],
     });
   } catch (error) {
     console.error("Database error:", error);
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
         [data.nama_pcl.trim(), data.status_pcl.trim()]
       );
 
-      if ((duplicateRows as any[]).length > 0) {
+      if ((duplicateRows as mysql.RowDataPacket[]).length > 0) {
         await connection.rollback();
         await connection.end();
         return NextResponse.json(
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
       );
       
       // Get new PCL ID
-      const newPclId = (result as any).insertId;
+      const newPclId = (result as mysql.RowDataPacket).insertId;
       
       await connection.commit();
       await connection.end();
@@ -299,7 +299,7 @@ export async function PUT(request: NextRequest) {
     await connection.end();
     
     // Check if any rows were affected
-    const affectedRows = (result as any).affectedRows;
+    const affectedRows = (result as mysql.RowDataPacket).affectedRows;
     
     if (affectedRows === 0) {
       return NextResponse.json({ 
@@ -348,7 +348,7 @@ export async function DELETE(request: NextRequest) {
     await connection.end();
     
     // Check if any rows were affected
-    const affectedRows = (result as any).affectedRows;
+    const affectedRows = (result as mysql.RowDataPacket).affectedRows;
     
     if (affectedRows === 0) {
       return NextResponse.json({ 

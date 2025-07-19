@@ -9,10 +9,14 @@ import ImportContactsRoundedIcon from "@mui/icons-material/ImportContactsRounded
 import AccountCircleRoundedIcon from "@mui/icons-material/AccountCircleRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useAuth } from "@/app/context/AuthContext";
 
-function SidebarLayout({ children }) {
+interface SidebarLayoutProps {
+  children: React.ReactNode;
+}
+
+function SidebarLayout({ children }: SidebarLayoutProps) {
   const [toast, setToast] = useState(false);
   const { logout } = useAuth();
 
@@ -91,12 +95,7 @@ function SidebarLayout({ children }) {
 
       <AnimatePresence>
         {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="absolute bottom-5 right-5"
-          >
+          <div className="absolute bottom-5 right-5">
             <div
               id="toast-success"
               className="flex items-center w-full max-w-xs p-4 mb-4 text-gray-500 bg-white rounded-lg shadow border-2 border-gray-200"
@@ -139,7 +138,7 @@ function SidebarLayout({ children }) {
                 </svg>
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

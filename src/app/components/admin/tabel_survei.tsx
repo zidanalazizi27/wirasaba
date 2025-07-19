@@ -340,6 +340,25 @@ export const columns = [
   { name: "Aksi", uid: "actions", sortable: false },
 ];
 
+interface SurveyExcelRow {
+  nama_survei: string;
+  fungsi: string;
+  periode: string;
+  tahun: number | string;
+}
+
+interface ValidationError {
+  row: number;
+  field: string;
+  message: string;
+  value: SurveyExcelRow;
+}
+
+interface DuplicateData {
+  data: SurveyExcelRow;
+  id?: number;
+}
+
 type Survey = {
   id_survei: number;
   no: number;
@@ -422,13 +441,20 @@ const TabelSurvei = () => {
     } finally {
       setIsLoadingAll(false);
     }
-  }, [filterValue, fungsiFilter, periodeFilter, tahunFilter, hasLoadedAll]);
+  }, [
+    filterValue,
+    fungsiFilter,
+    periodeFilter,
+    tahunFilter,
+    hasLoadedAll,
+    isLoadingAll,
+  ]);
 
   useEffect(() => {
     if (sortDescriptors.length > 0 && !hasLoadedAll) {
       fetchAllData();
     }
-  }, [sortDescriptors, fetchAllData]);
+  }, [sortDescriptors, fetchAllData, hasLoadedAll]);
 
   // Reset hasLoadedAll when filters change
   useEffect(() => {
@@ -535,7 +561,7 @@ const TabelSurvei = () => {
   const periodeDropdownRef = useRef<HTMLDivElement>(null);
   const tahunDropdownRef = useRef<HTMLDivElement>(null);
 
-  const hasSearchFilter = Boolean(filterValue);
+  // const hasSearchFilter = Boolean(filterValue);
 
   // Fetch filter options
   const fetchFilterOptions = useCallback(async () => {
@@ -592,7 +618,7 @@ const TabelSurvei = () => {
       if (result.success) {
         // Add row numbers to data
         const surveyWithNumbers = result.data.map(
-          (item: any, index: number) => ({
+          (item: Survey, index: number) => ({
             ...item,
             no: (currentPage - 1) * rowsPerPage + index + 1,
           })
@@ -762,78 +788,49 @@ const TabelSurvei = () => {
   }, [currentPage]);
 
   // Action handlers
-  const handleViewSurvey = async (survey: Survey) => {
-    await SweetAlertUtils.info(
-      `Detail Survei: ${survey.nama_survei}`,
-      `ID: ${survey.id_survei}\nFungsi: ${survey.fungsi}\nPeriode: ${survey.periode}\nTahun: ${survey.tahun}`
-    );
-  };
-
-  const handleEditSurvey = (survey: Survey) => {
+  const handleEditSurvey = useCallback((survey: Survey) => {
     setSelectedSurvey(survey);
     setShowEditModal(true);
-  };
+  }, []);
 
-  const handleDeleteSurvey = async (survey: Survey) => {
-    try {
-      // Konfirmasi penghapusan dengan SweetAlert
+  const handleDeleteSurvey = useCallback(
+    async (survey: Survey) => {
       const confirmed = await SweetAlertUtils.confirmDelete(
         "Hapus Data Survei",
-        `Anda akan menghapus survei "${survey.nama_survei}" (${survey.tahun}). Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan survei ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
+        `Anda yakin ingin menghapus "${survey.nama_survei}"? Tindakan ini akan menghapus semua riwayat survei terkait.`,
         "Ya, Hapus",
         "Batal"
       );
 
-      if (!confirmed) return;
+      if (confirmed) {
+        SweetAlertUtils.loading("Menghapus...", "Mohon tunggu...");
+        try {
+          const response = await fetch(`/api/survei/${survey.id_survei}`, {
+            method: "DELETE",
+          });
 
-      // Tampilkan loading
-      SweetAlertUtils.loading("Menghapus data...", "Mohon tunggu sebentar");
+          const result = await response.json();
+          SweetAlertUtils.closeLoading();
 
-      const response = await fetch(`/api/survei/${survey.id_survei}`, {
-        method: "DELETE",
-      });
-
-      const result = await response.json();
-
-      // Close loading
-      SweetAlertUtils.closeLoading();
-
-      if (result.success) {
-        // Tampilkan pesan sukses
-        await SweetAlertUtils.success(
-          "Berhasil Dihapus!",
-          `Survei "${survey.nama_survei}" berhasil dihapus dari database.`
-        );
-
-        // Refresh data after successful deletion
-        fetchData();
-      } else {
-        // Handle different types of errors
-        if (response.status === 409) {
-          await SweetAlertUtils.warning(
-            "Tidak Dapat Dihapus",
-            result.message ||
-              "Survei tidak dapat dihapus karena masih digunakan dalam riwayat survei"
-          );
-        } else {
+          if (result.success) {
+            await SweetAlertUtils.success("Berhasil", "Data survei dihapus.");
+            setHasLoadedAll(false);
+            fetchData();
+            fetchFilterOptions();
+          } else {
+            throw new Error(result.message || "Gagal menghapus survei.");
+          }
+        } catch (error) {
+          SweetAlertUtils.closeLoading();
           await SweetAlertUtils.error(
-            "Gagal Menghapus",
-            result.message || "Terjadi kesalahan saat menghapus data"
+            "Gagal",
+            error instanceof Error ? error.message : "Terjadi kesalahan"
           );
         }
       }
-    } catch (error) {
-      console.error("Error deleting survey:", error);
-
-      // Close loading jika masih terbuka
-      SweetAlertUtils.closeLoading();
-
-      await SweetAlertUtils.error(
-        "Error",
-        "Terjadi kesalahan saat menghapus data. Silakan coba lagi."
-      );
-    }
-  };
+    },
+    [fetchData, fetchFilterOptions]
+  );
 
   // Handle upload and download
   const handleUploadClick = () => {
@@ -1005,7 +1002,7 @@ const TabelSurvei = () => {
           return <span className="text-sm font-normal">{cellValue}</span>;
       }
     },
-    []
+    [handleDeleteSurvey, handleEditSurvey]
   );
 
   // Upload Modal component
@@ -1060,7 +1057,7 @@ const TabelSurvei = () => {
     };
 
     // Validation functions (sama seperti di form_survei.tsx)
-    const validateSurveiData = (data: any): string[] => {
+    const validateSurveiData = (data: SurveyExcelRow): string[] => {
       const errors: string[] = [];
 
       if (!data.nama_survei || typeof data.nama_survei !== "string") {
@@ -1106,7 +1103,7 @@ const TabelSurvei = () => {
       return errors;
     };
 
-    const sanitizeSurveiData = (data: any) => {
+    const sanitizeSurveiData = (data: SurveyExcelRow) => {
       return {
         nama_survei: data.nama_survei ? data.nama_survei.toString().trim() : "",
         fungsi: data.fungsi ? data.fungsi.toString().trim() : "",
@@ -1179,7 +1176,7 @@ const TabelSurvei = () => {
 
         // Get headers and data
         const headers = jsonData[0] as string[];
-        const rows = jsonData.slice(1) as any[][];
+        const rows = jsonData.slice(1) as (string | number | null)[][];
 
         // Validate headers
         const requiredHeaders = ["nama_survei", "fungsi", "periode", "tahun"];
@@ -1206,9 +1203,9 @@ const TabelSurvei = () => {
         });
 
         // Process and validate data
-        const validData: any[] = [];
-        const errors: any[] = [];
-        let validRowCount = 0;
+        const validData: SurveyExcelRow[] = [];
+        const errors: ValidationError[] = [];
+        // let validRowCount = 0;
 
         rows.forEach((row, index) => {
           const rowNumber = index + 2;
@@ -1220,10 +1217,10 @@ const TabelSurvei = () => {
             return;
           }
 
-          const rowData = {
-            nama_survei: row[headerMap.nama_survei] || "",
-            fungsi: row[headerMap.fungsi] || "",
-            periode: row[headerMap.periode] || "",
+          const rowData: SurveyExcelRow = {
+            nama_survei: (row[headerMap.nama_survei] as string) || "",
+            fungsi: (row[headerMap.fungsi] as string) || "",
+            periode: (row[headerMap.periode] as string) || "",
             tahun: row[headerMap.tahun] || "",
           };
 
@@ -1241,7 +1238,7 @@ const TabelSurvei = () => {
             });
           } else {
             validData.push(sanitizedData);
-            validRowCount++;
+            // validRowCount++;
           }
         });
 
@@ -1275,7 +1272,7 @@ const TabelSurvei = () => {
         }
 
         // PERBAIKAN: Check for duplicates if in append mode
-        let duplicates: any[] = []; // DEKLARASI duplicates DI SINI
+        let duplicates: DuplicateData[] = []; // DEKLARASI duplicates DI SINI
         if (uploadMode === "append") {
           SweetAlertUtils.loading(
             "Memeriksa Duplikat",
@@ -1505,9 +1502,9 @@ const TabelSurvei = () => {
             {uploadMode === "replace" && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                 <p className="text-sm text-red-800">
-                  ⚠️ <strong>Peringatan:</strong> Mode "Ganti Semua Data" akan
-                  menghapus semua data survei yang ada dan menggantinya dengan
-                  data dari file Excel.
+                  ⚠️ <strong>Peringatan:</strong> Mode &quot;Ganti Semua
+                  Data&quot; akan menghapus semua data survei yang ada dan
+                  menggantinya dengan data dari file Excel.
                 </p>
               </div>
             )}

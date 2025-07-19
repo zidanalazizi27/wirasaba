@@ -1,5 +1,7 @@
 import { Metadata } from "next";
 import Tentang from "../components/tentang";
+import Navbar from "../components/navbar";
+import Footer from "../components/footer";
 
 export const metadata: Metadata = {
   title: "Tentang | Kahuripan",
@@ -10,7 +12,9 @@ export const metadata: Metadata = {
 export default function Tentang_Page() {
   return (
     <>
+      <Navbar />
       <Tentang />
+      <Footer />
     </>
   );
 }

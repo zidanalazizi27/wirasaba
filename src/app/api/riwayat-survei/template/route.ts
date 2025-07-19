@@ -1,10 +1,10 @@
 // src/app/api/riwayat-survei/template/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 // Import XLSX dengan cara yang kompatibel
-const XLSX = require('xlsx');
+import * as XLSX from 'xlsx';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('🔄 Generating riwayat survei template...');
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useAnimation } from "framer-motion";
 import Image from "next/image";
 
 const classifications = [
@@ -13,6 +12,7 @@ const classifications = [
     topBgColor: "bg-[#AF8F6F]",
     bottomBgColor: "bg-[#74512D]",
     textColor: "text-cdark",
+    titleTextColor: "text-white",
   },
   {
     title: "Kecil",
@@ -22,6 +22,7 @@ const classifications = [
     topBgColor: "bg-[#AF8F6F]",
     bottomBgColor: "bg-[#74512D]",
     textColor: "text-black",
+    titleTextColor: "text-white",
   },
   {
     title: "Sedang",
@@ -31,6 +32,7 @@ const classifications = [
     topBgColor: "bg-[#AF8F6F]",
     bottomBgColor: "bg-[#1A120B]",
     textColor: "text-cdark",
+    titleTextColor: "text-white",
   },
   {
     title: "Besar",
@@ -40,11 +42,11 @@ const classifications = [
     topBgColor: "bg-[#AF8F6F]",
     bottomBgColor: "bg-[#1A120B]",
     textColor: "text-cdark",
+    titleTextColor: "text-white",
   },
 ];
 
 export default function KI() {
-  const controls = useAnimation();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -66,53 +68,40 @@ export default function KI() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Efek terpisah untuk mengontrol animasi berdasarkan state isVisible
-  useEffect(() => {
-    if (isVisible) {
-      controls.start({ opacity: 1, y: 0 });
-    } else {
-      controls.start({ opacity: 0, y: 50 });
-    }
-  }, [isVisible, controls]);
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      animate={controls}
-      transition={{ duration: 0.8, ease: "easeOut" }}
-      className="mx-[5%] font-roboto pb-10"
+    <div
+      className={`mx-[5%] font-roboto pb-10 transition-all duration-800 ease-out ${
+        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+      }`}
     >
-      <h1 className="text-2xl font-bold text-black text-center mt-10 mb-6">
+      <h1 className="text-2xl font-bold text-cdark text-center mt-10 mb-6">
         Klasifikasi Industri
       </h1>
 
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        animate={controls}
-        transition={{ duration: 1, delay: 0.4 }}
-        className="w-full text-black text-sm"
+      <div
+        className={`w-full text-cdark text-sm transition-all duration-1000 delay-400 ${
+          isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+        }`}
       >
         <div className="flex flex-wrap justify-center gap-4 my-6 font-medium">
           {classifications.map((item, index) => (
-            <motion.div
+            <div
               key={index}
-              className="rounded-lg w-[170px] shadow-md overflow-hidden"
-              whileHover={{ translateY: -5 }}
-              transition={{ duration: 0.3 }}
+              className="rounded-lg w-[170px] shadow-md overflow-hidden hover:-translate-y-1 transition-transform duration-300"
             >
               <div
-                className={`${item.topBgColor} ${item.textColor} p-3 flex flex-col gap-1`}
+                className={`${item.topBgColor} ${item.textColor} p-3 flex flex-col gap-1 font-semibold text-xs`}
               >
-                <div className="flex items-center gap-1 text-sm">
+                <div className="flex items-center gap-3 text-sm">
                   <Image
                     src="/image/ic_1.svg"
                     alt="Tenaga Kerja"
                     width={16}
                     height={16}
                   />
-                  <span>Tenaga Kerja {item.workforce}</span>
+                  <span>Pekerja {item.workforce}</span>
                 </div>
-                <div className="flex items-center gap-1 text-sm">
+                <div className="flex items-center gap-3 text-sm">
                   <Image
                     src="/image/ic_2.svg"
                     alt="Investasi"
@@ -121,7 +110,7 @@ export default function KI() {
                   />
                   <span>Investasi {item.investment}</span>
                 </div>
-                <div className="flex items-center gap-1 text-sm">
+                <div className="flex items-center gap-3 text-sm">
                   <Image
                     src="/image/ic_3.svg"
                     alt="Omset"
@@ -132,15 +121,15 @@ export default function KI() {
                 </div>
               </div>
               <div
-                className={`${item.bottomBgColor} w-full text-center py-2 font-bold ${item.titleTextColor || "text-white"}`}
+                className={`${item.bottomBgColor} w-full text-center py-2 font-bold ${item.titleTextColor}`}
               >
                 {item.title}
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
 
-        <p className="text-justify mt-4 indent-8 font-medium">
+        <p className="mt-4 indent-8 text-cdark text-sm leading-relaxed text-justify font-semibold">
           Penentuan skala usaha industri besar dan sedang didasarkan pada
           sejumlah kriteria. Industri skala sedang merupakan perusahaan
           manufaktur yang memenuhi salah satu dari kriteria berikut: jumlah
@@ -158,7 +147,7 @@ export default function KI() {
           omset perusahaan tahun tersebut kurang dari 15 miliar rupiah
           dikelompokkan menjadi perusahaan skala menengah (sedang).
         </p>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

@@ -10,7 +10,7 @@ import React, {
 import type { SVGProps } from "react";
 import RiwayatSurveiForm from "./riwayat_survei_form";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
-const XLSX = require("xlsx");
+import * as XLSX from "xlsx";
 
 export type IconSvgProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -350,6 +350,16 @@ interface SortDescriptor {
   direction: "ascending" | "descending" | null;
 }
 
+interface RiwayatExcelRow {
+  "Nama Survei": string;
+  Tahun: number | string;
+  KIP: string | number;
+  "Nama Perusahaan": string;
+  "Nama PCL": string;
+  Selesai: "Ya" | "Tidak" | string;
+  "Keterangan Survei"?: string;
+}
+
 const TabelRiwayatSurvei = () => {
   // State declarations
   const [filterValue, setFilterValue] = useState("");
@@ -403,8 +413,6 @@ const TabelRiwayatSurvei = () => {
   const pclDropdownRef = useRef<HTMLDivElement>(null);
   const selesaiDropdownRef = useRef<HTMLDivElement>(null);
   const tahunDropdownRef = useRef<HTMLDivElement>(null);
-
-  const hasSearchFilter = Boolean(filterValue);
 
   // Fetch data API function - EXACTLY like tabel_pcl.tsx
   const fetchData = useCallback(async () => {
@@ -537,7 +545,7 @@ const TabelRiwayatSurvei = () => {
     if (sortDescriptors.length > 0 && !hasLoadedAll) {
       fetchAllData();
     }
-  }, [sortDescriptors, fetchAllData]);
+  }, [sortDescriptors, fetchAllData, hasLoadedAll]);
 
   // Reset hasLoadedAll when filters change
   useEffect(() => {
@@ -583,59 +591,59 @@ const TabelRiwayatSurvei = () => {
   }, []);
 
   // Filter the data based on search and filters - EXACTLY like tabel_pcl.tsx
-  const filteredItems = useMemo(() => {
-    let filteredRiwayat = [...riwayatList];
+  // const filteredItems = useMemo(() => {
+  //   let filteredRiwayat = [...riwayatList];
 
-    // Text search filter
-    if (hasSearchFilter) {
-      const lowerFilter = filterValue.toLowerCase();
-      filteredRiwayat = filteredRiwayat.filter(
-        (riwayat) =>
-          riwayat.nama_survei.toLowerCase().includes(lowerFilter) ||
-          riwayat.kip.toString().toLowerCase().includes(lowerFilter) ||
-          riwayat.nama_perusahaan.toLowerCase().includes(lowerFilter) ||
-          riwayat.nama_pcl.toLowerCase().includes(lowerFilter)
-      );
-    }
+  //   // Text search filter
+  //   if (hasSearchFilter) {
+  //     const lowerFilter = filterValue.toLowerCase();
+  //     filteredRiwayat = filteredRiwayat.filter(
+  //       (riwayat) =>
+  //         riwayat.nama_survei.toLowerCase().includes(lowerFilter) ||
+  //         riwayat.kip.toString().toLowerCase().includes(lowerFilter) ||
+  //         riwayat.nama_perusahaan.toLowerCase().includes(lowerFilter) ||
+  //         riwayat.nama_pcl.toLowerCase().includes(lowerFilter)
+  //     );
+  //   }
 
-    // Filter berdasarkan survei
-    if (surveiFilter !== "all") {
-      filteredRiwayat = filteredRiwayat.filter(
-        (riwayat) => riwayat.nama_survei === surveiFilter
-      );
-    }
+  //   // Filter berdasarkan survei
+  //   if (surveiFilter !== "all") {
+  //     filteredRiwayat = filteredRiwayat.filter(
+  //       (riwayat) => riwayat.nama_survei === surveiFilter
+  //     );
+  //   }
 
-    // Filter berdasarkan PCL
-    if (pclFilter !== "all") {
-      filteredRiwayat = filteredRiwayat.filter(
-        (riwayat) => riwayat.nama_pcl === pclFilter
-      );
-    }
+  //   // Filter berdasarkan PCL
+  //   if (pclFilter !== "all") {
+  //     filteredRiwayat = filteredRiwayat.filter(
+  //       (riwayat) => riwayat.nama_pcl === pclFilter
+  //     );
+  //   }
 
-    // Filter berdasarkan status selesai
-    if (selesaiFilter !== "all") {
-      filteredRiwayat = filteredRiwayat.filter(
-        (riwayat) => riwayat.selesai === selesaiFilter
-      );
-    }
+  //   // Filter berdasarkan status selesai
+  //   if (selesaiFilter !== "all") {
+  //     filteredRiwayat = filteredRiwayat.filter(
+  //       (riwayat) => riwayat.selesai === selesaiFilter
+  //     );
+  //   }
 
-    // Filter berdasarkan tahun
-    if (tahunFilter !== "all") {
-      filteredRiwayat = filteredRiwayat.filter(
-        (riwayat) => riwayat.tahun.toString() === tahunFilter
-      );
-    }
+  //   // Filter berdasarkan tahun
+  //   if (tahunFilter !== "all") {
+  //     filteredRiwayat = filteredRiwayat.filter(
+  //       (riwayat) => riwayat.tahun.toString() === tahunFilter
+  //     );
+  //   }
 
-    return filteredRiwayat;
-  }, [
-    riwayatList,
-    filterValue,
-    surveiFilter,
-    pclFilter,
-    selesaiFilter,
-    tahunFilter,
-    hasSearchFilter,
-  ]);
+  //   return filteredRiwayat;
+  // }, [
+  //   riwayatList,
+  //   filterValue,
+  //   surveiFilter,
+  //   pclFilter,
+  //   selesaiFilter,
+  //   tahunFilter,
+  //   hasSearchFilter,
+  // ]);
 
   // Client-side sorting implementation - EXACTLY like tabel_pcl.tsx
   const sortedItems = useMemo(() => {
@@ -876,54 +884,53 @@ const TabelRiwayatSurvei = () => {
   }, [sortDescriptors]);
 
   // Action handlers
-  const handleEditRiwayat = (riwayat: RiwayatSurvei) => {
+  const handleEditRiwayat = useCallback((riwayat: RiwayatSurvei) => {
     setSelectedRiwayat(riwayat);
     setShowEditModal(true);
-  };
+  }, []);
 
-  // Handle delete with sweet alert confirmation
-  const handleDelete = async (riwayat: RiwayatSurvei) => {
-    const confirmed = await SweetAlertUtils.confirmDelete(
-      "Hapus Data Riwayat Survei",
-      `Apakah Anda yakin ingin menghapus riwayat survei "${riwayat.nama_survei}" untuk perusahaan "${riwayat.nama_perusahaan}"?`,
-      "Ya, Hapus",
-      "Batal"
-    );
-
-    if (!confirmed) return;
-
-    try {
-      SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
-
-      const response = await fetch(
-        `/api/riwayat-survei/${riwayat.id_riwayat}`,
-        {
-          method: "DELETE",
-        }
+  const handleDelete = useCallback(
+    async (riwayat: RiwayatSurvei) => {
+      const confirmed = await SweetAlertUtils.confirmDelete(
+        "Hapus Riwayat Survei",
+        `Anda yakin ingin menghapus riwayat survei untuk "${riwayat.nama_perusahaan}" pada survei "${riwayat.nama_survei} ${riwayat.tahun}"?`,
+        "Ya, Hapus",
+        "Batal"
       );
 
-      const result = await response.json();
-      SweetAlertUtils.closeLoading();
+      if (!confirmed) return;
 
-      if (result.success) {
-        await SweetAlertUtils.success(
-          "Berhasil Dihapus!",
-          `Data riwayat survei "${riwayat.nama_survei}" berhasil dihapus.`
+      SweetAlertUtils.loading("Menghapus...", "Mohon tunggu sebentar.");
+
+      try {
+        const response = await fetch(
+          `/api/riwayat-survei/${riwayat.id_riwayat}`,
+          {
+            method: "DELETE",
+          }
         );
-        // Refresh data after successful deletion
-        fetchData();
-      } else {
-        throw new Error(result.message || "Gagal menghapus data");
+        const result = await response.json();
+        SweetAlertUtils.closeLoading();
+
+        if (result.success) {
+          await SweetAlertUtils.success(
+            "Berhasil",
+            "Riwayat survei berhasil dihapus."
+          );
+          fetchData();
+        } else {
+          throw new Error(result.message || "Gagal menghapus riwayat survei.");
+        }
+      } catch (error) {
+        SweetAlertUtils.closeLoading();
+        await SweetAlertUtils.error(
+          "Gagal",
+          error instanceof Error ? error.message : "Terjadi kesalahan"
+        );
       }
-    } catch (error) {
-      console.error("Error deleting data:", error);
-      SweetAlertUtils.closeLoading();
-      await SweetAlertUtils.error(
-        "Gagal Menghapus",
-        "Terjadi kesalahan saat menghapus data. Silakan coba lagi."
-      );
-    }
-  };
+    },
+    [fetchData]
+  );
 
   // Handle upload and download
   const handleUploadClick = () => {
@@ -1050,7 +1057,7 @@ const TabelRiwayatSurvei = () => {
 
   // Render cell content
   const renderCell = useCallback(
-    (riwayat: RiwayatSurvei, columnKey: keyof RiwayatSurvei | "actions") => {
+    (riwayat: RiwayatSurvei, columnKey: React.Key) => {
       const cellValue = riwayat[columnKey as keyof RiwayatSurvei];
 
       switch (columnKey) {
@@ -1071,18 +1078,18 @@ const TabelRiwayatSurvei = () => {
         case "actions":
           return (
             <div className="relative flex items-center gap-2">
-              <Tooltip content="Edit" color="warning">
+              <Tooltip content="Edit Riwayat" color="warning">
                 <span
-                  onClick={() => handleEditRiwayat(riwayat)}
                   className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-amber-500"
+                  onClick={() => handleEditRiwayat(riwayat)}
                 >
                   <EditIcon />
                 </span>
               </Tooltip>
-              <Tooltip color="danger" content="Hapus">
+              <Tooltip color="danger" content="Hapus Riwayat">
                 <span
-                  onClick={() => handleDelete(riwayat)}
                   className="text-lg text-gray-400 cursor-pointer active:opacity-50 hover:text-red-500"
+                  onClick={() => handleDelete(riwayat)}
                 >
                   <DeleteIcon />
                 </span>
@@ -1093,7 +1100,7 @@ const TabelRiwayatSurvei = () => {
           return <span className="text-sm font-normal">{cellValue}</span>;
       }
     },
-    []
+    [handleDelete, handleEditRiwayat]
   );
 
   // Upload Modal component
@@ -1183,68 +1190,48 @@ const TabelRiwayatSurvei = () => {
     };
 
     // Validation functions for riwayat survei data
-    const validateRiwayatData = (data: any): string[] => {
+    const validateRiwayatData = (data: RiwayatExcelRow[]): string[] => {
       const errors: string[] = [];
+      const requiredFields = [
+        "Nama Survei",
+        "Tahun",
+        "KIP",
+        "Nama Perusahaan",
+        "Nama PCL",
+        "Selesai",
+      ];
 
-      // Validate KIP
-      if (!data.kip) {
-        errors.push("KIP wajib diisi");
-      } else {
-        const kip = data.kip.toString().trim();
-        if (kip.length > 10) {
-          errors.push("KIP maksimal 10 digit");
+      data.forEach((row, index) => {
+        for (const field of requiredFields) {
+          if (!row[field as keyof RiwayatExcelRow]) {
+            errors.push(
+              `Baris ${index + 2}: Kolom "${field}" tidak boleh kosong.`
+            );
+          }
         }
-        if (!/^\d+$/.test(kip)) {
-          errors.push("KIP harus berupa angka");
+        if (row.Selesai && !["Ya", "Tidak"].includes(row.Selesai)) {
+          errors.push(
+            `Baris ${
+              index + 2
+            }: Kolom "Selesai" harus berisi "Ya" atau "Tidak".`
+          );
         }
-      }
-
-      // Validate nama_perusahaan
-      if (!data.nama_perusahaan) {
-        errors.push("Nama Perusahaan wajib diisi");
-      }
-
-      // Validate nama_survei
-      if (!data.nama_survei) {
-        errors.push("Nama Survei wajib diisi");
-      }
-
-      // Validate tahun
-      if (!data.tahun) {
-        errors.push("Tahun wajib diisi");
-      } else {
-        const tahun = parseInt(data.tahun);
-        if (isNaN(tahun) || tahun < 1900 || tahun > 2100) {
-          errors.push("Tahun harus antara 1900-2100");
-        }
-      }
-
-      // Validate nama_pcl
-      if (!data.nama_pcl) {
-        errors.push("Nama PCL wajib diisi");
-      }
-
-      // Validate selesai
-      if (!data.selesai) {
-        errors.push("Status Selesai wajib diisi");
-      } else if (data.selesai !== "Iya" && data.selesai !== "Tidak") {
-        errors.push('Status Selesai harus "Iya" atau "Tidak"');
-      }
+      });
 
       return errors;
     };
 
-    const sanitizeRiwayatData = (data: any) => {
+    const sanitizeRiwayatData = (
+      data: Record<string, string | number | null>
+    ): RiwayatExcelRow => {
       return {
-        kip: data.kip ? data.kip.toString().trim() : "",
-        nama_perusahaan: data.nama_perusahaan
-          ? data.nama_perusahaan.toString().trim()
-          : "",
-        nama_survei: data.nama_survei ? data.nama_survei.toString().trim() : "",
-        tahun: parseInt(data.tahun) || 0,
-        nama_pcl: data.nama_pcl ? data.nama_pcl.toString().trim() : "",
-        selesai: data.selesai ? data.selesai.toString().trim() : "",
-        ket_survei: data.ket_survei ? data.ket_survei.toString().trim() : "",
+        "Nama Survei": data.nama_survei as string,
+        Tahun: data.tahun as number | string,
+        KIP: data.kip as string | number,
+        "Nama Perusahaan": data.nama_perusahaan as string,
+        "Nama PCL": data.nama_pcl as string,
+        Selesai: data.selesai as string,
+        "Keterangan Survei": (data.ket_survei as string) || "",
       };
     };
 
@@ -1295,7 +1282,7 @@ const TabelRiwayatSurvei = () => {
 
         // Get headers and data
         const headers = jsonData[0] as string[];
-        const rows = jsonData.slice(1) as any[][];
+        const rows = jsonData.slice(1) as (string | number | null)[][];
 
         // Validate headers
         const requiredHeaders = [
@@ -1320,7 +1307,7 @@ const TabelRiwayatSurvei = () => {
         }
 
         // Process data
-        const processedData: any[] = [];
+        const processedData: RiwayatExcelRow[] = [];
         const validationErrors: string[] = [];
 
         for (let i = 0; i < rows.length; i++) {
@@ -1331,7 +1318,7 @@ const TabelRiwayatSurvei = () => {
             continue;
           }
 
-          const rowData: any = {};
+          const rowData: Record<string, string | number | null> = {};
           headers.forEach((header, index) => {
             if (allowedHeaders.includes(header)) {
               rowData[header] = row[index];
@@ -1342,7 +1329,7 @@ const TabelRiwayatSurvei = () => {
           const sanitizedData = sanitizeRiwayatData(rowData);
 
           // Validate data
-          const errors = validateRiwayatData(sanitizedData);
+          const errors = validateRiwayatData([sanitizedData]);
           if (errors.length > 0) {
             validationErrors.push(`Baris ${i + 2}: ${errors.join(", ")}`);
           } else {
@@ -1554,7 +1541,8 @@ const TabelRiwayatSurvei = () => {
                   • <strong>PCL:</strong> Wajib diisi, harus terdaftar
                 </li>
                 <li>
-                  • <strong>Status Selesai:</strong> Harus "Iya" atau "Tidak"
+                  • <strong>Status Selesai:</strong> Harus &quot;Iya&quot; atau
+                  &quot;Tidak&quot;
                 </li>
                 <li>
                   • <strong>Keterangan:</strong> Opsional, maksimal 500 karakter

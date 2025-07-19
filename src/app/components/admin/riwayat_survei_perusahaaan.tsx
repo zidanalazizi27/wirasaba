@@ -1,6 +1,5 @@
 // src/app/components/admin/riwayat_survei_perusahaaan.tsx
-import React, { useState, useEffect } from "react";
-import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
+import React, { useState, useEffect, useCallback } from "react";
 
 interface RiwayatSurvei {
   id_riwayat: number;
@@ -34,10 +33,10 @@ const RiwayatSurveiPerusahaan: React.FC<Props> = ({ kip, onSummaryChange }) => {
   const [riwayatList, setRiwayatList] = useState<RiwayatSurvei[]>([]);
   const [loading, setLoading] = useState(false);
   // Removed isExpanded state - content is always visible
-  const [summary, setSummary] = useState<SurveySummary | null>(null);
+  // Removed summary state - summary is now calculated directly
 
   // Fetch riwayat survei data based on KIP
-  const fetchRiwayatSurvei = async () => {
+  const fetchRiwayatSurvei = useCallback(async () => {
     if (!kip) return;
 
     setLoading(true);
@@ -60,8 +59,6 @@ const RiwayatSurveiPerusahaan: React.FC<Props> = ({ kip, onSummaryChange }) => {
           companies: data.summary?.companies || [],
         };
 
-        setSummary(summaryData);
-
         // Call callback if provided
         if (onSummaryChange) {
           onSummaryChange(summaryData);
@@ -69,7 +66,6 @@ const RiwayatSurveiPerusahaan: React.FC<Props> = ({ kip, onSummaryChange }) => {
       } else {
         console.error("Failed to fetch riwayat survei:", data.message);
         setRiwayatList([]);
-        setSummary(null);
 
         if (onSummaryChange) {
           onSummaryChange(null);
@@ -78,7 +74,6 @@ const RiwayatSurveiPerusahaan: React.FC<Props> = ({ kip, onSummaryChange }) => {
     } catch (error) {
       console.error("Error fetching riwayat survei:", error);
       setRiwayatList([]);
-      setSummary(null);
 
       if (onSummaryChange) {
         onSummaryChange(null);
@@ -86,12 +81,12 @@ const RiwayatSurveiPerusahaan: React.FC<Props> = ({ kip, onSummaryChange }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [kip, onSummaryChange]);
 
   // Fetch data when KIP changes
   useEffect(() => {
     fetchRiwayatSurvei();
-  }, [kip]);
+  }, [fetchRiwayatSurvei]);
 
   // Calculate summary statistics
   const totalSurvei = riwayatList.length;
@@ -101,24 +96,6 @@ const RiwayatSurveiPerusahaan: React.FC<Props> = ({ kip, onSummaryChange }) => {
   ).length;
   const completionPercentage =
     totalSurvei > 0 ? Math.round((selesaiCount / totalSurvei) * 100) : 0;
-
-  // Helper function to get status based on completion percentage
-  const getStatus = () => {
-    if (totalSurvei === 0) return "kosong";
-    if (completionPercentage >= 80) return "tinggi";
-    if (completionPercentage >= 50) return "sedang";
-    if (completionPercentage > 0) return "rendah";
-    return "kosong";
-  };
-
-  // Get unique companies
-  const uniqueCompanies = [
-    ...new Set(
-      riwayatList.map(
-        (item) => `${item.nama_perusahaan} (ID: ${item.id_perusahaan})`
-      )
-    ),
-  ];
 
   return (
     <div className="mt-4 bg-white rounded-lg shadow-sm overflow-hidden">

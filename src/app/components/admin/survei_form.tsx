@@ -18,13 +18,6 @@ interface SurveyData {
   tahun: number;
 }
 
-interface ValidationErrors {
-  nama_survei?: string;
-  fungsi?: string;
-  periode?: string;
-  tahun?: string;
-}
-
 interface FieldState {
   [key: string]: {
     touched: boolean;
@@ -99,7 +92,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
   const [showCustomPeriode, setShowCustomPeriode] = useState(false);
 
   // Fungsi validasi untuk setiap field
-  const validateField = (name: string, value: any): string => {
+  const validateField = (name: string, value: string | number): string => {
     switch (name) {
       case "nama_survei":
         if (!value || value.toString().trim() === "") {
@@ -146,7 +139,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
   // Update field state dengan validasi
   const updateFieldState = (
     name: string,
-    value: any,
+    value: string | number,
     touched: boolean = true
   ) => {
     const error = validateField(name, value);
@@ -166,7 +159,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
     const fieldsToValidate = ["nama_survei", "fungsi", "periode", "tahun"];
 
     fieldsToValidate.forEach((field) => {
-      const error = validateField(field, formData[field as keyof SurveyData]);
+      const error = validateField(field, String(formData[field as keyof SurveyData] ?? ""));
       newFieldStates[field] = { touched: true, error };
       if (error) hasErrors = true;
     });
@@ -343,7 +336,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
   };
 
   // Handle blur events untuk menampilkan error
-  const handleBlur = (name: string, value: any) => {
+  const handleBlur = (name: string, value: string | number) => {
     updateFieldState(name, value, true);
   };
 
@@ -373,10 +366,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
     if (!isValid) {
       await SweetAlertUtils.warning(
         "Form Belum Lengkap",
-        "Silakan periksa dan lengkapi form dengan benar.",
-        {
-          confirmButtonText: "OK",
-        }
+        "Silakan periksa dan lengkapi form dengan benar."
       );
       return;
     }
@@ -489,7 +479,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
           name="nama_survei"
           value={formData.nama_survei}
           onChange={handleInputChange}
-          onBlur={(e) => handleBlur("nama_survei", e.target.value)}
+          onBlur={() => handleBlur("nama_survei", formData.nama_survei)}
           className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
             fieldStates.nama_survei.touched && fieldStates.nama_survei.error
               ? "border-red-500 focus:border-red-500 focus:ring-red-200"
@@ -519,7 +509,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
           name="fungsi"
           value={showCustomFungsi ? "Lainnya" : formData.fungsi}
           onChange={handleDropdownChange}
-          onBlur={(e) => handleBlur("fungsi", formData.fungsi)}
+          onBlur={() => handleBlur("fungsi", formData.fungsi)}
           className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
             fieldStates.fungsi.touched && fieldStates.fungsi.error
               ? "border-red-500 focus:border-red-500 focus:ring-red-200"
@@ -545,7 +535,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
               name="customFungsi"
               value={customFungsi}
               onChange={handleCustomInputChange}
-              onBlur={(e) => handleBlur("fungsi", e.target.value)}
+              onBlur={() => handleBlur("fungsi", customFungsi)}
               placeholder="Masukkan fungsi lainnya"
               className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
                 fieldStates.fungsi.touched && fieldStates.fungsi.error
@@ -571,7 +561,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
           name="periode"
           value={showCustomPeriode ? "Lainnya" : formData.periode}
           onChange={handleDropdownChange}
-          onBlur={(e) => handleBlur("periode", formData.periode)}
+          onBlur={() => handleBlur("periode", formData.periode)}
           className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
             fieldStates.periode.touched && fieldStates.periode.error
               ? "border-red-500 focus:border-red-500 focus:ring-red-200"
@@ -597,7 +587,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
               name="customPeriode"
               value={customPeriode}
               onChange={handleCustomInputChange}
-              onBlur={(e) => handleBlur("periode", e.target.value)}
+              onBlur={() => handleBlur("periode", customPeriode)}
               placeholder="Masukkan periode lainnya"
               className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
                 fieldStates.periode.touched && fieldStates.periode.error
@@ -626,7 +616,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({
           max="2100"
           value={formData.tahun}
           onChange={handleInputChange}
-          onBlur={(e) => handleBlur("tahun", e.target.value)}
+          onBlur={() => handleBlur("tahun", formData.tahun.toString())}
           className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
             fieldStates.tahun.touched && fieldStates.tahun.error
               ? "border-red-500 focus:border-red-500 focus:ring-red-200"

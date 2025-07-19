@@ -1,6 +1,6 @@
 // src/app/api/riwayat-survei/import/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
+import mysql, { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 // Database connection configuration
 const dbConfig = {
@@ -15,8 +15,18 @@ async function createDbConnection() {
   return await mysql.createConnection(dbConfig);
 }
 
+interface ExcelRow {
+  kip: string | number;
+  nama_perusahaan: string;
+  nama_survei: string;
+  tahun: string | number;
+  nama_pcl: string;
+  selesai: 'Iya' | 'Tidak' | string;
+  ket_survei?: string;
+}
+
 // Function to verify and get ID from related tables
-async function verifyAndGetIds(connection: mysql.Connection, item: any, rowNumber: number): Promise<{
+async function verifyAndGetIds(connection: mysql.Connection, item: ExcelRow): Promise<{
   id_survei: number;
   id_perusahaan: number;
   id_pcl: number;
@@ -36,30 +46,30 @@ async function verifyAndGetIds(connection: mysql.Connection, item: any, rowNumbe
       if (kip.length > 10) {
         errors.push(`KIP "${kip}" terlalu panjang. Maksimal 10 digit`);
       } else {
-        const [perusahaanRows] = await connection.execute(
+        const [perusahaanRows] = await connection.execute<RowDataPacket[]>(
           `SELECT id_perusahaan, nama_perusahaan, kip 
            FROM perusahaan 
            WHERE kip = ? AND nama_perusahaan = ?`,
           [kip, item.nama_perusahaan.toString().trim()]
         );
 
-        if ((perusahaanRows as any[]).length === 0) {
+        if (perusahaanRows.length === 0) {
           // Try to find by KIP only
-          const [kipRows] = await connection.execute(
+          const [kipRows] = await connection.execute<RowDataPacket[]>(
             `SELECT id_perusahaan, nama_perusahaan, kip 
              FROM perusahaan 
              WHERE kip = ?`,
             [kip]
           );
 
-          if ((kipRows as any[]).length === 0) {
+          if (kipRows.length === 0) {
             errors.push(`KIP "${kip}" tidak ditemukan dalam database perusahaan`);
           } else {
-            const found = (kipRows as any[])[0];
+            const found = kipRows[0];
             errors.push(`KIP "${kip}" ditemukan, tetapi nama perusahaan tidak cocok. Database: "${found.nama_perusahaan}", Input: "${item.nama_perusahaan}"`);
           }
         } else {
-          id_perusahaan = (perusahaanRows as any[])[0].id_perusahaan;
+          id_perusahaan = perusahaanRows[0].id_perusahaan;
         }
       }
     }
@@ -68,30 +78,30 @@ async function verifyAndGetIds(connection: mysql.Connection, item: any, rowNumbe
     if (!item.nama_survei || !item.tahun) {
       errors.push('Nama Survei dan Tahun wajib diisi');
     } else {
-      const [surveiRows] = await connection.execute(
+      const [surveiRows] = await connection.execute<RowDataPacket[]>(
         `SELECT id_survei, nama_survei, tahun 
          FROM survei 
          WHERE nama_survei = ? AND tahun = ?`,
-        [item.nama_survei.toString().trim(), parseInt(item.tahun)]
+        [item.nama_survei.toString().trim(), parseInt(String(item.tahun))]
       );
 
-      if ((surveiRows as any[]).length === 0) {
+      if (surveiRows.length === 0) {
         // Try to find by nama_survei only
-        const [namaRows] = await connection.execute(
+        const [namaRows] = await connection.execute<RowDataPacket[]>(
           `SELECT id_survei, nama_survei, tahun 
            FROM survei 
            WHERE nama_survei = ?`,
           [item.nama_survei.toString().trim()]
         );
 
-        if ((namaRows as any[]).length === 0) {
+        if (namaRows.length === 0) {
           errors.push(`Nama survei "${item.nama_survei}" tidak ditemukan dalam database survei`);
         } else {
-          const availableYears = (namaRows as any[]).map(row => row.tahun).join(', ');
+          const availableYears = namaRows.map(row => row.tahun).join(', ');
           errors.push(`Survei "${item.nama_survei}" ditemukan, tetapi tahun ${item.tahun} tidak tersedia. Tahun yang tersedia: ${availableYears}`);
         }
       } else {
-        id_survei = (surveiRows as any[])[0].id_survei;
+        id_survei = surveiRows[0].id_survei;
       }
     }
 
@@ -99,30 +109,30 @@ async function verifyAndGetIds(connection: mysql.Connection, item: any, rowNumbe
     if (!item.nama_pcl) {
       errors.push('Nama PCL wajib diisi');
     } else {
-      const [pclRows] = await connection.execute(
+      const [pclRows] = await connection.execute<RowDataPacket[]>(
         `SELECT id_pcl, nama_pcl 
          FROM pcl 
          WHERE nama_pcl = ?`,
         [item.nama_pcl.toString().trim()]
       );
 
-      if ((pclRows as any[]).length === 0) {
+      if (pclRows.length === 0) {
         // Try to find similar names
-        const [similarRows] = await connection.execute(
+        const [similarRows] = await connection.execute<RowDataPacket[]>(
           `SELECT id_pcl, nama_pcl 
            FROM pcl 
            WHERE nama_pcl LIKE ?`,
           [`%${item.nama_pcl.toString().trim()}%`]
         );
 
-        if ((similarRows as any[]).length === 0) {
+        if (similarRows.length === 0) {
           errors.push(`Nama PCL "${item.nama_pcl}" tidak ditemukan dalam database PCL`);
         } else {
-          const suggestions = (similarRows as any[]).map(row => row.nama_pcl).slice(0, 3).join(', ');
+          const suggestions = similarRows.map(row => row.nama_pcl).slice(0, 3).join(', ');
           errors.push(`Nama PCL "${item.nama_pcl}" tidak ditemukan. Saran: ${suggestions}`);
         }
       } else {
-        id_pcl = (pclRows as any[])[0].id_pcl;
+        id_pcl = pclRows[0].id_pcl;
       }
     }
 
@@ -141,8 +151,8 @@ async function verifyAndGetIds(connection: mysql.Connection, item: any, rowNumbe
       errors.push('Keterangan survei maksimal 500 karakter');
     }
 
-  } catch (error) {
-    console.error('Error verifying relations:', error);
+  } catch (e) {
+    console.error('Error verifying relations:', e);
     errors.push('Terjadi kesalahan saat memverifikasi data relasi');
   }
 
@@ -173,10 +183,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse the JSON data
-    let importData: any[];
+    let importData: ExcelRow[];
     try {
       importData = JSON.parse(dataString);
-    } catch (error) {
+    } catch {
       return NextResponse.json({
         success: false,
         message: 'Format data tidak valid'
@@ -200,7 +210,7 @@ export async function POST(request: NextRequest) {
     console.log('🔄 Transaction started');
 
     let insertedCount = 0;
-    let updatedCount = 0;
+    const updatedCount = 0;
     let skippedCount = 0;
     const relationErrors: string[] = [];
     const duplicateWarnings: string[] = [];
@@ -221,7 +231,7 @@ export async function POST(request: NextRequest) {
         console.log(`Processing row ${rowNumber}:`, item);
 
         // Verify relations and get IDs
-        const verification = await verifyAndGetIds(connection, item, rowNumber);
+        const verification = await verifyAndGetIds(connection, item);
         
         if (verification.errors.length > 0) {
           verification.errors.forEach(error => {
@@ -240,72 +250,37 @@ export async function POST(request: NextRequest) {
           ket_survei: item.ket_survei ? item.ket_survei.toString().trim() : ''
         };
 
-        // Check for existing record with same survei + perusahaan combination
-        if (mode === 'append') {
-          const checkQuery = `
-            SELECT id_riwayat, 
-                   s.nama_survei, s.tahun,
-                   p.nama_perusahaan, p.kip
-            FROM riwayat_survei rs
-            JOIN survei s ON rs.id_survei = s.id_survei
-            JOIN perusahaan p ON rs.id_perusahaan = p.id_perusahaan
-            WHERE rs.id_survei = ? AND rs.id_perusahaan = ?
-          `;
-          
-          const [existingRows] = await connection.execute(checkQuery, [
-            finalData.id_survei,
-            finalData.id_perusahaan
-          ]);
+        // Check for duplicates before inserting
+        const [checkResult] = await connection.execute<RowDataPacket[]>(
+          `SELECT r.id_riwayat, s.nama_survei, s.tahun, p.nama_perusahaan, p.kip 
+           FROM riwayat_survei r
+           JOIN survei s ON r.id_survei = s.id_survei
+           JOIN perusahaan p ON r.id_perusahaan = p.id_perusahaan
+           WHERE r.id_survei = ? AND r.id_perusahaan = ?`,
+          [finalData.id_survei, finalData.id_perusahaan]
+        );
+        
+        interface FinalData {
+          id_riwayat: number;
+          nama_survei: string;
+          tahun: number;
+          nama_perusahaan: string;
+          kip: string;
+        }
 
-          if ((existingRows as any[]).length > 0) {
-            const existing = (existingRows as any[])[0];
-            duplicateWarnings.push(
-              `Baris ${rowNumber}: Data dengan KIP "${existing.kip}" dan survei "${existing.nama_survei} ${existing.tahun}" sudah ada - data akan diperbarui`
-            );
-
-            // Update existing record
-            const updateQuery = `
-              UPDATE riwayat_survei 
-              SET id_pcl = ?, selesai = ?, ket_survei = ?
-              WHERE id_survei = ? AND id_perusahaan = ?
-            `;
-            
-            await connection.execute(updateQuery, [
-              finalData.id_pcl,
-              finalData.selesai,
-              finalData.ket_survei,
-              finalData.id_survei,
-              finalData.id_perusahaan
-            ]);
-            
-            updatedCount++;
-            console.log(`✅ Updated existing record for row ${rowNumber}`);
-          } else {
-            // Insert new record
-            const insertQuery = `
-              INSERT INTO riwayat_survei (id_survei, id_perusahaan, id_pcl, selesai, ket_survei)
-              VALUES (?, ?, ?, ?, ?)
-            `;
-            
-            await connection.execute(insertQuery, [
-              finalData.id_survei,
-              finalData.id_perusahaan,
-              finalData.id_pcl,
-              finalData.selesai,
-              finalData.ket_survei
-            ]);
-            
-            insertedCount++;
-            console.log(`✅ Inserted new record for row ${rowNumber}`);
-          }
+        if (checkResult.length > 0) {
+          const existingData = checkResult[0] as FinalData;
+          duplicateWarnings.push(
+            `Baris ${rowNumber}: Data duplikat untuk survei "${existingData.nama_survei} (${existingData.tahun})" dan perusahaan "${existingData.nama_perusahaan} (KIP: ${existingData.kip})" sudah ada. Data dilewati.`
+          );
+          skippedCount++;
         } else {
-          // Replace mode - always insert
+          // Insert new record if no duplicates
           const insertQuery = `
             INSERT INTO riwayat_survei (id_survei, id_perusahaan, id_pcl, selesai, ket_survei)
             VALUES (?, ?, ?, ?, ?)
           `;
-          
-          await connection.execute(insertQuery, [
+          const [result] = await connection.execute<ResultSetHeader>(insertQuery, [
             finalData.id_survei,
             finalData.id_perusahaan,
             finalData.id_pcl,
@@ -313,8 +288,9 @@ export async function POST(request: NextRequest) {
             finalData.ket_survei
           ]);
           
-          insertedCount++;
-          console.log(`✅ Inserted record for row ${rowNumber}`);
+          if (result.affectedRows > 0) {
+            insertedCount++;
+          }
         }
       }
 
@@ -351,8 +327,20 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      interface ImportResponse {
+        success: boolean;
+        message: string;
+        inserted: number;
+        updated: number;
+        skipped: number;
+        total: number;
+        relationVerified: boolean;
+        warnings?: string[];
+        hasWarnings?: boolean;
+      }
+
       // Add duplicate warnings to response if any
-      const response: any = {
+      const response: ImportResponse = {
         success: true,
         message: message,
         inserted: insertedCount,

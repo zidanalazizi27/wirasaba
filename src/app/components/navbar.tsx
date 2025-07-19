@@ -14,7 +14,7 @@ const Navbar = () => {
   const pathname = usePathname();
   const [activeMenu, setActiveMenu] = useState(pathname);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isLoggedIn, logout, user } = useAuth();
+  const { isLoggedIn, logout } = useAuth();
 
   useEffect(() => {
     // Update active menu based on current path

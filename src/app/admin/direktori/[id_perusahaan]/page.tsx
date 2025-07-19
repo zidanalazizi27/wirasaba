@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import React, { useState, useEffect, useCallback } from "react";
+import { useParams } from "next/navigation";
 import SidebarLayout from "@/app/components/admin/sidebar_layout";
 import Breadcrumb from "@/app/components/admin/breadcrumb";
 import DetailDirektori from "@/app/components/admin/detail_direktori";
@@ -15,44 +14,43 @@ interface CompanyData {
 }
 
 export default function DirektoriDetail() {
-  const params = useParams();
-  const router = useRouter();
+  const params = useParams<{ id_perusahaan: string }>();
   const id_perusahaan = params.id_perusahaan;
   const [companyData, setCompanyData] = useState<CompanyData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const fetchCompanyData = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/perusahaan/${id_perusahaan}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch company data");
+      }
+
+      const data: CompanyData = await response.json();
+      setCompanyData({
+        id_perusahaan: data.id_perusahaan,
+        nama_perusahaan: data.nama_perusahaan || "Detail Perusahaan",
+        kip: data.kip || "",
+      });
+    } catch (error) {
+      console.error("Error fetching company data:", error);
+      setCompanyData({
+        id_perusahaan: 0,
+        nama_perusahaan: "Detail Perusahaan",
+        kip: "",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id_perusahaan]);
+
   // Fetch company data including KIP
   useEffect(() => {
-    const fetchCompanyData = async () => {
-      try {
-        const response = await fetch(`/api/perusahaan/${id_perusahaan}`);
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch company data");
-        }
-
-        const data = await response.json();
-        setCompanyData({
-          id_perusahaan: data.id_perusahaan,
-          nama_perusahaan: data.nama_perusahaan || "Detail Perusahaan",
-          kip: data.kip || "",
-        });
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Error fetching company data:", error);
-        setCompanyData({
-          id_perusahaan: 0,
-          nama_perusahaan: "Detail Perusahaan",
-          kip: "",
-        });
-        setIsLoading(false);
-      }
-    };
-
     if (id_perusahaan) {
       fetchCompanyData();
     }
-  }, [id_perusahaan]);
+  }, [id_perusahaan, fetchCompanyData]);
 
   return (
     <SidebarLayout>

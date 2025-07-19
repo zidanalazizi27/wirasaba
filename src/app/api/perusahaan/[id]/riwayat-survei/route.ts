@@ -17,7 +17,7 @@ export async function GET(
     });
     
     // Query untuk mendapatkan data riwayat survei berdasarkan id_perusahaan
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
       `SELECT 
         r.id_riwayat,
         s.nama_survei,
@@ -41,7 +41,7 @@ export async function GET(
     // Kembalikan data dalam format JSON
     return NextResponse.json({ 
       success: true, 
-      count: (rows as any[]).length,
+      count: rows.length,
       data: rows 
     });
   } catch (error) {

@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         WHERE p.kip = ?
       `;
       
-      const queryParams: any[] = [kip];
+      const queryParams: (string | number)[] = [kip];
 
       // Jika sedang edit perusahaan, exclude perusahaan yang sedang diedit
       if (excludeCompanyId) {
@@ -63,10 +63,9 @@ export async function POST(request: NextRequest) {
 
       query += ` ORDER BY p.id_perusahaan, d.thn_direktori`;
 
-      const [rows] = await connection.execute(query, queryParams);
-      const results = rows as any[];
+      const [rows] = await connection.execute<mysql.RowDataPacket[]>(query, queryParams);
 
-      if (results.length === 0) {
+      if ((rows as mysql.RowDataPacket[]).length === 0) {
         return NextResponse.json({
           isDuplicate: false
         } as DuplicateCheckResult);
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest) {
         tahun_direktori: number[];
       }>();
 
-      results.forEach(row => {
+      (rows as mysql.RowDataPacket[]).forEach(row => {
         const companyId = row.id_perusahaan;
         
         if (!companiesMap.has(companyId)) {
@@ -97,9 +96,14 @@ export async function POST(request: NextRequest) {
 
       // Cek apakah ada tahun yang duplikasi
       const duplicateYears: number[] = [];
-      let existingCompany: any = null;
+      let existingCompany: {
+        id_perusahaan: number;
+        nama_perusahaan: string;
+        kip: string;
+        tahun_direktori: number[];
+      } | null = null;
 
-      for (const [companyId, company] of companiesMap.entries()) {
+      for (const [, company] of companiesMap.entries()) {
         const conflictYears = years.filter(year => 
           company.tahun_direktori.includes(year)
         );
@@ -168,7 +172,7 @@ export async function GET(request: NextRequest) {
         WHERE p.kip = ? AND d.thn_direktori = ?
       `;
       
-      const queryParams: any[] = [kip, parseInt(year)];
+      const queryParams: (string | number)[] = [kip, parseInt(year)];
 
       if (excludeCompanyId) {
         query += ` AND p.id_perusahaan != ?`;
@@ -177,17 +181,16 @@ export async function GET(request: NextRequest) {
 
       query += ` LIMIT 1`;
 
-      const [rows] = await connection.execute(query, queryParams);
-      const results = rows as any[];
+      const [rows] = await connection.execute<mysql.RowDataPacket[]>(query, queryParams);
 
-      const isDuplicate = results.length > 0;
+      const isDuplicate = rows.length > 0;
 
       return NextResponse.json({
         isDuplicate,
         existingCompany: isDuplicate ? {
-          id_perusahaan: results[0].id_perusahaan,
-          nama_perusahaan: results[0].nama_perusahaan,
-          kip: results[0].kip,
+          id_perusahaan: rows[0].id_perusahaan,
+          nama_perusahaan: rows[0].nama_perusahaan,
+          kip: rows[0].kip,
           tahun_direktori: [parseInt(year)]
         } : undefined,
         duplicateYears: isDuplicate ? [parseInt(year)] : undefined

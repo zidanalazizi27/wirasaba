@@ -79,15 +79,17 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
           const result = await response.json();
 
           if (result.success) {
-            setFormData(result.data);
-            setOriginalData(result.data);
+            setFormData(result.data as PCLData);
+            setOriginalData(result.data as PCLData);
           } else {
             throw new Error(result.message || "Failed to fetch PCL data");
           }
         } catch (err) {
+          const errorMessage =
+            err instanceof Error ? err.message : "An unknown error occurred";
           console.error("Error fetching PCL data:", err);
           setError("Gagal memuat data PCL");
-          SweetAlertUtils.error("Error", "Gagal memuat data PCL");
+          SweetAlertUtils.error("Error", errorMessage);
         } finally {
           setIsLoading(false);
         }
@@ -105,7 +107,7 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
   }, [formData, originalData]);
 
   // Validasi individual field seperti pattern di survei_form.tsx
-  const validateField = (fieldName: string, value: any): string => {
+  const validateField = (fieldName: string, value: string): string => {
     switch (fieldName) {
       case "nama_pcl":
         if (!value || !value.trim()) {
@@ -146,7 +148,7 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
     const fieldsToValidate = ["nama_pcl", "status_pcl", "telp_pcl"];
 
     fieldsToValidate.forEach((field) => {
-      const error = validateField(field, formData[field as keyof PCLData]);
+      const error = validateField(field, String(formData[field as keyof PCLData] ?? ""));
       newFieldStates[field] = { touched: true, error };
       if (error) hasErrors = true;
     });
@@ -156,7 +158,7 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
   };
 
   // Handle blur event untuk validasi real-time
-  const handleBlur = (fieldName: string, value: any) => {
+  const handleBlur = (fieldName: string, value: string) => {
     const error = validateField(fieldName, value);
 
     setFieldStates((prev) => ({
@@ -236,7 +238,8 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
         // Handle error dari server - termasuk duplicate check
         if (
           response.status === 409 ||
-          (result.message && result.message.toLowerCase().includes("sudah ada"))
+          (result.message &&
+            (result.message as string).toLowerCase().includes("sudah ada"))
         ) {
           // Error 409 = Conflict (duplicate data)
           await SweetAlertUtils.warning(
@@ -252,165 +255,175 @@ const PCLForm: React.FC<PCLFormProps> = ({ id, mode, onSuccess, onCancel }) => {
         }
       }
     } catch (err) {
-      console.error("Error saving PCL data:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "An unknown error occurred";
       SweetAlertUtils.closeLoading();
-      SweetAlertUtils.error(
-        "Gagal Menyimpan",
-        `Gagal ${mode === "edit" ? "memperbarui" : "menambahkan"} data PCL: ${err instanceof Error ? err.message : "Unknown error"}`
-      );
+      await SweetAlertUtils.error("Operasi Gagal", errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle cancel dengan konfirmasi jika ada perubahan
+  // Handle cancel - konfirmasi jika ada perubahan
   const handleCancel = async () => {
     if (hasChanges) {
-      const confirmCancel = await SweetAlertUtils.confirmCancel(
+      const confirmCancel = await SweetAlertUtils.confirm(
         "Batalkan Perubahan",
         "Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin membatalkan?",
         "Ya, Batalkan",
-        "Lanjut Edit"
+        "Tidak, Lanjutkan Mengedit"
       );
-      if (!confirmCancel) return;
+      if (confirmCancel) {
+        onCancel();
+      }
+    } else {
+      onCancel();
     }
-    onCancel();
+  };
+
+  // Dynamic class for inputs
+  const getInputClass = (fieldName: keyof PCLData): string => {
+    const baseClass =
+      "w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2";
+    const errorClass = "border-red-500 focus:ring-red-500";
+    const defaultClass = "border-gray-300 focus:ring-blue-500";
+    return `${baseClass} ${
+      fieldStates[fieldName]?.error ? errorClass : defaultClass
+    }`;
   };
 
   if (isLoading && mode === "edit") {
-    return <div className="p-4 text-center">Memuat data...</div>;
+    return (
+      <div className="flex justify-center items-center py-10">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
+      </div>
+    );
   }
 
-  if (error) {
+  if (error && mode === "edit") {
     return (
-      <div className="p-4">
-        <p className="text-red-500">{error}</p>
-        <button
-          onClick={onCancel}
-          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg"
-        >
-          Kembali
-        </button>
+      <div
+        className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-center"
+        role="alert"
+      >
+        <strong className="font-bold">Error:</strong>
+        <span className="block sm:inline"> {error}</span>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-      {/* Nama PCL */}
-      <div className="relative">
-        <label
-          htmlFor="nama_pcl"
-          className="block text-sm font-medium text-gray-700 mb-1"
-        >
-          Nama PCL <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          id="nama_pcl"
-          name="nama_pcl"
-          value={formData.nama_pcl}
-          onChange={handleInputChange}
-          onBlur={(e) => handleBlur("nama_pcl", e.target.value)}
-          className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
-            fieldStates.nama_pcl.touched && fieldStates.nama_pcl.error
-              ? "border-red-500 focus:border-red-500 focus:ring-red-200"
-              : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
-          }`}
-          placeholder="Masukkan nama PCL"
-          disabled={isLoading}
-        />
-        <Tooltip
-          message={fieldStates.nama_pcl.error}
-          isVisible={
-            fieldStates.nama_pcl.touched && !!fieldStates.nama_pcl.error
-          }
-        />
-      </div>
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-xl shadow-lg font-roboto">
+      <h1 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">
+        {mode === "add" ? "Tambah Data PCL Baru" : "Edit Data PCL"}
+      </h1>
 
-      {/* Status PCL */}
-      <div className="relative">
-        <label
-          htmlFor="status_pcl"
-          className="block text-sm font-medium text-gray-700 mb-1"
-        >
-          Status <span className="text-red-500">*</span>
-        </label>
-        <select
-          id="status_pcl"
-          name="status_pcl"
-          value={formData.status_pcl}
-          onChange={handleInputChange}
-          onBlur={(e) => handleBlur("status_pcl", e.target.value)}
-          className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
-            fieldStates.status_pcl.touched && fieldStates.status_pcl.error
-              ? "border-red-500 focus:border-red-500 focus:ring-red-200"
-              : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
-          }`}
-          disabled={isLoading}
-        >
-          <option value="">-- Pilih Status --</option>
-          <option value="Mitra">Mitra</option>
-          <option value="Staff">Staff</option>
-        </select>
-        <Tooltip
-          message={fieldStates.status_pcl.error}
-          isVisible={
-            fieldStates.status_pcl.touched && !!fieldStates.status_pcl.error
-          }
-        />
-      </div>
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="space-y-6">
+          {/* Nama PCL */}
+          <div className="relative">
+            <label
+              htmlFor="nama_pcl"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Nama PCL
+            </label>
+            <input
+              type="text"
+              id="nama_pcl"
+              name="nama_pcl"
+              value={formData.nama_pcl}
+              onChange={handleInputChange}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              className={getInputClass("nama_pcl")}
+              required
+              aria-describedby="nama_pcl-error"
+            />
+            <Tooltip
+              message={fieldStates.nama_pcl.error}
+              isVisible={!!fieldStates.nama_pcl.error}
+            />
+          </div>
 
-      {/* Nomor Telepon */}
-      <div className="relative">
-        <label
-          htmlFor="telp_pcl"
-          className="block text-sm font-medium text-gray-700 mb-1"
-        >
-          Telepon
-        </label>
-        <input
-          type="text"
-          id="telp_pcl"
-          name="telp_pcl"
-          value={formData.telp_pcl || ""}
-          onChange={handleInputChange}
-          onBlur={(e) => handleBlur("telp_pcl", e.target.value)}
-          className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 ${
-            fieldStates.telp_pcl.touched && fieldStates.telp_pcl.error
-              ? "border-red-500 focus:border-red-500 focus:ring-red-200"
-              : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
-          }`}
-          placeholder="Masukkan nomor telepon (hanya angka)"
-          disabled={isLoading}
-        />
-        <Tooltip
-          message={fieldStates.telp_pcl.error}
-          isVisible={
-            fieldStates.telp_pcl.touched && !!fieldStates.telp_pcl.error
-          }
-        />
-      </div>
+          {/* Status PCL */}
+          <div className="relative">
+            <label
+              htmlFor="status_pcl"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Status PCL
+            </label>
+            <select
+              id="status_pcl"
+              name="status_pcl"
+              value={formData.status_pcl}
+              onChange={handleInputChange}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              className={getInputClass("status_pcl")}
+              required
+            >
+              <option value="Mitra">Mitra</option>
+              <option value="Organik">Organik</option>
+            </select>
+            <Tooltip
+              message={fieldStates.status_pcl.error}
+              isVisible={!!fieldStates.status_pcl.error}
+            />
+          </div>
 
-      {/* Buttons */}
-      <div className="flex justify-end space-x-3 pt-4">
-        <button
-          type="button"
-          onClick={handleCancel}
-          disabled={isLoading}
-          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          Batal
-        </button>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isLoading ? "Menyimpan..." : mode === "edit" ? "Perbarui" : "Simpan"}
-        </button>
-      </div>
-    </form>
+          {/* Telepon PCL */}
+          <div className="relative">
+            <label
+              htmlFor="telp_pcl"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Nomor Telepon
+            </label>
+            <input
+              type="tel"
+              id="telp_pcl"
+              name="telp_pcl"
+              value={formData.telp_pcl}
+              onChange={handleInputChange}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              className={getInputClass("telp_pcl")}
+              placeholder="Contoh: 081234567890"
+            />
+            <Tooltip
+              message={fieldStates.telp_pcl.error}
+              isVisible={!!fieldStates.telp_pcl.error}
+            />
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-end items-center gap-4 mt-8 pt-4 border-t">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={isLoading || !hasChanges}
+            className={`px-6 py-2 border border-transparent rounded-lg text-sm font-medium text-white ${
+              isLoading || !hasChanges
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            } transition-colors`}
+          >
+            {isLoading
+              ? "Menyimpan..."
+              : mode === "add"
+                ? "Simpan"
+                : "Simpan Perubahan"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 };
 

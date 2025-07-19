@@ -3,7 +3,46 @@ import { NextRequest, NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 
 // Import XLSX dengan cara yang kompatibel
-const XLSX = require('xlsx');
+import * as XLSX from 'xlsx';
+
+export const dynamic = "force-dynamic";
+
+// Interface untuk data perusahaan dari database
+interface PerusahaanRowData {
+  id_perusahaan: number;
+  kip: string;
+  nama_perusahaan: string;
+  badan_usaha: string;
+  alamat: string;
+  kec: string;
+  nama_kec: string;
+  des: string;
+  nama_des: string;
+  kode_pos: string;
+  skala: string;
+  lok_perusahaan: string;
+  nama_kawasan: string;
+  lat: number;
+  lon: number;
+  jarak: string;
+  produk: string;
+  KBLI: string;
+  telp_perusahaan: string;
+  email_perusahaan: string;
+  web_perusahaan: string;
+  tkerja: string;
+  investasi: string;
+  omset: string;
+  nama_narasumber: string;
+  jbtn_narasumber: string;
+  email_narasumber: string;
+  telp_narasumber: string;
+  pcl_utama: string;
+  catatan: string;
+  tahun_direktori: string;
+  total_survei: number;
+  completed_survei: number;
+}
 
 // Database connection configuration
 const dbConfig = {
@@ -133,7 +172,7 @@ export async function GET(request: NextRequest) {
     `;
 
     const whereConditions: string[] = [];
-    const queryParams: any[] = [];
+    const queryParams: (string | number)[] = [];
 
     // Filter berdasarkan tahun
     if (year && year !== "all") {
@@ -196,8 +235,8 @@ export async function GET(request: NextRequest) {
     console.log("Query params:", queryParams);
 
     // Execute query
-    const [rows] = await connection.execute(finalQuery, queryParams);
-    const businessData = rows as any[];
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(finalQuery, queryParams);
+    const businessData = rows as PerusahaanRowData[];
 
     console.log(`Found ${businessData.length} businesses for export`);
 
@@ -364,13 +403,15 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error("Detailed error in Excel export:", error);
-    console.error("Error stack:", error.stack);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error("Error stack:", errorStack);
     
     return NextResponse.json(
       { 
         success: false, 
-        message: "Error generating Excel file: " + error.message,
-        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        message: "Error generating Excel file: " + errorMessage,
+        error: process.env.NODE_ENV === 'development' ? errorStack : undefined
       },
       { status: 500 }
     );

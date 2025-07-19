@@ -1,6 +1,6 @@
 // src/app/api/pcl/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import mysql, { RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
 // Database connection configuration
 const dbConfig = {
@@ -19,24 +19,20 @@ async function createDbConnection() {
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
-) {
-  const id = params.id;
-  
+): Promise<NextResponse> {
+  const { id } = params;
   try {
     // Create database connection
     const connection = await createDbConnection();
-    
     // Query to get PCL by ID
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<RowDataPacket[]>(
       `SELECT id_pcl, nama_pcl, status_pcl, telp_pcl
        FROM pcl
        WHERE id_pcl = ?`,
       [id]
     );
-    
     await connection.end();
-    
-    if ((rows as any[]).length === 0) {
+    if ((rows as RowDataPacket[]).length === 0) {
       return NextResponse.json({ 
         success: false, 
         message: "PCL tidak ditemukan" 
@@ -45,9 +41,9 @@ export async function GET(
     
     return NextResponse.json({
       success: true,
-      data: (rows as any[])[0]
+      data: (rows as RowDataPacket[])[0]
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Database error:", error);
     return NextResponse.json(
       { 
@@ -63,8 +59,8 @@ export async function GET(
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
-) {
-  const id = params.id;
+): Promise<NextResponse> {
+  const { id } = params;
   
   try {
     const data = await request.json();
@@ -105,12 +101,12 @@ export async function PUT(
       await connection.beginTransaction();
 
       // Check if PCL exists
-      const [existingRows] = await connection.execute(
+      const [existingRows] = await connection.execute<RowDataPacket[]>(
         `SELECT id_pcl, nama_pcl, status_pcl FROM pcl WHERE id_pcl = ?`,
         [id]
       );
 
-      if ((existingRows as any[]).length === 0) {
+      if ((existingRows as RowDataPacket[]).length === 0) {
         await connection.rollback();
         await connection.end();
         return NextResponse.json({
@@ -121,7 +117,7 @@ export async function PUT(
 
       // ===== DUPLICATE CHECK SEPERTI DI SURVEI_FORM.TSX =====
       // Check for duplicate nama_pcl + status_pcl combination (excluding current record)
-      const [duplicateRows] = await connection.execute(
+      const [duplicateRows] = await connection.execute<RowDataPacket[]>(
         `SELECT id_pcl FROM pcl 
          WHERE LOWER(TRIM(nama_pcl)) = LOWER(?) 
          AND LOWER(TRIM(status_pcl)) = LOWER(?) 
@@ -129,7 +125,7 @@ export async function PUT(
         [data.nama_pcl.trim(), data.status_pcl.trim(), id]
       );
 
-      if ((duplicateRows as any[]).length > 0) {
+      if ((duplicateRows as RowDataPacket[]).length > 0) {
         await connection.rollback();
         await connection.end();
         return NextResponse.json(
@@ -142,7 +138,7 @@ export async function PUT(
       }
 
       // Update PCL data jika tidak duplikat
-      const [result] = await connection.execute(
+      const [result] = await connection.execute<ResultSetHeader>(
         `UPDATE pcl 
          SET nama_pcl = ?, status_pcl = ?, telp_pcl = ? 
          WHERE id_pcl = ?`,
@@ -154,7 +150,7 @@ export async function PUT(
         ]
       );
       
-      const affectedRows = (result as any).affectedRows;
+      const affectedRows = result.affectedRows;
 
       await connection.commit();
       await connection.end();
@@ -171,13 +167,13 @@ export async function PUT(
         message: "Data PCL berhasil diperbarui" 
       });
 
-    } catch (dbError) {
+    } catch (dbError: unknown) {
       await connection.rollback();
       await connection.end();
       throw dbError;
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Database error:", error);
     return NextResponse.json({ 
       success: false, 
@@ -190,20 +186,20 @@ export async function PUT(
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
-) {
-  const id = params.id;
+): Promise<NextResponse> {
+  const { id } = params;
   
   try {
     // Create database connection
     const connection = await createDbConnection();
     
     // Delete PCL
-    const [result] = await connection.execute(
+    const [result] = await connection.execute<ResultSetHeader>(
       `DELETE FROM pcl WHERE id_pcl = ?`,
       [id]
     );
     
-    const affectedRows = (result as any).affectedRows;
+    const affectedRows = result.affectedRows;
     
     await connection.end();
     
@@ -218,7 +214,7 @@ export async function DELETE(
       success: true, 
       message: "PCL berhasil dihapus" 
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Database error:", error);
     return NextResponse.json({ 
       success: false, 

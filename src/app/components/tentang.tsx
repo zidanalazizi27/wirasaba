@@ -1,11 +1,9 @@
 "use client";
 
 import React from "react";
-import { Metadata } from "next";
-import Navbar from "../components/navbar";
-import Footer from "../components/footer";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 // Interface untuk tipe data survei
 interface SurveiType {
@@ -126,17 +124,15 @@ const TentangPage: React.FC = () => {
 
   return (
     <div className="bg-base">
-      <Navbar />
-
       <div className="min-h-screen bg-base">
         {/* Header Section - Layout Perbaikan */}
-        <div className="mx-[5%] font-roboto py-12">
+        <div className="mx-[5%] font-roboto py-6">
           <h1 className="text-2xl font-bold text-cdark text-center mb-6">
             Penjelasan Umum
           </h1>
 
           {/* Paragraf Pertama - Full Width */}
-          <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed mb-8">
+          <div className="w-full text-cdark text-sm leading-relaxed text-justify font-semibold mb-6">
             <p className="indent-8">
               Badan Pusat Statistik (BPS) Kabupaten Sidoarjo merupakan salah
               satu instansi vertikal yang memiliki tugas dalam penyelenggaraan
@@ -163,7 +159,7 @@ const TentangPage: React.FC = () => {
             <div className="w-full">
               <div className="rounded-lg shadow-md">
                 {/* Tabel Kode Keadaan Lapangan */}
-                <h4 className="text-sm font-semibold text-cdark text-center">
+                <h4 className="text-sm font-semibold text-cdark text-center mb-2">
                   Kode Keadaan Lapangan:
                 </h4>
                 {/* <div className="overflow-x-auto">
@@ -182,66 +178,66 @@ const TentangPage: React.FC = () => {
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           1
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Perusahaan sudah berproduksi komersial
                         </td>
                       </tr>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           2
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Perusahaan masih produksi percobaan
                         </td>
                       </tr>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           3
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Perusahaan sedang dibangun
                         </td>
                       </tr>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           4
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Baru ada lokasi / Penyelidikan Umum
                         </td>
                       </tr>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           5
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Perusahaan yang dulu ada, sekarang tutup
                         </td>
                       </tr>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           6
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Perusahaan berada di wilayah kabupaten/kota lain
                         </td>
                       </tr>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           7
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Perusahaan bukan sektor industri
                         </td>
                       </tr>
                       <tr>
-                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark text-center font-semibold">
                           8
                         </td>
-                        <td className="border border-cdark px-2 text-sm text-cdark font-medium">
+                        <td className="border border-cdark px-2 text-sm text-cdark font-semibold">
                           Perusahaan tidak ditemukan
                         </td>
                       </tr>
@@ -252,8 +248,9 @@ const TentangPage: React.FC = () => {
             </div>
 
             {/* Kolom Kanan - Paragraf Kedua */}
-            <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed">
+            <div className="w-full text-cdark text-sm text-justify font-semibold leading-relaxed">
               <p className="indent-8 mb-6">
+                <br />
                 Berdasarkan hasil pengecekan lapangan, perusahaan yang memenuhi
                 kriteria skala besar atau sedang serta memiliki kode 1 akan
                 dimasukkan ke dalam direktori. Sementara itu, perusahaan dengan
@@ -274,7 +271,7 @@ const TentangPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-cdark text-center mt-10 mb-6">
             Kegiatan Survei Terkait
           </h1>
-          <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed">
+          <div className="w-full text-cdark text-sm text-justify font-semibold leading-relaxed">
             <p className="indent-8">
               Selain melakukan pemutakhiran direktori perusahaan manufaktur
               skala besar dan sedang (IBS) untuk penyusunan direktori perusahaan
@@ -293,7 +290,7 @@ const TentangPage: React.FC = () => {
             {/* Fungsi Distribusi */}
             <div className="mb-6">
               <h3 className="text-xl font-bold text-center mb-2 text-cdark">
-                Fungsi Distribusi
+                Distribusi
               </h3>
               <div className="space-y-4">
                 {surveiList.slice(0, 4).map((survei) => (
@@ -305,7 +302,7 @@ const TentangPage: React.FC = () => {
                       onClick={() => toggleAccordion(survei.id)}
                       className="w-full flex items-center justify-between p-2 text-left bg-cdark text-white"
                     >
-                      <span className="text-sm font-medium">
+                      <span className="text-sm font-semibold">
                         {survei.title}
                       </span>
                       {survei.isExpanded ? (
@@ -333,7 +330,7 @@ const TentangPage: React.FC = () => {
             {/* Fungsi Neraca */}
             <div className="mb-6">
               <h3 className="text-xl font-bold text-center mb-2 text-cdark">
-                Fungsi Neraca
+                Neraca
               </h3>
 
               <div className="space-y-4">
@@ -346,7 +343,7 @@ const TentangPage: React.FC = () => {
                       onClick={() => toggleAccordion(survei.id)}
                       className="w-full flex items-center justify-between p-2 text-left bg-cdark text-white"
                     >
-                      <span className="text-sm font-medium">
+                      <span className="text-sm font-semibold">
                         {survei.title}
                       </span>
                       {survei.isExpanded ? (
@@ -374,7 +371,7 @@ const TentangPage: React.FC = () => {
             {/* Fungsi Produksi */}
             <div className="mb-6">
               <h3 className="text-xl font-bold text-center mb-2 text-cdark">
-                Fungsi Produksi
+                Produksi
               </h3>
 
               <div className="space-y-4">
@@ -387,7 +384,7 @@ const TentangPage: React.FC = () => {
                       onClick={() => toggleAccordion(survei.id)}
                       className="w-full flex items-center justify-between p-2 text-left bg-cdark text-white"
                     >
-                      <span className="text-sm font-medium">
+                      <span className="text-sm font-semibold">
                         {survei.title}
                       </span>
                       {survei.isExpanded ? (
@@ -419,7 +416,7 @@ const TentangPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-cdark text-center mb-6">
             Tujuan
           </h1>
-          <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed mb-8">
+          <div className="w-full text-cdark text-sm text-justify font-semibold leading-relaxed mb-8">
             <p className="indent-8">
               Sistem ini dirancang untuk menyajikan data direktori perusahaan
               Industri Besar dan Sedang di Kabupaten Sidoarjo menjadi lebih
@@ -446,17 +443,20 @@ const TentangPage: React.FC = () => {
           </h1>
 
           <div className="flex justify-center mb-12">
-            <motion.div
-              whileHover={{ translateY: -10 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="hover:cursor-pointer"
-            >
-              <img
-                src="/image/piagam.png"
-                alt="Piagam Penghargaan BPS Kabupaten Sidoarjo"
-                className="rounded-lg shadow-lg max-w-md w-full h-auto"
-              />
-            </motion.div>
+            <div className="hover:cursor-pointer">
+              <motion.div
+                whileHover={{ translateY: -10 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              >
+                <Image
+                  src="/image/piagam.png"
+                  alt="Piagam Penghargaan BPS Kabupaten Sidoarjo"
+                  width={400}
+                  height={300}
+                  className="rounded-lg shadow-lg max-w-md w-full h-auto"
+                />
+              </motion.div>
+            </div>
           </div>
         </div>
 
@@ -479,9 +479,11 @@ const TentangPage: React.FC = () => {
                     className="relative overflow-hidden rounded-xl shadow-lg bg-cdarkbrown"
                   >
                     <div className="aspect-[4/3] w-full">
-                      <img
+                      <Image
                         src={images[imageIndex]}
                         alt={`Dokumentasi Kegiatan ${imageIndex + 1}`}
+                        width={400}
+                        height={300}
                         className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                       />
                     </div>
@@ -546,8 +548,6 @@ const TentangPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 };

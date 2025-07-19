@@ -30,19 +30,23 @@ export async function GET(request: NextRequest) {
     // Tambahkan sorting
     query += ` ORDER BY thn_direktori`;
     
-    const [rows] = await dbConnection.execute(query, params);
+    const [rows] = await dbConnection.execute<mysql.RowDataPacket[]>(
+      query,
+      params
+    );
     
     await dbConnection.end();
     
     return NextResponse.json({ 
       success: true, 
-      count: (rows as any[]).length,
-      data: rows 
+      count: (rows as mysql.RowDataPacket[]).length,
+      data: rows as mysql.RowDataPacket[] 
     });
   } catch (error) {
-    console.error('Database error:', error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Database error:', errorMessage);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: errorMessage },
       { status: 500 }
     );
   }
@@ -74,7 +78,7 @@ export async function POST(request: NextRequest) {
       [id_perusahaan, thn_direktori]
     );
     
-    if ((existingRows as any[]).length > 0) {
+    if ((existingRows as mysql.RowDataPacket[]).length > 0) {
       await dbConnection.end();
       return NextResponse.json({ 
         success: false, 
@@ -97,9 +101,10 @@ export async function POST(request: NextRequest) {
       data: result
     });
   } catch (error) {
-    console.error('Database error:', error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Database error:', errorMessage);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: errorMessage },
       { status: 500 }
     );
   }
@@ -133,7 +138,7 @@ export async function DELETE(request: NextRequest) {
       [id_perusahaan, thn_direktori]
     );
     
-    const rowsAffected = (result as any).affectedRows;
+    const rowsAffected = (result as mysql.RowDataPacket).affectedRows;
     
     await dbConnection.end();
     
@@ -149,9 +154,10 @@ export async function DELETE(request: NextRequest) {
       message: "Tahun direktori berhasil dihapus"
     });
   } catch (error) {
-    console.error('Database error:', error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Database error:', errorMessage);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: errorMessage },
       { status: 500 }
     );
   }

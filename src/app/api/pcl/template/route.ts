@@ -1,9 +1,9 @@
 // src/app/api/pcl/template/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
 // POST endpoint untuk menghasilkan template Excel
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // Create template data
     const templateData = [
@@ -77,10 +77,12 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("Template generation error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error('Error generating template:', errorMessage);
+    
     return NextResponse.json({
       success: false,
-      message: "Error saat membuat template: " + (error instanceof Error ? error.message : "Unknown error")
+      message: "Error saat membuat template: " + errorMessage
     }, { status: 500 });
   }
 }

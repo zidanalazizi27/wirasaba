@@ -19,7 +19,7 @@ async function createDbConnection() {
 
 // Interfaces
 interface ExcelRowData {
-  [key: string]: any;
+  [key: string]: string | number | null | undefined;
 }
 
 interface ProcessedData {
@@ -57,7 +57,7 @@ interface ValidationError {
   row: number;
   field: string;
   message: string;
-  value?: any;
+  value?: unknown;
 }
 
 interface DuplicateData {
@@ -214,7 +214,7 @@ async function mapLookupValues(connection: mysql.Connection, data: ProcessedData
 }
 
 // ✅ Fungsi validasi data yang lebih komprehensif
-function validateDirectoryData(data: ProcessedData, row: number): string[] {
+function validateDirectoryData(data: ProcessedData): string[] {
   const errors: string[] = [];
 
   // ========== VALIDASI 16 FIELD WAJIB ==========
@@ -315,7 +315,7 @@ function validateDirectoryData(data: ProcessedData, row: number): string[] {
   }
 
   // Validasi jarak jika ada
-  if (data.jarak !== undefined && (isNaN(data.jarak) || data.jarak < 0)) {
+  if (data.jarak !== null && data.jarak !== undefined && (isNaN(data.jarak) || data.jarak < 0)) {
     errors.push("Jarak harus berupa angka positif");
   }
 
@@ -419,7 +419,7 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
         `, [
           data.nama_perusahaan, data.badan_usaha, data.alamat, data.kec, data.des,
           data.kode_pos, data.skala, data.lok_perusahaan, data.nama_kawasan,
-          data.lat, data.lon, data.jarak, data.produk, data.KBLI,
+          data.lat, data.lon, data.jarak || 0, data.produk, data.KBLI,
           data.telp_perusahaan, data.email_perusahaan, data.web_perusahaan,
           data.tkerja, data.investasi, data.omset, data.nama_narasumber,
           data.jbtn_narasumber, data.email_narasumber, data.telp_narasumber,
@@ -438,7 +438,7 @@ async function saveCompanyData(connection: mysql.Connection, data: ProcessedData
         `, [
           data.kip, data.nama_perusahaan, data.badan_usaha, data.alamat, data.kec,
           data.des, data.kode_pos, data.skala, data.lok_perusahaan, data.nama_kawasan,
-          data.lat, data.lon, data.jarak, data.produk, data.KBLI,
+          data.lat, data.lon, data.jarak || 0, data.produk, data.KBLI,
           data.telp_perusahaan, data.email_perusahaan, data.web_perusahaan,
           data.tkerja, data.investasi, data.omset, data.nama_narasumber,
           data.jbtn_narasumber, data.email_narasumber, data.telp_narasumber,
@@ -587,17 +587,18 @@ export async function POST(request: NextRequest) {
         try {
           await mapLookupValues(connection, data, kecamatanName, desaName);
         } catch (mappingError) {
+          const mappingErrorMessage = mappingError instanceof Error ? mappingError.message : "Unknown mapping error";
           validationErrors.push({
             row: rowIndex,
             field: 'Mapping Error',
-            message: mappingError.message,
+            message: mappingErrorMessage,
             value: { kecamatan: kecamatanName, desa: desaName }
           });
           continue;
         }
 
         // Validate processed data
-        const errors = validateDirectoryData(data, rowIndex);
+        const errors = validateDirectoryData(data);
         if (errors.length > 0) {
           errors.forEach(error => {
             validationErrors.push({
@@ -636,7 +637,7 @@ export async function POST(request: NextRequest) {
 
         // Save data (HANYA SEKALI!)
         console.log(`💾 Saving data for row ${rowIndex}: ${data.nama_perusahaan}`);
-        const savedCompanyId = await saveCompanyData(connection, data, mode);
+        await saveCompanyData(connection, data, mode);
         totalYears += data.tahun_direktori.length;
 
         // PERBAIKAN: Hitung berdasarkan kondisi yang tepat
@@ -658,11 +659,12 @@ export async function POST(request: NextRequest) {
         processedData.push(data);
         
       } catch (rowError) {
+        const rowErrorMessage = rowError instanceof Error ? rowError.message : "Unknown row processing error";
         console.error(`❌ Error processing row ${rowIndex}:`, rowError);
         validationErrors.push({
           row: rowIndex,
           field: 'Processing Error',
-          message: rowError.message || 'Kesalahan tidak dikenal',
+          message: rowErrorMessage,
           value: null
         });
       }
@@ -763,10 +765,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
     return NextResponse.json({
       success: false,
-      message: `Error dalam proses import: ${error.message}`,
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: `Error dalam proses import: ${errorMessage}`,
+      error: process.env.NODE_ENV === 'development' ? errorStack : undefined
     }, { status: 500 });
 
   } finally {

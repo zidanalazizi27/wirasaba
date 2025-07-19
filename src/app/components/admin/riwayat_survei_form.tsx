@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
 interface RiwayatSurveiFormProps {
@@ -30,6 +30,18 @@ interface PerusahaanOption {
   isDuplicate: boolean; // dari API: isDuplicate (duplicate_count > 1)
   duplicateCount: number; // dari API: duplicateCount (COUNT(*))
   displayLabel: string; // dari API: displayLabel
+}
+
+// Tambahkan interface di atas:
+interface SurveiOption {
+  id_survei: number | string;
+  nama_survei: string;
+  tahun: string | number;
+}
+interface PCLOption {
+  id_pcl: number | string;
+  nama_pcl: string;
+  status_pcl: string;
 }
 
 // State untuk field validation
@@ -72,15 +84,11 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   });
 
   // State untuk dropdown options
-  const [surveiOptions, setSurveiOptions] = useState<
-    { id: number | string; name: string }[]
-  >([]);
+  const [surveiOptions, setSurveiOptions] = useState<SurveiOption[]>([]);
   const [perusahaanOptions, setPerusahaanOptions] = useState<
     PerusahaanOption[]
   >([]);
-  const [pclOptions, setPclOptions] = useState<
-    { id: number | string; name: string }[]
-  >([]);
+  const [pclOptions, setPclOptions] = useState<PCLOption[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
 
   // State untuk dropdown perusahaan
@@ -106,7 +114,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   });
 
   // Validation rules
-  const validateField = (name: string, value: any): string => {
+  const validateField = (name: string, value: string | number): string => {
     switch (name) {
       case "id_survei":
         if (!value || value === "") {
@@ -137,8 +145,8 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   // Update field state
   const updateFieldState = (
     name: string,
-    value: any,
-    touched: boolean = false
+    value: string | number,
+    touched = false
   ) => {
     const error = validateField(name, value);
     setFieldStates((prev) => ({
@@ -166,7 +174,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     fieldsToValidate.forEach((fieldName) => {
       const error = validateField(
         fieldName,
-        formData[fieldName as keyof RiwayatSurveiData]
+        formData[fieldName as keyof RiwayatSurveiData] ?? ""
       );
       newFieldStates[fieldName] = { touched: true, error };
       if (error) hasErrors = true;
@@ -179,12 +187,14 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   };
 
   // function checkForChanges:
-  const checkForChanges = (newFormData: RiwayatSurveiData) => {
-    const hasChanged =
-      JSON.stringify(newFormData) !== JSON.stringify(originalData);
-    setHasChanges(hasChanged);
-  };
-
+  const checkForChanges = useCallback(
+    (newFormData: RiwayatSurveiData) => {
+      const hasChanged =
+        JSON.stringify(newFormData) !== JSON.stringify(originalData);
+      setHasChanges(hasChanged);
+    },
+    [originalData]
+  );
   // function checkDuplicateData:
   const checkDuplicateData = async (
     data: RiwayatSurveiData
@@ -199,7 +209,7 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
 
       const response = await fetch(`/api/riwayat-survei?${params}`);
       const result = await response.json();
-      return result.isDuplicate;
+      return result.isDuplicate as boolean;
     } catch (error) {
       console.error("Error checking duplicate:", error);
       return false;
@@ -210,7 +220,10 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
   const checkDuplicatePerusahaanEntry = async (
     selectedPerusahaan: PerusahaanOption,
     id_survei: string
-  ): Promise<{ isDuplicate: boolean; duplicateInfo?: any }> => {
+  ): Promise<{
+    isDuplicate: boolean;
+    duplicateInfo?: Record<string, unknown>;
+  }> => {
     try {
       // Safety check berdasarkan struktur API yang benar
       if (!selectedPerusahaan.isDuplicate || !selectedPerusahaan.id_list) {
@@ -218,213 +231,99 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
       }
 
       const params = new URLSearchParams({
-        check_duplicate_company_group: "true",
-        id_survei: id_survei.toString(),
-        id_perusahaan_list: selectedPerusahaan.id_list,
-        exclude_id: mode === "edit" && id ? id.toString() : "",
+        check_duplicate_kip: "true",
+        id_list: selectedPerusahaan.id_list,
+        id_survei,
       });
 
-      const response = await fetch(`/api/riwayat-survei?${params}`);
-      const result = await response.json();
+      const response = await fetch(`/api/riwayat-survei/by-kip?${params}`);
 
-      return {
-        isDuplicate: result.isDuplicate,
-        duplicateInfo: result.duplicateInfo,
-      };
+      if (!response.ok) {
+        throw new Error("Gagal memeriksa duplikasi KIP");
+      }
+       
+      return await response.json();
     } catch (error) {
-      console.error("Error checking duplicate company entry:", error);
+      console.error("Error checking KIP duplicate:", error);
+      // Return a default non-duplicate result on error to avoid blocking the user
       return { isDuplicate: false };
     }
   };
 
-  // Debug function
-  const DEBUG = true;
-  function debug(...args: any[]) {
-    if (DEBUG) {
-      console.log(...args);
-    }
-  }
-
-  // useEffect hooks
-  useEffect(() => {
-    debug("Component mounted, mode:", mode, "id:", id);
-  }, [mode, id]);
-
-  useEffect(() => {
-    debug("Selected perusahaan changed:", selectedPerusahaan);
-  }, [selectedPerusahaan]);
-
-  useEffect(() => {
-    debug("perusahaanOptions updated:", perusahaanOptions);
-  }, [perusahaanOptions]);
-
-  // Fetch riwayat data if in edit mode
   useEffect(() => {
     if (mode === "edit" && id) {
       const fetchRiwayat = async () => {
         try {
           setIsLoading(true);
           const response = await fetch(`/api/riwayat-survei/${id}`);
-
           if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
           }
-
           const result = await response.json();
-
           if (result.success) {
-            setFormData(result.data);
-            setOriginalData(result.data);
+            const data = result.data as RiwayatSurveiData;
+            setFormData(data);
+            setOriginalData(data);
+            checkForChanges(data);
           } else {
-            throw new Error(result.message || "Failed to fetch riwayat data");
+            throw new Error(
+              result.message || "Failed to fetch riwayat survei data"
+            );
           }
         } catch (err) {
-          console.error("Error fetching riwayat data:", err);
-          setError("Gagal memuat data riwayat survei");
+          const errorMessage =
+            err instanceof Error ? err.message : "An unknown error occurred";
+          console.error("Error fetching riwayat survei:", err);
+          setError("Gagal memuat data");
+          SweetAlertUtils.error("Error", errorMessage);
         } finally {
           setIsLoading(false);
         }
       };
 
-      fetchRiwayat();
+      void fetchRiwayat();
     }
-  }, [id, mode]);
+  }, [id, mode, checkForChanges]);
 
-  // 🔧 PERBAIKAN: Fetch dropdown options dengan error handling yang lebih baik
+  // Fetch dropdown options
   useEffect(() => {
     const fetchOptions = async () => {
+      setIsLoadingOptions(true);
       try {
-        setIsLoadingOptions(true);
-        setError(null);
+        const [surveiRes, perusahaanRes, pclRes] = await Promise.all([
+          fetch("/api/survei/filters"),
+          fetch("/api/perusahaan/dropdown"),
+          fetch("/api/pcl"),
+        ]);
 
-        // Fetch survei options
-        try {
-          const surveiResponse = await fetch("/api/survei?limit=1000");
-          if (surveiResponse.ok) {
-            const surveiData = await surveiResponse.json();
-            if (surveiData.data) {
-              setSurveiOptions(
-                surveiData.data.map((survei: any) => ({
-                  id: survei.id_survei,
-                  name: `${survei.nama_survei} (${survei.tahun})`,
-                }))
-              );
-            }
-          }
-        } catch (err) {
-          console.error("Error fetching survei options:", err);
+        const surveiData = await surveiRes.json();
+        const perusahaanData = await perusahaanRes.json();
+        const pclData = await pclRes.json();
+
+        if (surveiData.success) {
+          setSurveiOptions(surveiData.data as SurveiOption[]);
         }
-
-        // Fetch PCL options
-        try {
-          const pclResponse = await fetch("/api/pcl?limit=1000");
-          if (pclResponse.ok) {
-            const pclData = await pclResponse.json();
-            if (pclData.data) {
-              setPclOptions(
-                pclData.data.map((pcl: any) => ({
-                  id: pcl.id_pcl,
-                  name: `${pcl.nama_pcl} (${pcl.status_pcl})`,
-                }))
-              );
-            }
-          }
-        } catch (err) {
-          console.error("Error fetching PCL options:", err);
+        if (perusahaanData.success) {
+          setPerusahaanOptions(perusahaanData.data as PerusahaanOption[]);
         }
-
-        // 🔧 PERBAIKAN: Fetch perusahaan options dengan mapping yang benar
-        try {
-          const perusahaanResponse = await fetch("/api/perusahaan/dropdown");
-          console.log("Perusahaan response status:", perusahaanResponse.status);
-
-          if (perusahaanResponse.ok) {
-            const result = await perusahaanResponse.json();
-            console.log("Raw perusahaan dropdown data:", result);
-
-            if (result.success && Array.isArray(result.data)) {
-              // Log raw data untuk debugging
-              console.log("Raw data sample:", result.data.slice(0, 3));
-
-              // 🔧 PERBAIKAN: Mapping yang sesuai dengan API response
-              const options: PerusahaanOption[] = result.data
-                .filter((item: any) => {
-                  // Filter out invalid items
-                  const isValid =
-                    item &&
-                    item.id !== undefined &&
-                    item.id !== null &&
-                    item.name;
-
-                  if (!isValid) {
-                    console.warn("Filtering out invalid item:", item);
-                  }
-
-                  return isValid;
-                })
-                .map((item: any) => ({
-                  // API response sudah menggunakan field names yang benar
-                  id: Number(item.id), // API response: id
-                  name: String(item.name || ""), // API response: name
-                  kip: String(item.kip || "-"), // API response: kip
-                  id_list: String(item.id_list || ""), // API response: id_list
-                  isDuplicate: Boolean(item.isDuplicate), // API response: isDuplicate
-                  duplicateCount: Number(item.duplicateCount) || 1, // API response: duplicateCount
-                  displayLabel: String(
-                    item.displayLabel ||
-                      `${item.kip || "-"} - ${item.name || ""}`
-                  ), // API response: displayLabel
-                }));
-
-              console.log("Processed perusahaan options:", options);
-              console.log("Options count:", options.length);
-              setPerusahaanOptions(options);
-
-              // Jika dalam edit mode, set selected perusahaan
-              if (mode === "edit" && formData.id_perusahaan) {
-                const selected = options.find((opt) => {
-                  // Safety check untuk edit mode
-                  if (!opt || opt.id === undefined || opt.id === null)
-                    return false;
-                  return Number(opt.id) === Number(formData.id_perusahaan);
-                });
-
-                if (selected) {
-                  console.log(
-                    "Setting selected perusahaan for edit mode:",
-                    selected
-                  );
-                  setSelectedPerusahaan(selected);
-                } else {
-                  console.log(
-                    "No matching perusahaan found for edit mode. FormData id_perusahaan:",
-                    formData.id_perusahaan
-                  );
-                }
-              }
-            } else {
-              console.error("Invalid perusahaan data format:", result);
-              throw new Error("Format data perusahaan tidak valid");
-            }
-          } else {
-            throw new Error(`HTTP error! status: ${perusahaanResponse.status}`);
-          }
-        } catch (err) {
-          console.error("Error fetching perusahaan data:", err);
-          setError("Gagal memuat data perusahaan");
+        if (pclData.success) {
+          setPclOptions(pclData.data as PCLOption[]);
         }
       } catch (err) {
-        console.error("Error in fetchOptions:", err);
-        setError("Gagal memuat opsi dropdown");
+        const errorMessage =
+          err instanceof Error
+            ? `Gagal memuat opsi: ${err.message}`
+            : "Terjadi kesalahan tidak diketahui";
+        setError(errorMessage);
+        SweetAlertUtils.error("Error", errorMessage);
       } finally {
         setIsLoadingOptions(false);
       }
     };
 
-    fetchOptions();
-  }, [mode, formData.id_perusahaan]);
+    void fetchOptions();
+  }, []);
 
-  // Handle form input changes
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -433,126 +332,93 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
     const { name, value } = e.target;
     const newFormData = { ...formData, [name]: value };
     setFormData(newFormData);
-    updateFieldState(name, value);
     checkForChanges(newFormData);
+    updateFieldState(name, value);
   };
 
-  // Handle blur events untuk menampilkan error
-  const handleBlur = (name: string, value: any) => {
+  const handleBlur = (name: string, value: string | number) => {
     updateFieldState(name, value, true);
   };
 
-  // Handle perusahaan selection from dropdown
   const handleSelectPerusahaan = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const perusahaanId = e.target.value;
-    debug("Selected perusahaan ID:", perusahaanId);
+    const selectedId = e.target.value;
+    const selected =
+      perusahaanOptions.find((p) => p.id === parseInt(selectedId, 10)) || null;
+    setSelectedPerusahaan(selected);
 
-    if (!perusahaanId) {
-      setSelectedPerusahaan(null);
-      setFormData((prev) => ({ ...prev, id_perusahaan: "" }));
-      return;
-    }
-
-    // 🔧 PERBAIKAN: Safety checks untuk mencegah error
-    const selected = perusahaanOptions.find((p) => {
-      // Safety check: pastikan p dan p.id exists
-      if (!p || p.id === undefined || p.id === null) {
-        console.warn("Invalid perusahaan option:", p);
-        return false;
-      }
-
-      // Convert both to string safely
-      const optionId = String(p.id);
-      const selectedId = String(perusahaanId);
-
-      return optionId === selectedId;
-    });
-
-    debug("Found selected perusahaan:", selected);
-
-    if (selected && selected.id !== undefined) {
-      setSelectedPerusahaan(selected);
-      setFormData((prev) => ({
-        ...prev,
-        id_perusahaan: selected.id,
-      }));
-    } else {
-      debug("Selected perusahaan not found in options or invalid");
-      setSelectedPerusahaan(null);
-      setFormData((prev) => ({
-        ...prev,
-        id_perusahaan: "",
-      }));
-    }
+    // Update form data dengan ID yang dipilih
+    const newFormData = { ...formData, id_perusahaan: selectedId };
+    setFormData(newFormData);
+    checkForChanges(newFormData);
+    updateFieldState("id_perusahaan", selectedId);
   };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validasi semua field terlebih dahulu
+    // 1. Validasi semua field
     if (!validateAllFields()) {
-      await SweetAlertUtils.warning(
+      SweetAlertUtils.warning(
         "Form Belum Lengkap",
-        "Silakan periksa dan lengkapi form dengan benar."
+        "Silakan periksa kembali semua isian yang wajib diisi."
       );
       return;
     }
 
-    // Validasi khusus untuk duplikat berdasarkan KIP & nama perusahaan
-    if (selectedPerusahaan) {
-      const duplicateCheck = await checkDuplicatePerusahaanEntry(
+    // 2. Cek duplikasi entri survei yang sama
+    const isDuplicateEntry = await checkDuplicateData(formData);
+    if (isDuplicateEntry) {
+      SweetAlertUtils.warning(
+        "Data Duplikat",
+        "Perusahaan ini sudah terdaftar pada survei yang sama."
+      );
+      return;
+    }
+
+    // 3. Cek duplikasi KIP jika perusahaan yang dipilih adalah duplikat
+    if (selectedPerusahaan?.isDuplicate) {
+      const duplicateResult = await checkDuplicatePerusahaanEntry(
         selectedPerusahaan,
-        formData.id_survei.toString()
+        String(formData.id_survei)
       );
 
-      if (duplicateCheck.isDuplicate) {
-        const duplicateInfo = duplicateCheck.duplicateInfo;
-        const existingEntries = duplicateInfo?.existing_entries || [];
+      if (duplicateResult.isDuplicate) {
+        const { duplicateInfo } = duplicateResult;
+        const infoText = `Perusahaan dengan KIP yang sama (<strong>${
+          selectedPerusahaan.kip
+        }</strong>) sudah dientri pada survei ini dengan nama "<strong>${
+          (duplicateInfo?.nama_perusahaan as string) || "N/A"
+        }</strong>".`;
 
-        let warningMessage = `Data riwayat survei untuk perusahaan dengan KIP "${selectedPerusahaan.kip}" dan nama "${selectedPerusahaan.name}" sudah ada untuk survei ini.\n\n`;
-
-        if (existingEntries.length > 0) {
-          warningMessage += "Data yang sudah ada:\n";
-          existingEntries.forEach((entry: any, index: number) => {
-            warningMessage += `${index + 1}. ID Riwayat: ${entry.id_riwayat}, Perusahaan: ${entry.nama_perusahaan} (KIP: ${entry.kip})\n`;
-          });
-        }
-
-        warningMessage +=
-          "\nSistem tidak mengizinkan duplikasi data ini karena KIP dan nama perusahaan sudah sama.";
-
-        await SweetAlertUtils.warning(
-          "Data Duplikat Terdeteksi",
-          warningMessage
+        const confirmContinue = await SweetAlertUtils.confirm(
+          "Potensi Duplikasi KIP",
+          `${infoText} Apakah Anda yakin ingin melanjutkan entri?`,
+          "Ya, Lanjutkan",
+          "Batal"
         );
-        return;
-      }
-    }
 
-    // Check duplicate data
-    const isDuplicate = await checkDuplicateData(formData);
-    if (isDuplicate) {
-      await SweetAlertUtils.warning(
-        "Data Sudah Ada",
-        "Kombinasi survei dan perusahaan ini sudah terdaftar dalam sistem."
-      );
-      return;
+        if (!confirmContinue) {
+          return;
+        }
+      }
     }
 
     // Konfirmasi sebelum menyimpan
     const confirmSave = await SweetAlertUtils.confirmSave(
-      mode === "edit" ? "Simpan Perubahan" : "Simpan Data Riwayat Survei",
+      mode === "edit" ? "Simpan Perubahan" : "Simpan Data Riwayat",
       mode === "edit"
-        ? "Apakah Anda yakin ingin menyimpan perubahan data riwayat survei ini?"
+        ? "Apakah Anda yakin ingin menyimpan perubahan data ini?"
         : "Apakah Anda yakin ingin menyimpan data riwayat survei baru ini?"
     );
 
-    if (!confirmSave) return;
+    if (!confirmSave) {
+      return;
+    }
 
     try {
       setIsLoading(true);
-      SweetAlertUtils.loading("Menyimpan Data", "Mohon tunggu sebentar...");
+      SweetAlertUtils.loading("Menyimpan Data", "Mohon tunggu...");
 
       const url =
         mode === "edit" ? `/api/riwayat-survei/${id}` : "/api/riwayat-survei";
@@ -572,23 +438,23 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
       if (result.success) {
         await SweetAlertUtils.success(
           "Berhasil!",
-          `Data riwayat survei berhasil ${mode === "edit" ? "diperbarui" : "ditambahkan"}!`
+          `Data riwayat survei berhasil ${
+            mode === "edit" ? "diperbarui" : "ditambahkan"
+          }!`
         );
-        setHasChanges(false);
         onSuccess();
       } else {
         throw new Error(
           result.message ||
-            `Gagal ${mode === "edit" ? "memperbarui" : "menambahkan"} data riwayat survei`
+            `Gagal ${mode === "edit" ? "memperbarui" : "menambahkan"} data`
         );
       }
     } catch (err) {
-      console.error("Error saving data:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "An unknown error occurred";
       SweetAlertUtils.closeLoading();
-      await SweetAlertUtils.error(
-        "Error",
-        `Terjadi kesalahan saat ${mode === "edit" ? "memperbarui" : "menyimpan"} data`
-      );
+      await SweetAlertUtils.error("Operasi Gagal", errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -596,240 +462,252 @@ const RiwayatSurveiForm: React.FC<RiwayatSurveiFormProps> = ({
 
   const handleCancel = async () => {
     if (hasChanges) {
-      const confirmed = await SweetAlertUtils.confirmCancel(
+      const confirmCancel = await SweetAlertUtils.confirm(
         "Batalkan Perubahan",
         "Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin membatalkan?",
         "Ya, Batalkan",
-        "Tetap Edit"
+        "Tidak, Lanjutkan Mengedit"
       );
-
-      if (!confirmed) return;
+      if (confirmCancel) {
+        onCancel();
+      }
+    } else {
+      onCancel();
     }
+  };
 
-    onCancel();
+  // Dynamic class for inputs
+  const getInputClass = (fieldName: keyof RiwayatSurveiData): string => {
+    const baseClass =
+      "w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2";
+    const errorClass = "border-red-500 focus:ring-red-500";
+    const defaultClass = "border-gray-300 focus:ring-blue-500";
+    return `${baseClass} ${
+      fieldStates[fieldName]?.error ? errorClass : defaultClass
+    }`;
+  };
+
+  // Helper untuk menampilkan label perusahaan
+  const getPerusahaanDisplayLabel = (option: PerusahaanOption) => {
+    let label = option.name;
+    if (option.isDuplicate) {
+      label += ` (KIP: ${option.kip} - Duplikat ${option.duplicateCount}x)`;
+    }
+    return label;
   };
 
   if (isLoading && mode === "edit") {
-    return <div className="p-4 text-center">Memuat data...</div>;
+    return (
+      <div className="flex justify-center items-center py-10">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (error && mode === "edit") {
+    return (
+      <div
+        className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-center"
+        role="alert"
+      >
+        <strong className="font-bold">Error:</strong>
+        <span className="block sm:inline"> {error}</span>
+      </div>
+    );
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-4 max-h-[500px] overflow-y-auto pr-2"
-    >
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
+    <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow-lg font-roboto">
+      <h1 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">
+        {mode === "add"
+          ? "Tambah Data Riwayat Survei"
+          : "Edit Data Riwayat Survei"}
+      </h1>
 
-      {/* ID_SURVEI */}
-      <div className="space-y-1">
-        <label
-          htmlFor="id_survei"
-          className="block text-sm font-medium text-gray-700"
-        >
-          Survei <span className="text-red-500">*</span>
-        </label>
-        <div className="relative">
-          <select
-            id="id_survei"
-            name="id_survei"
-            value={formData.id_survei}
-            onChange={handleInputChange}
-            onBlur={(e) => handleBlur("id_survei", e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              fieldStates.id_survei.touched && fieldStates.id_survei.error
-                ? "border-red-500"
-                : "border-gray-300"
-            }`}
-            disabled={isLoading}
-          >
-            <option value="">Pilih Survei</option>
-            {surveiOptions.map((survei) => (
-              <option key={survei.id} value={survei.id}>
-                {survei.name}
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+          {/* Survei */}
+          <div className="relative md:col-span-2">
+            <label
+              htmlFor="id_survei"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Survei
+            </label>
+            <select
+              id="id_survei"
+              name="id_survei"
+              value={formData.id_survei}
+              onChange={handleInputChange}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              className={getInputClass("id_survei")}
+              required
+              disabled={isLoadingOptions}
+            >
+              <option value="" disabled>
+                {isLoadingOptions ? "Memuat..." : "Pilih Survei"}
               </option>
-            ))}
-          </select>
-          <Tooltip
-            message={fieldStates.id_survei.error}
-            isVisible={
-              fieldStates.id_survei.touched && !!fieldStates.id_survei.error
-            }
-          />
-        </div>
-      </div>
+              {surveiOptions.map((survei) => (
+                <option key={survei.id_survei} value={survei.id_survei}>
+                  {survei.nama_survei} ({survei.tahun})
+                </option>
+              ))}
+            </select>
+            <Tooltip
+              message={fieldStates.id_survei.error}
+              isVisible={!!fieldStates.id_survei.error}
+            />
+          </div>
 
-      {/* ID_PERUSAHAAN */}
-      <div className="space-y-1">
-        <label
-          htmlFor="id_perusahaan"
-          className="block text-sm font-medium text-gray-700"
-        >
-          Perusahaan <span className="text-red-500">*</span>
-        </label>
-        <div className="relative">
-          {isLoadingOptions ? (
-            <div className="flex items-center text-sm text-gray-500 my-2">
-              <div className="animate-spin h-4 w-4 mr-2 border-2 border-blue-500 rounded-full border-t-transparent"></div>
-              Memuat data perusahaan...
-            </div>
-          ) : perusahaanOptions.length > 0 ? (
-            <>
-              <select
-                id="id_perusahaan"
-                name="id_perusahaan"
-                value={formData.id_perusahaan || ""}
-                onChange={handleSelectPerusahaan}
-                onBlur={(e) => handleBlur("id_perusahaan", e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  fieldStates.id_perusahaan.touched &&
-                  fieldStates.id_perusahaan.error
-                    ? "border-red-500"
-                    : "border-gray-300"
-                }`}
-              >
-                <option value="">Pilih Perusahaan</option>
-                {/* 🔧 PERBAIKAN: Tambahkan unique key dan safety checks */}
-                {perusahaanOptions.map((perusahaan, index) => (
-                  <option
-                    key={`perusahaan-${perusahaan.id}-${index}`} // Unique key
-                    value={perusahaan.id}
-                  >
-                    {/* 🔧 PERBAIKAN: Fallback untuk displayLabel */}
-                    {perusahaan.displayLabel ||
-                      `${perusahaan.kip} - ${perusahaan.name}`}
-                  </option>
-                ))}
-              </select>
-              <Tooltip
-                message={fieldStates.id_perusahaan.error}
-                isVisible={
-                  fieldStates.id_perusahaan.touched &&
-                  !!fieldStates.id_perusahaan.error
-                }
-              />
-            </>
-          ) : (
-            <div className="text-red-500 text-sm my-2">
-              {error ? `Error: ${error}` : "Tidak ada data perusahaan tersedia"}
-            </div>
-          )}
-        </div>
-      </div>
+          {/* Perusahaan */}
+          <div className="relative md:col-span-2">
+            <label
+              htmlFor="id_perusahaan"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Perusahaan
+            </label>
+            <select
+              id="id_perusahaan"
+              name="id_perusahaan"
+              value={formData.id_perusahaan}
+              onChange={handleSelectPerusahaan}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              className={getInputClass("id_perusahaan")}
+              required
+              disabled={isLoadingOptions}
+            >
+              <option value="" disabled>
+                {isLoadingOptions ? "Memuat..." : "Pilih Perusahaan"}
+              </option>
+              {perusahaanOptions.map((option) => (
+                <option
+                  key={option.id}
+                  value={option.id}
+                  className={option.isDuplicate ? "font-bold text-red-600" : ""}
+                >
+                  {getPerusahaanDisplayLabel(option)}
+                </option>
+              ))}
+            </select>
+            <Tooltip
+              message={fieldStates.id_perusahaan.error}
+              isVisible={!!fieldStates.id_perusahaan.error}
+            />
+          </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {/* ID_PCL */}
-        <div className="space-y-1">
-          <label
-            htmlFor="id_pcl"
-            className="block text-sm font-medium text-gray-700"
-          >
-            PCL <span className="text-red-500">*</span>
-          </label>
+          {/* PCL */}
           <div className="relative">
+            <label
+              htmlFor="id_pcl"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              PCL (Petugas Lapangan)
+            </label>
             <select
               id="id_pcl"
               name="id_pcl"
               value={formData.id_pcl}
               onChange={handleInputChange}
-              onBlur={(e) => handleBlur("id_pcl", e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                fieldStates.id_pcl.touched && fieldStates.id_pcl.error
-                  ? "border-red-500"
-                  : "border-gray-300"
-              }`}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              className={getInputClass("id_pcl")}
+              required
               disabled={isLoadingOptions}
             >
-              <option value="">Pilih PCL</option>
-              {pclOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
+              <option value="" disabled>
+                {isLoadingOptions ? "Memuat..." : "Pilih PCL"}
+              </option>
+              {pclOptions.map((pcl) => (
+                <option key={pcl.id_pcl} value={pcl.id_pcl}>
+                  {pcl.nama_pcl} ({pcl.status_pcl})
                 </option>
               ))}
             </select>
             <Tooltip
               message={fieldStates.id_pcl.error}
-              isVisible={
-                fieldStates.id_pcl.touched && !!fieldStates.id_pcl.error
-              }
+              isVisible={!!fieldStates.id_pcl.error}
             />
           </div>
-        </div>
 
-        {/* STATUS SELESAI */}
-        <div className="space-y-1">
-          <label
-            htmlFor="selesai"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Status Selesai <span className="text-red-500">*</span>
-          </label>
+          {/* Status Selesai */}
           <div className="relative">
+            <label
+              htmlFor="selesai"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Status Penyelesaian
+            </label>
             <select
               id="selesai"
               name="selesai"
               value={formData.selesai}
               onChange={handleInputChange}
-              onBlur={(e) => handleBlur("selesai", e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                fieldStates.selesai.touched && fieldStates.selesai.error
-                  ? "border-red-500"
-                  : "border-gray-300"
-              }`}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              className={getInputClass("selesai")}
+              required
             >
-              <option value="">Pilih Status</option>
-              <option value="Iya">Iya</option>
-              <option value="Tidak">Tidak</option>
+              <option value="" disabled>
+                Pilih Status
+              </option>
+              <option value="Selesai">Selesai</option>
+              <option value="Belum Selesai">Belum Selesai</option>
+              <option value="Tidak Aktif">Tidak Aktif</option>
+              <option value="Responden Menolak">Responden Menolak</option>
             </select>
             <Tooltip
               message={fieldStates.selesai.error}
-              isVisible={
-                fieldStates.selesai.touched && !!fieldStates.selesai.error
-              }
+              isVisible={!!fieldStates.selesai.error}
+            />
+          </div>
+
+          {/* Keterangan Survei */}
+          <div className="relative md:col-span-2">
+            <label
+              htmlFor="ket_survei"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Keterangan Tambahan (Opsional)
+            </label>
+            <textarea
+              id="ket_survei"
+              name="ket_survei"
+              value={formData.ket_survei}
+              onChange={handleInputChange}
+              onBlur={(e) => handleBlur(e.target.name, e.target.value)}
+              rows={4}
+              className={getInputClass("ket_survei")}
+              placeholder="Contoh: Responden meminta untuk dihubungi kembali minggu depan."
             />
           </div>
         </div>
-      </div>
 
-      {/* KET SURVEI */}
-      <div className="space-y-1">
-        <label
-          htmlFor="ket_survei"
-          className="block text-sm font-medium text-gray-700"
-        >
-          Keterangan
-        </label>
-        <textarea
-          id="ket_survei"
-          name="ket_survei"
-          value={formData.ket_survei || ""}
-          onChange={handleInputChange}
-          rows={3}
-          className="w-full px-3 py-2 border rounded-lg border-gray-300 shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Masukkan keterangan survei (opsional)"
-        />
-      </div>
-
-      <div className="flex justify-end space-x-3 pt-4">
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-        >
-          Batal
-        </button>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
-          {isLoading ? "Menyimpan..." : mode === "edit" ? "Perbarui" : "Simpan"}
-        </button>
-      </div>
-    </form>
+        {/* Action Buttons */}
+        <div className="flex justify-end items-center gap-4 mt-8 pt-6 border-t">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={isLoading || !hasChanges}
+            className={`px-6 py-2 border border-transparent rounded-lg text-sm font-medium text-white ${
+              isLoading || !hasChanges
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            } transition-colors`}
+          >
+            {isLoading
+              ? "Menyimpan..."
+              : mode === "add"
+              ? "Simpan"
+              : "Simpan Perubahan"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 };
 

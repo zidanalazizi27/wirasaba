@@ -1,6 +1,6 @@
 // src/app/api/survei/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import mysql, { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 // Database connection configuration
 const dbConfig = {
@@ -15,8 +15,15 @@ async function createDbConnection() {
   return await mysql.createConnection(dbConfig);
 }
 
+interface SurveiData {
+  nama_survei: string;
+  fungsi: string;
+  periode: string;
+  tahun: number | string;
+}
+
 // Validation functions (same as in route.ts)
-function validateSurveiData(data: any) {
+function validateSurveiData(data: Partial<SurveiData>) {
   const errors: string[] = [];
 
   // Validate nama_survei
@@ -58,12 +65,12 @@ function validateSurveiData(data: any) {
 }
 
 // Sanitize data function
-function sanitizeSurveiData(data: any) {
+function sanitizeSurveiData(data: Partial<SurveiData>): Partial<SurveiData> {
   return {
     nama_survei: data.nama_survei ? data.nama_survei.toString().trim() : '',
     fungsi: data.fungsi ? data.fungsi.toString().trim() : '',
     periode: data.periode ? data.periode.toString().trim() : '',
-    tahun: typeof data.tahun === 'string' ? parseInt(data.tahun) : data.tahun
+    tahun: typeof data.tahun === 'string' ? parseInt(data.tahun, 10) : data.tahun
   };
 }
 
@@ -105,7 +112,7 @@ export async function GET(
     const connection = await createDbConnection();
 
     // Query to get survey by ID
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<RowDataPacket[]>(
       `SELECT id_survei, nama_survei, fungsi, periode, tahun
        FROM survei
        WHERE id_survei = ?`,
@@ -114,7 +121,7 @@ export async function GET(
 
     await connection.end();
 
-    if ((rows as any[]).length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json({
         success: false,
         message: "Survei tidak ditemukan"
@@ -123,7 +130,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: (rows as any[])[0]
+      data: rows[0]
     });
   } catch (error) {
     console.error("Database error:", error);
@@ -151,7 +158,7 @@ export async function PUT(
   }
 
   try {
-    const rawData = await request.json();
+    const rawData: Partial<SurveiData> = await request.json();
     
     // Sanitize input data
     const data = sanitizeSurveiData(rawData);
@@ -177,12 +184,12 @@ export async function PUT(
       await connection.beginTransaction();
 
       // Check if survey exists
-      const [existingRows] = await connection.execute(
+      const [existingRows] = await connection.execute<RowDataPacket[]>(
         `SELECT id_survei, nama_survei, tahun FROM survei WHERE id_survei = ?`,
         [idValidation.numericId]
       );
 
-      if ((existingRows as any[]).length === 0) {
+      if (existingRows.length === 0) {
         await connection.rollback();
         await connection.end();
         return NextResponse.json({
@@ -191,16 +198,14 @@ export async function PUT(
         }, { status: 404 });
       }
 
-      const existingSurvei = (existingRows as any[])[0];
-
       // Check for duplicate survey name in the same year (excluding current record)
-      const [duplicateRows] = await connection.execute(
+      const [duplicateRows] = await connection.execute<RowDataPacket[]>(
         `SELECT id_survei FROM survei 
          WHERE nama_survei = ? AND tahun = ? AND id_survei != ?`,
         [data.nama_survei, data.tahun, idValidation.numericId]
       );
 
-      if ((duplicateRows as any[]).length > 0) {
+      if (duplicateRows.length > 0) {
         await connection.rollback();
         await connection.end();
         return NextResponse.json(
@@ -213,7 +218,7 @@ export async function PUT(
       }
 
       // Update survey data
-      const [result] = await connection.execute(
+      const [result] = await connection.execute<ResultSetHeader>(
         `UPDATE survei 
          SET nama_survei = ?, fungsi = ?, periode = ?, tahun = ?
          WHERE id_survei = ?`,
@@ -221,7 +226,7 @@ export async function PUT(
       );
 
       // Check if update was successful
-      if ((result as any).affectedRows === 0) {
+      if (result.affectedRows === 0) {
         await connection.rollback();
         await connection.end();
         return NextResponse.json({
@@ -234,16 +239,20 @@ export async function PUT(
       await connection.commit();
       await connection.end();
 
+      const updatedData: SurveiData = {
+        nama_survei: data.nama_survei!,
+        fungsi: data.fungsi!,
+        periode: data.periode!,
+        tahun: data.tahun!,
+      };
+
       return NextResponse.json({
         success: true,
         message: "Data survei berhasil diperbarui",
         data: {
           id: idValidation.numericId,
-          nama_survei: data.nama_survei,
-          fungsi: data.fungsi,
-          periode: data.periode,
-          tahun: data.tahun,
-        },
+          ...updatedData
+        }
       });
     } catch (dbError) {
       // Rollback transaction on error
@@ -254,8 +263,12 @@ export async function PUT(
   } catch (error) {
     console.error("Database error:", error);
     
+    interface MySQLError extends Error {
+      code: string;
+    }
+
     // Check for specific MySQL errors
-    if ((error as any).code === 'ER_DUP_ENTRY') {
+    if ((error as MySQLError).code === 'ER_DUP_ENTRY') {
       return NextResponse.json(
         {
           success: false,
@@ -299,51 +312,20 @@ export async function DELETE(
       // Begin transaction
       await connection.beginTransaction();
 
-      // Check if survey exists
-      const [existingRows] = await connection.execute(
-        `SELECT id_survei FROM survei WHERE id_survei = ?`,
+      // Delete survey
+      const [result] = await connection.execute<ResultSetHeader>(
+        `DELETE FROM survei WHERE id_survei = ?`,
         [idValidation.numericId]
       );
 
-      if ((existingRows as any[]).length === 0) {
+      // Check if delete was successful
+      if (result.affectedRows === 0) {
         await connection.rollback();
         await connection.end();
         return NextResponse.json({
           success: false,
           message: "Survei tidak ditemukan"
         }, { status: 404 });
-      }
-
-      // Check if survey is referenced in riwayat_survei
-      const [referencedRows] = await connection.execute(
-        `SELECT COUNT(*) as count FROM riwayat_survei WHERE id_survei = ?`,
-        [idValidation.numericId]
-      );
-
-      const isReferenced = (referencedRows as any[])[0].count > 0;
-
-      if (isReferenced) {
-        await connection.rollback();
-        await connection.end();
-        return NextResponse.json({
-          success: false,
-          message: "Tidak dapat menghapus survei karena masih digunakan dalam riwayat survei"
-        }, { status: 409 });
-      }
-
-      // Delete survey
-      const [result] = await connection.execute(
-        `DELETE FROM survei WHERE id_survei = ?`,
-        [idValidation.numericId]
-      );
-
-      if ((result as any).affectedRows === 0) {
-        await connection.rollback();
-        await connection.end();
-        return NextResponse.json({
-          success: false,
-          message: "Gagal menghapus data survei"
-        }, { status: 500 });
       }
 
       // Commit transaction
@@ -354,20 +336,20 @@ export async function DELETE(
         success: true,
         message: "Data survei berhasil dihapus"
       });
+
     } catch (dbError) {
-      // Rollback transaction on error
-      await connection.rollback();
-      await connection.end();
-      throw dbError;
+      if (connection) {
+        // Rollback transaction on error
+        await connection.rollback();
+        await connection.end();
+      }
+      throw dbError; // Rethrow to be caught by outer catch block
     }
   } catch (error) {
-    console.error("Database error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Terjadi kesalahan saat menghapus data",
-      },
-      { status: 500 }
-    );
+    console.error("DELETE error:", error);
+    return NextResponse.json({
+      success: false,
+      message: "Terjadi kesalahan saat menghapus data"
+    }, { status: 500 });
   }
 }

@@ -372,12 +372,12 @@ export const statusOptions = [
   { name: "Kosong", uid: "kosong" },
 ];
 
-const statusColorMap: Record<string, string> = {
-  tinggi: "bg-green-100 text-green-800",
-  sedang: "bg-amber-100 text-amber-800",
-  rendah: "bg-red-100 text-red-800",
-  kosong: "bg-gray-100 text-gray-800",
-};
+// const statusColorMap: Record<string, string> = {
+//   tinggi: "bg-green-100 text-green-800",
+//   sedang: "bg-amber-100 text-amber-800",
+//   rendah: "bg-red-100 text-red-800",
+//   kosong: "bg-gray-100 text-gray-800",
+// };
 
 type Business = {
   id_perusahaan: number;
@@ -387,45 +387,27 @@ type Business = {
   alamat: string;
   jarak: string;
   pcl_utama: string;
+  pcl?: string; // Add optional pcl property
   status: string;
   completion_percentage: number;
   total_survei: number;
   completed_survei: number;
 };
-type SortDirection = "ascending" | "descending" | null;
 
 interface SortDescriptor {
   column: string;
   direction: "ascending" | "descending" | null;
 }
 
-// Tambahkan interface untuk upload modal
 interface UploadModalProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
-interface ValidationError {
-  row: number;
-  field: string;
-  message: string;
-  value?: any;
-}
-
-interface DuplicateData {
-  row: number;
-  kip: string;
-  tahun_direktori: number[];
-  existing_company?: {
-    id_perusahaan: number;
-    nama_perusahaan: string;
-  };
-}
-
 // Upload Modal Component yang sudah lengkap
 const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [uploadMode, setUploadMode] = useState<"append" | "replace">("append");
+  const [mode, setMode] = useState<"append" | "replace">("append");
   const [isUploading, setIsUploading] = useState(false);
 
   // Enhanced file validation
@@ -570,16 +552,14 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
 
     // Confirm upload action
     const confirmMessage =
-      uploadMode === "replace"
+      mode === "replace"
         ? "PERINGATAN: Semua data direktori yang ada akan dihapus dan diganti dengan data dari file ini. Aksi ini tidak dapat dibatalkan. Apakah Anda yakin?"
         : "Data baru akan ditambahkan ke database. Data yang sudah ada akan diperbarui jika ditemukan duplikat. Lanjutkan?";
 
     const confirmed = await SweetAlertUtils.confirm(
-      uploadMode === "replace"
-        ? "Konfirmasi Ganti Semua Data"
-        : "Konfirmasi Upload",
+      mode === "replace" ? "Konfirmasi Ganti Semua Data" : "Konfirmasi Upload",
       confirmMessage,
-      uploadMode === "replace" ? "Ya, Ganti Semua!" : "Ya, Upload!"
+      mode === "replace" ? "Ya, Ganti Semua!" : "Ya, Upload!"
     );
 
     if (!confirmed) return;
@@ -593,7 +573,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("mode", uploadMode);
+      formData.append("mode", mode);
 
       const response = await fetch("/api/perusahaan/import", {
         method: "POST",
@@ -622,7 +602,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
         let message = "";
         let detailInfo = "";
 
-        if (uploadMode === "replace") {
+        if (mode === "replace") {
           if (totalProcessed > 0) {
             message = `Berhasil mengganti semua data dengan ${totalProcessed} perusahaan baru`;
             if (totalYears > 0) {
@@ -685,7 +665,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
   const handleCancel = () => {
     onClose();
     setFile(null);
-    setUploadMode("append");
+    setMode("append");
   };
 
   return (
@@ -737,8 +717,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                   id="append"
                   name="uploadMode"
                   value="append"
-                  checked={uploadMode === "append"}
-                  onChange={() => setUploadMode("append")}
+                  checked={mode === "append"}
+                  onChange={() => setMode("append")}
                   className="h-4 w-4 text-blue-600 mt-0.5"
                   disabled={isUploading}
                 />
@@ -753,8 +733,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                   id="replace"
                   name="uploadMode"
                   value="replace"
-                  checked={uploadMode === "replace"}
-                  onChange={() => setUploadMode("replace")}
+                  checked={mode === "replace"}
+                  onChange={() => setMode("replace")}
                   className="h-4 w-4 text-red-600 mt-0.5"
                   disabled={isUploading}
                 />
@@ -803,14 +783,14 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
               onClick={handleUpload}
               disabled={!file || isUploading}
               className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                uploadMode === "replace"
+                mode === "replace"
                   ? "bg-red-600 hover:bg-red-700 text-white"
                   : "bg-blue-600 hover:bg-blue-700 text-white"
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {isUploading
                 ? "Memproses..."
-                : uploadMode === "replace"
+                : mode === "replace"
                   ? "Ganti Semua"
                   : "Upload"}
             </button>
@@ -826,7 +806,7 @@ const TabelDirektori = () => {
 
   // State declarations
   const [filterValue, setFilterValue] = useState("");
-  const [selectedKeys, setSelectedKeys] = useState<Set<number>>(new Set([]));
+  // const [selectedKeys, setSelectedKeys] = useState<Set<number>>(new Set([]));
   const [statusFilter, setStatusFilter] = useState("all");
   const [pclFilter, setPclFilter] = useState("all");
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -993,7 +973,7 @@ const TabelDirektori = () => {
       console.error("Error downloading Excel:", error);
 
       // Tentukan pesan error dan saran
-      let errorMessage =
+      const errorMessage =
         (error as Error).message || "Terjadi kesalahan yang tidak diketahui";
       let suggestions =
         "Silakan coba lagi atau hubungi administrator jika masalah berlanjut.";
@@ -1027,9 +1007,12 @@ const TabelDirektori = () => {
       if (result.success && result.data) {
         // Ekstrak tahun-tahun unik dari data direktori
         const years = result.data
-          .map((dir) => dir.thn_direktori.toString())
-          .filter((year, index, self) => self.indexOf(year) === index)
-          .sort((a, b) => b - a); // Sortir tahun secara descending
+          .map((dir: { thn_direktori: number }) => dir.thn_direktori.toString())
+          .filter(
+            (year: string, index: number, self: string[]) =>
+              self.indexOf(year) === index
+          )
+          .sort((a: string, b: string) => parseInt(b) - parseInt(a)); // Sortir tahun secara descending
 
         setUniqueYears(years);
 
@@ -1077,7 +1060,7 @@ const TabelDirektori = () => {
     fetchPclOptions();
   }, [fetchPclOptions]);
 
-  const hasSearchFilter = Boolean(filterValue);
+  // const hasSearchFilter = Boolean(filterValue);
 
   // Fetch data from API
   const fetchData = useCallback(async () => {
@@ -1176,48 +1159,48 @@ const TabelDirektori = () => {
     if (sortDescriptors.length > 0 && !hasLoadedAll) {
       fetchAllData();
     }
-  }, [sortDescriptors, fetchAllData]);
+  }, [sortDescriptors, fetchAllData, hasLoadedAll]);
 
   //Reset hasLoadedAll ketika filter berubah
   useEffect(() => {
     setHasLoadedAll(false);
   }, [selectedYear, filterValue, statusFilter, pclFilter]);
 
-  const filteredItems = useMemo(() => {
-    let filteredBusinesses = [...businesses];
+  // const filteredItems = useMemo(() => {
+  //   let filteredBusinesses = [...businesses];
 
-    // Text search filter
-    if (hasSearchFilter) {
-      const lowerFilter = filterValue.toLowerCase();
-      filteredBusinesses = filteredBusinesses.filter(
-        (business) =>
-          // Gunakan optional chaining dan pastikan tipe data sesuai
-          (business.kip &&
-            String(business.kip).toLowerCase().includes(lowerFilter)) ||
-          (business.nama_perusahaan &&
-            business.nama_perusahaan.toLowerCase().includes(lowerFilter)) ||
-          (business.alamat &&
-            business.alamat.toLowerCase().includes(lowerFilter))
-      );
-    }
+  //   // Text search filter
+  //   if (hasSearchFilter) {
+  //     const lowerFilter = filterValue.toLowerCase();
+  //     filteredBusinesses = filteredBusinesses.filter(
+  //       (business) =>
+  //         // Gunakan optional chaining dan pastikan tipe data sesuai
+  //         (business.kip &&
+  //           String(business.kip).toLowerCase().includes(lowerFilter)) ||
+  //         (business.nama_perusahaan &&
+  //           business.nama_perusahaan.toLowerCase().includes(lowerFilter)) ||
+  //         (business.alamat &&
+  //           business.alamat.toLowerCase().includes(lowerFilter))
+  //     );
+  //   }
 
-    // Status filter
-    if (statusFilter !== "all") {
-      filteredBusinesses = filteredBusinesses.filter(
-        (business) => business.status === statusFilter
-      );
-    }
+  //   // Status filter
+  //   if (statusFilter !== "all") {
+  //     filteredBusinesses = filteredBusinesses.filter(
+  //       (business) => business.status === statusFilter
+  //     );
+  //   }
 
-    // PCL filter
-    if (pclFilter !== "all") {
-      filteredBusinesses = filteredBusinesses.filter(
-        (business) =>
-          business.pcl_utama && String(business.pcl_utama) === pclFilter
-      );
-    }
+  //   // PCL filter
+  //   if (pclFilter !== "all") {
+  //     filteredBusinesses = filteredBusinesses.filter(
+  //       (business) =>
+  //         business.pcl_utama && String(business.pcl_utama) === pclFilter
+  //     );
+  //   }
 
-    return filteredBusinesses;
-  }, [businesses, filterValue, statusFilter, pclFilter, hasSearchFilter]);
+  //   return filteredBusinesses;
+  // }, [businesses, filterValue, statusFilter, pclFilter, hasSearchFilter]);
 
   // Implementasi client-side sorting yang bekerja dengan semua data
   const sortedItems = useMemo(() => {
@@ -1441,71 +1424,80 @@ const TabelDirektori = () => {
   }, []);
 
   // Action handlers
-  const handleViewBusiness = (business: Business) => {
-    router.push(`/admin/direktori/${business.id_perusahaan}`);
-  };
+  const handleViewBusiness = useCallback(
+    (business: Business) => {
+      router.push(`/admin/direktori/${business.id_perusahaan}`);
+    },
+    [router]
+  );
 
-  const handleEditBusiness = (business: Business) => {
-    router.push(`/admin/direktori/${business.id_perusahaan}/edit`);
-  };
+  const handleEditBusiness = useCallback(
+    (business: Business) => {
+      router.push(`/admin/direktori/${business.id_perusahaan}/edit`);
+    },
+    [router]
+  );
 
   // Handle delete business with SweetAlert
-  const handleDeleteBusiness = async (business: Business) => {
-    // Input validation
-    if (!business?.id_perusahaan) {
-      await SweetAlertUtils.error(
-        "Error",
-        "Data perusahaan tidak valid. Silakan refresh halaman."
-      );
-      return;
-    }
-
-    // Konfirmasi menggunakan confirmDelete seperti di PCL
-    const confirmDelete = await SweetAlertUtils.confirmDelete(
-      "Hapus Data Perusahaan",
-      `Anda akan menghapus data "${business.kip} - ${business.nama_perusahaan}". Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan perusahaan ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
-      "Ya, Hapus",
-      "Batal"
-    );
-
-    if (!confirmDelete) return;
-
-    try {
-      // Loading state seperti di PCL
-      SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
-
-      // API call
-      const response = await fetch(
-        `/api/perusahaan/${business.id_perusahaan}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      const result = await response.json();
-      SweetAlertUtils.closeLoading();
-
-      if (result.success) {
-        await SweetAlertUtils.success(
-          "Berhasil Dihapus!",
-          `Data "${business.nama_perusahaan}" berhasil dihapus!`
+  const handleDeleteBusiness = useCallback(
+    async (business: Business) => {
+      // Input validation
+      if (!business?.id_perusahaan) {
+        await SweetAlertUtils.error(
+          "Error",
+          "Data perusahaan tidak valid. Silakan refresh halaman."
         );
-        setHasLoadedAll(false);
-        await fetchData();
-      } else {
-        throw new Error(result.message || "Gagal menghapus data");
+        return;
       }
-    } catch (error) {
-      console.error("Error deleting data:", error);
-      SweetAlertUtils.closeLoading();
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      await SweetAlertUtils.error(
-        "Gagal Menghapus",
-        `Terjadi kesalahan saat menghapus data: ${errorMessage}`
+
+      // Konfirmasi menggunakan confirmDelete seperti di PCL
+      const confirmDelete = await SweetAlertUtils.confirmDelete(
+        "Hapus Data Perusahaan",
+        `Anda akan menghapus data "${business.kip} - ${business.nama_perusahaan}". Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan perusahaan ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
+        "Ya, Hapus",
+        "Batal"
       );
-    }
-  };
+
+      if (!confirmDelete) return;
+
+      try {
+        // Loading state seperti di PCL
+        SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
+
+        // API call
+        const response = await fetch(
+          `/api/perusahaan/${business.id_perusahaan}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+        const result = await response.json();
+        SweetAlertUtils.closeLoading();
+
+        if (result.success) {
+          await SweetAlertUtils.success(
+            "Berhasil Dihapus!",
+            `Data "${business.nama_perusahaan}" berhasil dihapus!`
+          );
+          setHasLoadedAll(false);
+          await fetchData();
+        } else {
+          throw new Error(result.message || "Gagal menghapus data");
+        }
+      } catch (error) {
+        console.error("Error deleting data:", error);
+        SweetAlertUtils.closeLoading();
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        await SweetAlertUtils.error(
+          "Gagal Menghapus",
+          `Terjadi kesalahan saat menghapus data: ${errorMessage}`
+        );
+      }
+    },
+    [fetchData]
+  );
 
   // Calculate pages
   const pages = totalPages;
@@ -1637,7 +1629,7 @@ const TabelDirektori = () => {
           return <span className="text-sm font-normal">{cellValue}</span>;
       }
     },
-    []
+    [handleDeleteBusiness, handleEditBusiness, handleViewBusiness]
   );
 
   return (
@@ -1688,36 +1680,38 @@ const TabelDirektori = () => {
                     >
                       Semua
                     </button>
-                    {statusOptions.map((status) => (
-                      <button
-                        key={status.uid}
-                        className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
-                          statusFilter === status.uid ? "bg-gray-100" : ""
-                        }`}
-                        onClick={() => {
-                          onStatusFilterChange(status.uid);
-                          setStatusDropdownOpen(false);
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-block w-3 h-3 rounded-full ${
-                              status.uid === "tinggi"
-                                ? "bg-green-500"
-                                : status.uid === "sedang"
-                                  ? "bg-amber-500"
-                                  : status.uid === "rendah"
-                                    ? "bg-red-500"
-                                    : "bg-gray-500"
-                            }`}
-                          ></span>
-                          {status.name}
-                        </div>
-                        {statusFilter === status.uid && (
-                          <span className="h-2 w-2 rounded-full bg-blue-600"></span>
-                        )}
-                      </button>
-                    ))}
+                    {statusOptions.map(
+                      (status: { name: string; uid: string }) => (
+                        <button
+                          key={status.uid}
+                          className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
+                            statusFilter === status.uid ? "bg-gray-100" : ""
+                          }`}
+                          onClick={() => {
+                            onStatusFilterChange(status.uid);
+                            setStatusDropdownOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-block w-3 h-3 rounded-full ${
+                                status.uid === "tinggi"
+                                  ? "bg-green-500"
+                                  : status.uid === "sedang"
+                                    ? "bg-amber-500"
+                                    : status.uid === "rendah"
+                                      ? "bg-red-500"
+                                      : "bg-gray-500"
+                              }`}
+                            ></span>
+                            {status.name}
+                          </div>
+                          {statusFilter === status.uid && (
+                            <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+                          )}
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
               )}
@@ -1752,7 +1746,7 @@ const TabelDirektori = () => {
                     >
                       Semua PCL
                     </button>
-                    {pclOptions.map((pcl) => (
+                    {pclOptions.map((pcl: { name: string; uid: string }) => (
                       <button
                         key={pcl.uid}
                         className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 flex items-center justify-between ${
@@ -1787,7 +1781,7 @@ const TabelDirektori = () => {
               {yearDropdownOpen && (
                 <div className="absolute left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-36">
                   <div className="py-1">
-                    {uniqueYears.map((year) => (
+                    {uniqueYears.map((year: string) => (
                       <button
                         key={year}
                         className={`w-full text-left px-2 py-2 text-sm hover:bg-gray-100 ${
@@ -1865,42 +1859,44 @@ const TabelDirektori = () => {
         <table className="w-full">
           <thead>
             <tr className="border-t border-gray-200">
-              {columns.map((column) => (
-                <th
-                  key={column.uid}
-                  className="text-left p-4 text-sm font-bold text-gray-700"
-                >
-                  <div className="flex items-center gap-1">
-                    {column.name}
-                    {column.sortable && (
-                      <button
-                        onClick={() => handleSort(column.uid)}
-                        className="ml-1 focus:outline-none"
-                      >
-                        <div className="relative">
-                          {getSortDirection(column.uid) === "ascending" && (
-                            <SortAscIcon className="text-blue-500" />
-                          )}
-                          {getSortDirection(column.uid) === "descending" && (
-                            <SortDescIcon className="text-blue-500" />
-                          )}
-                          {getSortDirection(column.uid) === null && (
-                            <SortIcon className="text-gray-400" />
-                          )}
-
-                          {/* Tampilkan indikator urutan prioritas jika ada multiple sort */}
-                          {getSortIndex(column.uid) > 0 &&
-                            sortDescriptors.length > 1 && (
-                              <span className="absolute -top-2 -right-2 w-4 h-4 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center">
-                                {getSortIndex(column.uid)}
-                              </span>
+              {columns.map(
+                (column: { name: string; uid: string; sortable: boolean }) => (
+                  <th
+                    key={column.uid}
+                    className="text-left p-4 text-sm font-bold text-gray-700"
+                  >
+                    <div className="flex items-center gap-1">
+                      {column.name}
+                      {column.sortable && (
+                        <button
+                          onClick={() => handleSort(column.uid)}
+                          className="ml-1 focus:outline-none"
+                        >
+                          <div className="relative">
+                            {getSortDirection(column.uid) === "ascending" && (
+                              <SortAscIcon className="text-blue-500" />
                             )}
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                </th>
-              ))}
+                            {getSortDirection(column.uid) === "descending" && (
+                              <SortDescIcon className="text-blue-500" />
+                            )}
+                            {getSortDirection(column.uid) === null && (
+                              <SortIcon className="text-gray-400" />
+                            )}
+
+                            {/* Tampilkan indikator urutan prioritas jika ada multiple sort */}
+                            {getSortIndex(column.uid) > 0 &&
+                              sortDescriptors.length > 1 && (
+                                <span className="absolute -top-2 -right-2 w-4 h-4 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center">
+                                  {getSortIndex(column.uid)}
+                                </span>
+                              )}
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )
+              )}
             </tr>
           </thead>
           <tbody>
@@ -1924,30 +1920,36 @@ const TabelDirektori = () => {
                 </td>
               </tr>
             ) : paginatedItems.length > 0 ? (
-              paginatedItems.map((item, index) => (
+              paginatedItems.map((item: Business, index: number) => (
                 <tr
                   key={item.id_perusahaan}
                   className="border-t border-gray-200 hover:bg-gray-50"
                 >
-                  {columns.map((column) => (
-                    <td
-                      key={`${item.id_perusahaan}-${column.uid}`}
-                      className="p-2"
-                    >
-                      {renderCell(
-                        // Perbarui nomor urut jika pagination client-side
-                        column.uid === "no" &&
-                          hasLoadedAll &&
-                          sortDescriptors.length > 0
-                          ? {
-                              ...item,
-                              no: (currentPage - 1) * rowsPerPage + index + 1,
-                            }
-                          : item,
-                        column.uid as keyof Business | "actions"
-                      )}
-                    </td>
-                  ))}
+                  {columns.map(
+                    (column: {
+                      name: string;
+                      uid: string;
+                      sortable: boolean;
+                    }) => (
+                      <td
+                        key={`${item.id_perusahaan}-${column.uid}`}
+                        className="p-2"
+                      >
+                        {renderCell(
+                          // Perbarui nomor urut jika pagination client-side
+                          column.uid === "no" &&
+                            hasLoadedAll &&
+                            sortDescriptors.length > 0
+                            ? {
+                                ...item,
+                                no: (currentPage - 1) * rowsPerPage + index + 1,
+                              }
+                            : item,
+                          column.uid as keyof Business | "actions"
+                        )}
+                      </td>
+                    )
+                  )}
                 </tr>
               ))
             ) : (
@@ -1999,7 +2001,7 @@ const TabelDirektori = () => {
             <div className="flex items-center gap-1">
               {pages <= 7 ? (
                 // Show all pages if total pages <= 7
-                [...Array(pages)].map((_, i) => (
+                [...Array(pages)].map((_: unknown, i: number) => (
                   <button
                     key={i}
                     onClick={() => setCurrentPage(i + 1)}

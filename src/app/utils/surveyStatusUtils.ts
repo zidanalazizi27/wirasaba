@@ -142,13 +142,22 @@ export function createTooltipText(statusData: SurveyStatusData): string {
  * @param data - Data to validate
  * @returns Boolean indicating if data is valid
  */
-export function isValidSurveyData(data: any): data is SurveyStatusData {
+export function isValidSurveyData(data: unknown): data is SurveyStatusData {
+  if (!data || typeof data !== "object" || data === null) {
+    return false;
+  }
+  
+  const obj = data as Record<string, unknown>;
   return (
-    data &&
-    typeof data.total_survei === "number" &&
-    typeof data.completed_survei === "number" &&
-    typeof data.completion_percentage === "number" &&
-    typeof data.status === "string" &&
-    typeof data.status_text === "string"
+    "total_survei" in obj &&
+    "completed_survei" in obj &&
+    "completion_percentage" in obj &&
+    "status" in obj &&
+    "status_text" in obj &&
+    typeof obj.total_survei === "number" &&
+    typeof obj.completed_survei === "number" &&
+    typeof obj.completion_percentage === "number" &&
+    typeof obj.status === "string" &&
+    typeof obj.status_text === "string"
   );
 }

@@ -1,10 +1,8 @@
 // src/app/api/survei/template/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import * as XLSX from 'xlsx';
 
-// Import XLSX dengan cara yang kompatibel
-const XLSX = require('xlsx');
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('🔄 Generating survei template...');
 
@@ -154,15 +152,12 @@ export async function GET(request: NextRequest) {
     return response;
 
   } catch (error) {
-    console.error('❌ Error generating survei template:', error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error('Error generating template:', errorMessage);
     
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Gagal membuat template survei',
-        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error'
+    }, { status: 500 });
   }
 }

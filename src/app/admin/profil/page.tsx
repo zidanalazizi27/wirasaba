@@ -70,7 +70,7 @@ export default function Profil() {
   };
 
   // Handler untuk form profil
-  const handleProfileChange = (e) => {
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setProfileForm({
       ...profileForm,
@@ -79,7 +79,7 @@ export default function Profil() {
   };
 
   // Handler untuk form password
-  const handlePasswordChange = (e) => {
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setPasswordForm({
       ...passwordForm,
@@ -88,15 +88,15 @@ export default function Profil() {
   };
 
   // Toggle visibility password
-  const togglePasswordVisibility = (field) => {
+  const togglePasswordVisibility = (field: string) => {
     setShowPassword({
       ...showPassword,
-      [field]: !showPassword[field],
+      [field]: !showPassword[field as keyof typeof showPassword],
     });
   };
 
   // Submit handler untuk update profil
-  const handleProfileSubmit = async (e) => {
+  const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setMessage({ type: "", text: "" });
@@ -144,7 +144,7 @@ export default function Profil() {
   };
 
   // Submit handler untuk update password
-  const handlePasswordSubmit = async (e) => {
+  const handlePasswordSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setMessage({ type: "", text: "" });
@@ -206,7 +206,7 @@ export default function Profil() {
   };
 
   // Generate inisial dari nama
-  const getInitials = (name) => {
+  const getInitials = (name: string) => {
     if (!name) return "??";
     return name
       .split(" ")
@@ -306,7 +306,7 @@ export default function Profil() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("profile")}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-colors ${
                     activeTab === "profile"
                       ? "bg-clightbrown text-white"
                       : "bg-gray-100 text-cdark"
@@ -317,7 +317,7 @@ export default function Profil() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("password")}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-colors ${
                     activeTab === "password"
                       ? "bg-clightbrown text-white"
                       : "bg-gray-100 text-cdark"
@@ -333,7 +333,9 @@ export default function Profil() {
           <div className="bg-white rounded-lg shadow-md p-6 md:w-2/3">
             {activeTab === "profile" ? (
               <div>
-                <h2 className="text-xl text-cdark mb-6">Ubah Profil</h2>
+                <h2 className="text-xl font-semibold text-cdark mb-6">
+                  Ubah Profil
+                </h2>
                 <form onSubmit={handleProfileSubmit} className="space-y-4">
                   <div>
                     <label
@@ -396,7 +398,7 @@ export default function Profil() {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="bg-clightbrown text-white py-2 px-6 rounded-md hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-clightbrown text-white font-semibold py-2 px-6 rounded-md hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? "Menyimpan..." : "Simpan Profil"}
                     </button>
@@ -405,7 +407,9 @@ export default function Profil() {
               </div>
             ) : (
               <div>
-                <h2 className="text-xl text-cdark mb-6">Ubah Password</h2>
+                <h2 className="text-xl font-semibold text-cdark mb-6">
+                  Ubah Password
+                </h2>
                 <form onSubmit={handlePasswordSubmit} className="space-y-4">
                   <div>
                     <label
@@ -512,7 +516,7 @@ export default function Profil() {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="bg-clightbrown text-white py-2 px-6 rounded-md hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-clightbrown text-white font-semibold py-2 px-6 rounded-md hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? "Mengubah..." : "Ubah Password"}
                     </button>

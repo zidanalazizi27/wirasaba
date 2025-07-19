@@ -4,22 +4,67 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import SidebarLayout from "@/app/components/admin/sidebar_layout";
 import Breadcrumb from "@/app/components/admin/breadcrumb";
-import DetailDirektori from "@/app/components/admin/detail_direktori";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
+import dynamic from 'next/dynamic';
+
+const DetailDirektori = dynamic(() => import('@/app/components/admin/detail_direktori'), {
+  ssr: false,
+});
+
+
+// Import interface PerusahaanData
+interface PerusahaanData {
+  id_perusahaan: number;
+  kip: string | number;
+  nama_perusahaan: string;
+  badan_usaha: number;
+  badan_usaha_nama: string;
+  alamat: string;
+  kec: number;
+  kec_nama: string;
+  des: number;
+  des_nama: string;
+  kode_pos: string;
+  skala: string;
+  lok_perusahaan: number;
+  lok_perusahaan_nama: string;
+  nama_kawasan: string | null;
+  lat: number | null;
+  lon: number | null;
+  jarak: number | null;
+  produk: string;
+  KBLI: number;
+  telp_perusahaan: string | null;
+  email_perusahaan: string | null;
+  web_perusahaan: string | null;
+  tkerja: number;
+  tkerja_nama: string;
+  investasi: number;
+  investasi_nama: string;
+  omset: number;
+  omset_nama: string;
+  nama_narasumber: string;
+  jbtn_narasumber: string;
+  email_narasumber: string | null;
+  telp_narasumber: string | null;
+  catatan: string | null;
+  tahun_direktori: number[];
+  pcl_utama: string;
+}
 
 export default function TambahDirektori() {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = async (data) => {
+  const handleSave = async (data: PerusahaanData) => {
     if (isSaving) return; // Prevent double submission
 
     try {
       setIsSaving(true);
 
       // Prepare data for new company
-      const dataToSend = { ...data };
-      delete dataToSend.id_perusahaan; // Remove ID for new entries
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id_perusahaan, ...dataToSend } = data; // Remove ID for new entries
 
       // Ensure tahun_direktori is properly set
       if (
@@ -65,7 +110,9 @@ export default function TambahDirektori() {
       }
     } catch (error) {
       console.error("Error saving data:", error);
-      SweetAlertUtils.error("Error", `Gagal menyimpan data: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      SweetAlertUtils.error("Error", `Gagal menyimpan data: ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }

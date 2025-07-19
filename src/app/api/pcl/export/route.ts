@@ -1,7 +1,9 @@
 // src/app/api/pcl/export/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import mysql, { RowDataPacket } from "mysql2/promise";
 import * as XLSX from "xlsx";
+
+export const dynamic = "force-dynamic";
 
 // Database connection configuration
 const dbConfig = {
@@ -27,8 +29,8 @@ export async function GET(request: NextRequest) {
     const connection = await createDbConnection();
 
     // Buat kondisi WHERE untuk query berdasarkan filter
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions: string[] = [];
+    const queryParams: (string | number)[] = [];
 
     // Filter berdasarkan pencarian
     if (searchTerm) {
@@ -86,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     await connection.end();
 
-    const pclData = rows as any[];
+    const pclData = rows as RowDataPacket[];
 
     // Jika tidak ada data
     if (pclData.length === 0) {

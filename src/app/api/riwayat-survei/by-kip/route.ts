@@ -57,24 +57,38 @@ export async function GET(request: NextRequest) {
       ORDER BY s.tahun DESC, s.nama_survei ASC, p.nama_perusahaan ASC
     `;
 
-    const [rows] = await connection.execute(query, [kip]);
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(query, [kip]);
     await connection.end();
 
-    const riwayatData = rows as any[];
+    const riwayatData = rows;
+
+    interface RiwayatRow {
+      id_riwayat: number;
+      nama_survei: string;
+      fungsi: string;
+      periode: string;
+      tahun: number;
+      nama_pcl: string;
+      selesai: string;
+      ket_survei: string;
+      nama_perusahaan: string;
+      kip: string;
+      id_perusahaan: number;
+    }
 
     // Format response data
     const formattedData = riwayatData.map((row) => ({
-      id_riwayat: row.id_riwayat,
-      nama_survei: row.nama_survei,
-      fungsi: row.fungsi || "",
-      periode: row.periode || "",
-      tahun: row.tahun,
-      nama_pcl: row.nama_pcl,
-      selesai: row.selesai,
-      ket_survei: row.ket_survei || "",
-      nama_perusahaan: row.nama_perusahaan,
-      kip: row.kip,
-      id_perusahaan: row.id_perusahaan,
+      id_riwayat: (row as RiwayatRow).id_riwayat,
+      nama_survei: (row as RiwayatRow).nama_survei,
+      fungsi: (row as RiwayatRow).fungsi || "",
+      periode: (row as RiwayatRow).periode || "",
+      tahun: (row as RiwayatRow).tahun,
+      nama_pcl: (row as RiwayatRow).nama_pcl,
+      selesai: (row as RiwayatRow).selesai,
+      ket_survei: (row as RiwayatRow).ket_survei || "",
+      nama_perusahaan: (row as RiwayatRow).nama_perusahaan,
+      kip: (row as RiwayatRow).kip,
+      id_perusahaan: (row as RiwayatRow).id_perusahaan,
     }));
 
     // Get summary statistics

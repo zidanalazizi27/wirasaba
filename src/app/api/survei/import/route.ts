@@ -1,6 +1,6 @@
 // src/app/api/survei/import/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import mysql, { Connection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 // Database connection configuration
 const dbConfig = {
@@ -23,25 +23,16 @@ interface SurveiUploadData {
   tahun: number;
 }
 
-// Interface untuk hasil validasi
-interface ValidationError {
-  row: number;
-  field: string;
-  message: string;
-  value?: any;
-}
-
-// Interface untuk import stats
-interface ImportStats {
-  total: number;
-  inserted: number;
-  updated: number;
-  errors: number;
-  errorDetails: ValidationError[];
+// Interface untuk data mentah dari Excel
+interface ExcelRow {
+  nama_survei: string;
+  fungsi: string;
+  periode: string;
+  tahun: number | string;
 }
 
 // Validation functions (sama seperti di form_survei.tsx)
-function validateSurveiData(data: any) {
+function validateSurveiData(data: ExcelRow) {
   const errors: string[] = [];
 
   // Validate nama_survei
@@ -71,7 +62,7 @@ function validateSurveiData(data: any) {
   if (!data.tahun) {
     errors.push("Tahun wajib diisi");
   } else {
-    const tahun = typeof data.tahun === 'string' ? parseInt(data.tahun) : data.tahun;
+    const tahun = typeof data.tahun === 'string' ? parseInt(data.tahun, 10) : data.tahun;
     if (isNaN(tahun)) {
       errors.push("Tahun harus berupa angka");
     } else if (tahun < 1900 || tahun > 2100) {
@@ -83,18 +74,18 @@ function validateSurveiData(data: any) {
 }
 
 // Sanitize data function
-function sanitizeSurveiData(data: any) {
+function sanitizeSurveiData(data: ExcelRow): SurveiUploadData {
   return {
     nama_survei: data.nama_survei ? data.nama_survei.toString().trim() : '',
     fungsi: data.fungsi ? data.fungsi.toString().trim() : '',
     periode: data.periode ? data.periode.toString().trim() : '',
-    tahun: typeof data.tahun === 'string' ? parseInt(data.tahun) : data.tahun
+    tahun: typeof data.tahun === 'string' ? parseInt(data.tahun, 10) : data.tahun
   };
 }
 
 // Fungsi untuk cek duplikasi
-async function checkForDuplicates(connection: any, data: SurveiUploadData[]): Promise<any[]> {
-  const duplicates: any[] = [];
+async function checkForDuplicates(connection: Connection, data: SurveiUploadData[]) {
+  const duplicates: (RowDataPacket & { uploadData: SurveiUploadData })[] = [];
 
   for (const item of data) {
     if (!item.nama_survei || !item.fungsi || !item.periode || !item.tahun) {
@@ -113,17 +104,16 @@ async function checkForDuplicates(connection: any, data: SurveiUploadData[]): Pr
       LIMIT 1
     `;
     
-    const [rows] = await connection.execute(checkQuery, [
+    const [rows] = await connection.execute<RowDataPacket[]>(checkQuery, [
       item.nama_survei.trim(),
       item.fungsi.trim(),
       item.periode.trim(),
       item.tahun
     ]);
 
-    const existingRecords = rows as any[];
-    if (existingRecords.length > 0) {
+    if (rows.length > 0) {
       duplicates.push({
-        ...existingRecords[0],
+        ...rows[0],
         uploadData: item // Include the upload data for comparison
       });
     }
@@ -132,11 +122,17 @@ async function checkForDuplicates(connection: any, data: SurveiUploadData[]): Pr
   return duplicates;
 }
 
+interface ImportRequestBody {
+  data: ExcelRow[];
+  mode: 'check_duplicates' | 'append' | 'replace';
+  replaceExisting?: boolean;
+}
+
 export async function POST(request: NextRequest) {
-  let connection;
+  let connection: Connection | undefined;
   
   try {
-    const body = await request.json();
+    const body: ImportRequestBody = await request.json();
     const { data, mode, replaceExisting } = body;
 
     console.log('🚀 Starting survei import process...');
@@ -155,7 +151,8 @@ export async function POST(request: NextRequest) {
       connection = await createDbConnection();
       console.log('✅ Database connected for duplicate check');
 
-      const duplicates = await checkForDuplicates(connection, data);
+      const sanitizedData = data.map(item => sanitizeSurveiData(item));
+      const duplicates = await checkForDuplicates(connection, sanitizedData);
       
       console.log(`🔍 Found ${duplicates.length} duplicates out of ${data.length} records`);
 
@@ -179,9 +176,9 @@ export async function POST(request: NextRequest) {
 
     // Validate all data first
     const validationErrors: string[] = [];
-    const validData: any[] = [];
+    const validData: SurveiUploadData[] = [];
 
-    data.forEach((item: any, index: number) => {
+    data.forEach((item, index) => {
       const errors = validateSurveiData(item);
       if (errors.length > 0) {
         validationErrors.push(`Baris ${index + 1}: ${errors.join(', ')}`);
@@ -225,7 +222,7 @@ export async function POST(request: NextRequest) {
             VALUES (?, ?, ?, ?)
           `;
           
-          await connection.execute(insertQuery, [
+          await connection.execute<ResultSetHeader>(insertQuery, [
             item.nama_survei,
             item.fungsi,
             item.periode,
@@ -246,33 +243,33 @@ export async function POST(request: NextRequest) {
             WHERE nama_survei = ? AND fungsi = ? AND periode = ? AND tahun = ?
           `;
           
-          const [existingRows] = await connection.execute(checkQuery, [
+          const [existingRows] = await connection.execute<RowDataPacket[]>(checkQuery, [
             item.nama_survei,
-            item.fungsi, 
+            item.fungsi,
             item.periode,
             item.tahun
           ]);
 
-          if ((existingRows as any[]).length > 0) {
+          if (existingRows.length > 0) {
+            // Record exists
             if (replaceExisting) {
-              // Update existing record
+              // Update existing record if replaceExisting is true
+              const existingId = existingRows[0].id_survei;
               const updateQuery = `
-                UPDATE survei 
+                UPDATE survei
                 SET nama_survei = ?, fungsi = ?, periode = ?, tahun = ?
                 WHERE id_survei = ?
               `;
               
-              await connection.execute(updateQuery, [
+              await connection.execute<ResultSetHeader>(updateQuery, [
                 item.nama_survei,
                 item.fungsi,
                 item.periode,
                 item.tahun,
-                (existingRows as any[])[0].id_survei
+                existingId
               ]);
-              
               updatedCount++;
             }
-            // If replaceExisting is false, skip duplicate
           } else {
             // Insert new record
             const insertQuery = `
@@ -280,57 +277,58 @@ export async function POST(request: NextRequest) {
               VALUES (?, ?, ?, ?)
             `;
             
-            await connection.execute(insertQuery, [
+            await connection.execute<ResultSetHeader>(insertQuery, [
               item.nama_survei,
               item.fungsi,
               item.periode,
               item.tahun
             ]);
-            
             insertedCount++;
           }
         }
-
-        console.log(`✅ Inserted ${insertedCount} new records, updated ${updatedCount} existing records`);
       }
 
-      // Commit transaction
       await connection.commit();
       
-      console.log('🎉 Import completed successfully');
+      console.log('✅ Transaction committed');
 
-      return NextResponse.json({
-        success: true,
-        message: mode === 'replace' 
-          ? `Berhasil mengganti semua data dengan ${insertedCount} data baru`
-          : `Berhasil memproses ${insertedCount + updatedCount} data`,
+    } catch (dbError) {
+      if (connection) {
+        await connection.rollback();
+        console.log('❌ Transaction rolled back due to error');
+      }
+      throw dbError; // Rethrow to be caught by outer catch block
+    }
+
+    await connection.end();
+    console.log('✅ Database connection closed');
+
+    return NextResponse.json({
+      success: true,
+      message: `Impor berhasil. ${insertedCount} data ditambahkan, ${updatedCount} data diperbarui.`,
+      summary: {
+        totalRecords: validData.length,
         inserted: insertedCount,
         updated: updatedCount,
-        total: insertedCount + updatedCount
-      });
-
-    } catch (error) {
-      // Rollback transaction on error
-      await connection.rollback();
-      throw error;
-    }
+      }
+    });
 
   } catch (error) {
-    console.error('❌ Error in survei import:', error);
+    console.error("❌ Detailed error in import:", error);
     
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: "Gagal mengimport data",
-        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-      },
-      { status: 500 }
-    );
-  } finally {
+    // Make sure connection is closed even on error
     if (connection) {
-      await connection.end();
-      console.log('🔌 Database connection closed');
+      try {
+        await connection.end();
+      } catch (closeError) {
+        console.error('❌ Error closing connection on fail:', closeError);
+      }
     }
+    
+    return NextResponse.json({ 
+      success: false, 
+      message: (error instanceof Error) ? error.message : "Terjadi kesalahan server yang tidak diketahui" 
+    }, { status: 500 });
   }
 }
 

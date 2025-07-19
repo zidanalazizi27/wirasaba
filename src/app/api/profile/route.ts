@@ -4,6 +4,22 @@ import mysql from "mysql2/promise";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
+interface UserPayload {
+  userId: number;
+  username: string;
+}
+
+interface UpdateProfileBody {
+  username: string;
+  email: string;
+  institution: string;
+}
+
+interface ChangePasswordBody {
+  currentPassword: string;
+  newPassword: string;
+}
+
 // Helper function untuk membuat koneksi database
 async function createConnection() {
   return await mysql.createConnection({
@@ -24,21 +40,24 @@ async function verifyAuthToken(request: NextRequest) {
   const token = authorization.substring(7);
   
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "wirasaba-secret-key") as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "wirasaba-secret-key");
+    if (typeof decoded === 'string' || !decoded.userId) {
+      return null;
+    }
     
     // Verifikasi apakah user masih ada di database
     const connection = await createConnection();
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT id_akun, username FROM akun WHERE id_akun = ?",
       [decoded.userId]
     );
     await connection.end();
 
-    if ((rows as any[]).length === 0) {
+    if (rows.length === 0) {
       return null;
     }
 
-    const user = (rows as any[])[0];
+    const user = rows[0];
     return {
       userId: user.id_akun,
       username: user.username
@@ -58,7 +77,7 @@ function errorResponse(message: string, status: number = 400) {
 }
 
 // Helper function untuk response success
-function successResponse(data: any, message: string = "Berhasil") {
+function successResponse(data: Record<string, unknown>, message: string = "Berhasil") {
   return NextResponse.json({
     success: true,
     message,
@@ -79,8 +98,8 @@ export async function GET(request: NextRequest) {
     return successResponse({
       username: user.username,
       // Email dan institution default karena hanya untuk frontend
-      email: `${user.username}@example.com`,
-      institution: "Instansi Default",
+      email: `${user.username}@bps.go.id`,
+      institution: "BPS Kabupaten Sidoarjo",
     }, "Data profil berhasil diambil");
 
   } catch (error) {
@@ -144,7 +163,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Handler untuk update profil
-async function handleUpdateProfile(user: any, body: any) {
+async function handleUpdateProfile(user: UserPayload, body: UpdateProfileBody) {
   const { username, email, institution } = body;
 
   // Validasi input
@@ -156,12 +175,12 @@ async function handleUpdateProfile(user: any, body: any) {
     const connection = await createConnection();
 
     // Cek apakah username sudah digunakan oleh user lain
-    const [existingUsers] = await connection.execute(
+    const [existingUsers] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT id_akun FROM akun WHERE username = ? AND id_akun != ?",
       [username, user.userId]
     );
 
-    if ((existingUsers as any[]).length > 0) {
+    if (existingUsers.length > 0) {
       await connection.end();
       return errorResponse("Username sudah digunakan");
     }
@@ -188,7 +207,7 @@ async function handleUpdateProfile(user: any, body: any) {
 }
 
 // Handler untuk ubah password
-async function handleChangePassword(user: any, body: any) {
+async function handleChangePassword(user: UserPayload, body: ChangePasswordBody) {
   const { currentPassword, newPassword } = body;
 
   // Validasi input
@@ -204,17 +223,17 @@ async function handleChangePassword(user: any, body: any) {
     const connection = await createConnection();
 
     // Ambil password saat ini dari database
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT password FROM akun WHERE id_akun = ?",
       [user.userId]
     );
 
-    if ((rows as any[]).length === 0) {
+    if (rows.length === 0) {
       await connection.end();
       return errorResponse("User tidak ditemukan", 404);
     }
 
-    const userData = (rows as any[])[0];
+    const userData = rows[0];
 
     // Verifikasi password lama
     let isCurrentPasswordValid = false;
@@ -252,63 +271,39 @@ async function handleChangePassword(user: any, body: any) {
   }
 }
 
-// Handler untuk hash semua password existing
+// Handler untuk hash password (khusus admin, jika diperlukan)
 async function handleHashPasswords() {
   try {
     const connection = await createConnection();
 
-    // Ambil semua akun dengan password yang belum di-hash
-    const [rows] = await connection.execute(
-      "SELECT id_akun, username, password FROM akun WHERE password NOT LIKE '$2a$%' AND password NOT LIKE '$2b$%'"
+    // Ambil semua user yang passwordnya belum di-hash (misal, tidak diawali '$2a$')
+    const [usersToHash] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT id_akun, password FROM akun WHERE password NOT LIKE '$2a$%' AND password NOT LIKE '$2b$%'"
     );
 
-    const users = rows as any[];
-    
-    if (users.length === 0) {
+    if (usersToHash.length === 0) {
       await connection.end();
-      return successResponse({
-        processed: 0,
-        total: 0,
-        errors: []
-      }, "Semua password sudah dalam bentuk hash");
+      return successResponse({}, "Tidak ada password yang perlu di-hash");
     }
 
-    const saltRounds = 10;
-    let processedCount = 0;
-    const errors = [];
+    let updatedCount = 0;
+    for (const user of usersToHash) {
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(user.password, saltRounds);
 
-    // Hash setiap password
-    for (const userData of users) {
-      try {
-        // Hash password
-        const hashedPassword = await bcrypt.hash(userData.password, saltRounds);
-        
-        // Update ke database
-        await connection.execute(
-          "UPDATE akun SET password = ? WHERE id_akun = ?",
-          [hashedPassword, userData.id_akun]
-        );
-        
-        processedCount++;
-        
-      } catch (error) {
-        errors.push({
-          username: userData.username,
-          error: error.message
-        });
-      }
+      await connection.execute(
+        "UPDATE akun SET password = ? WHERE id_akun = ?",
+        [hashedPassword, user.id_akun]
+      );
+      updatedCount++;
     }
 
     await connection.end();
 
-    return successResponse({
-      processed: processedCount,
-      total: users.length,
-      errors: errors
-    }, `Berhasil hash ${processedCount} dari ${users.length} password`);
+    return successResponse({ updated: updatedCount }, `${updatedCount} password berhasil di-hash`);
 
   } catch (error) {
-    console.error("Hash passwords error:", error);
-    return errorResponse("Terjadi kesalahan saat hash password", 500);
+    console.error("Hashing passwords error:", error);
+    return errorResponse("Terjadi kesalahan saat hashing", 500);
   }
 }

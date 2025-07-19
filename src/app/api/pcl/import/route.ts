@@ -18,9 +18,20 @@ async function createDbConnection() {
 
 // Interface untuk data Excel yang akan diimport
 interface ExcelRowData {
-  "Nama PCL": string;
-  "Status": string;
+  "Nama PCL"?: string;
+  "Status"?: string;
   "Telepon"?: string;
+  // Tambahkan property untuk normalisasi kolom
+  nama_pcl?: string;
+  status?: string;
+  status_pcl?: string;
+  telepon?: string;
+  telp_pcl?: string;
+  "Nama"?: string;
+  nama?: string;
+  "Status PCL"?: string;
+  "Telp"?: string;
+  "No Telepon"?: string;
 }
 
 interface ProcessedData {
@@ -33,7 +44,7 @@ interface ValidationError {
   row: number;
   field: string;
   message: string;
-  value?: any;
+  value?: unknown;
 }
 
 interface DuplicateData {
@@ -43,8 +54,13 @@ interface DuplicateData {
   existing_id?: number;
 }
 
+interface DuplicateResolutionData {
+  processedData: ProcessedData[];
+  duplicates: DuplicateData[];
+}
+
 // Validation functions (same as in pcl_form.tsx)
-const validateField = (fieldName: string, value: any, rowIndex: number): ValidationError | null => {
+const validateField = (fieldName: string, value: string | number | null | undefined, rowIndex: number): ValidationError | null => {
   switch (fieldName) {
     case "nama_pcl":
       if (!value || !value.toString().trim()) {
@@ -175,8 +191,8 @@ export async function POST(request: NextRequest) {
       } else {
         // Process valid data
         processedData.push({
-          nama_pcl: normalizedRow["Nama PCL"].toString().trim(),
-          status_pcl: normalizedRow["Status"].toString().trim(),
+          nama_pcl: (normalizedRow["Nama PCL"] || "").toString().trim(),
+          status_pcl: (normalizedRow["Status"] || "").toString().trim(),
           telp_pcl: normalizedRow["Telepon"] ? normalizedRow["Telepon"].toString().trim() : null
         });
       }
@@ -204,7 +220,7 @@ export async function POST(request: NextRequest) {
         // Insert all data in replace mode
         let insertedCount = 0;
         for (const data of processedData) {
-          await connection.execute(
+          await connection.execute<mysql.ResultSetHeader>(
             `INSERT INTO pcl (nama_pcl, status_pcl, telp_pcl) VALUES (?, ?, ?)`,
             [data.nama_pcl, data.status_pcl, data.telp_pcl]
           );
@@ -231,19 +247,19 @@ export async function POST(request: NextRequest) {
       
       for (let i = 0; i < processedData.length; i++) {
         const data = processedData[i];
-        const [existingRows] = await connection.execute(
+        const [existingRows] = await connection.execute<mysql.RowDataPacket[]>(
           `SELECT id_pcl FROM pcl 
            WHERE LOWER(TRIM(nama_pcl)) = LOWER(?) 
            AND LOWER(TRIM(status_pcl)) = LOWER(?)`,
           [data.nama_pcl, data.status_pcl]
         );
 
-        if ((existingRows as any[]).length > 0) {
+        if ((existingRows as mysql.RowDataPacket[]).length > 0) {
           duplicates.push({
             row: i + 2,
             nama_pcl: data.nama_pcl,
             status_pcl: data.status_pcl,
-            existing_id: (existingRows as any[])[0].id_pcl
+            existing_id: (existingRows as mysql.RowDataPacket[])[0].id_pcl
           });
           duplicateIndexes.push(i);
         }
@@ -269,7 +285,7 @@ export async function POST(request: NextRequest) {
       // No duplicates - insert all data
       let insertedCount = 0;
       for (const data of processedData) {
-        await connection.execute(
+        await connection.execute<mysql.ResultSetHeader>(
           `INSERT INTO pcl (nama_pcl, status_pcl, telp_pcl) VALUES (?, ?, ?)`,
           [data.nama_pcl, data.status_pcl, data.telp_pcl]
         );
@@ -307,7 +323,7 @@ export async function POST(request: NextRequest) {
 // Function to handle duplicate resolution
 async function handleDuplicateResolution(action: string, dataString: string) {
   try {
-    const { processedData, duplicates } = JSON.parse(dataString);
+    const { processedData, duplicates } = JSON.parse(dataString) as DuplicateResolutionData;
     
     if (!["replace", "skip"].includes(action)) {
       return NextResponse.json({
@@ -333,7 +349,7 @@ async function handleDuplicateResolution(action: string, dataString: string) {
 
           if (isDuplicate) {
             // Update existing record
-            await connection.execute(
+            await connection.execute<mysql.ResultSetHeader>(
               `UPDATE pcl 
                SET nama_pcl = ?, status_pcl = ?, telp_pcl = ?
                WHERE LOWER(TRIM(nama_pcl)) = LOWER(?) 
@@ -342,7 +358,7 @@ async function handleDuplicateResolution(action: string, dataString: string) {
             );
           } else {
             // Insert new record
-            await connection.execute(
+            await connection.execute<mysql.ResultSetHeader>(
               `INSERT INTO pcl (nama_pcl, status_pcl, telp_pcl) VALUES (?, ?, ?)`,
               [data.nama_pcl, data.status_pcl, data.telp_pcl]
             );
@@ -358,7 +374,7 @@ async function handleDuplicateResolution(action: string, dataString: string) {
           );
 
           if (!isDuplicate) {
-            await connection.execute(
+            await connection.execute<mysql.ResultSetHeader>(
               `INSERT INTO pcl (nama_pcl, status_pcl, telp_pcl) VALUES (?, ?, ?)`,
               [data.nama_pcl, data.status_pcl, data.telp_pcl]
             );

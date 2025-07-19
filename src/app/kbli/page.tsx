@@ -1,5 +1,7 @@
 import { Metadata } from "next";
 import KBLI from "../components/kbli";
+import Navbar from "../components/navbar";
+import Footer from "../components/footer";
 
 export const metadata: Metadata = {
   title: "KBLI | Kahuripan",
@@ -9,7 +11,9 @@ export const metadata: Metadata = {
 export default function KBLI_Page() {
   return (
     <>
+      <Navbar />
       <KBLI />
+      <Footer />
     </>
   );
 }

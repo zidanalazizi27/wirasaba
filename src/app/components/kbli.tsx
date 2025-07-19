@@ -1,11 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Metadata } from "next";
-import Navbar from "../components/navbar";
-import Footer from "../components/footer";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
-import { motion, useAnimation } from "framer-motion";
 import Image from "next/image";
 import CountUp from "react-countup";
 
@@ -36,7 +32,6 @@ interface AccordionItem {
 
 const KBLIPage: React.FC = () => {
   // Animation controls
-  const controls = useAnimation();
   const strukturRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -358,7 +353,6 @@ const KBLIPage: React.FC = () => {
 
   return (
     <div className="bg-base">
-      <Navbar />
       <div className="min-h-screen">
         {/* Hero Section with KBLI Title */}
         <div className="mx-[5%] font-roboto py-12">
@@ -380,7 +374,7 @@ const KBLIPage: React.FC = () => {
               </h1>
             </div>
 
-            <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed">
+            <div className="w-full text-cdark text-sm leading-relaxed text-justify font-semibold">
               <p className="indent-8">
                 Merupakan standar klasifikasi yang diterbitkan oleh BPS untuk
                 mengelompokkan kegiatan ekonomi ke dalam berbagai lapangan
@@ -410,17 +404,12 @@ const KBLIPage: React.FC = () => {
               {strukturItems.map((item, index) => (
                 <div key={index} className="flex flex-col items-center">
                   {/* Card */}
-                  <motion.div
-                    className={`${item.color} text-white rounded-lg shadow-md overflow-hidden w-20 h-32 md:w-24 md:h-36 flex items-center justify-center cursor-pointer`}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1, duration: 0.6 }}
-                    whileHover={{
-                      translateY: -8,
-                      scale: 1.05,
-                      boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+                  <div
+                    className={`${item.color} text-white rounded-lg shadow-md overflow-hidden w-20 h-32 md:w-24 md:h-36 flex items-center justify-center cursor-pointer transition-all duration-300`}
+                    style={{
+                      transform: isVisible ? "translateY(0)" : "translateY(20px)",
+                      opacity: isVisible ? 1 : 0,
                     }}
-                    whileTap={{ scale: 0.95 }}
                   >
                     <div className="text-center">
                       <div className="text-xl md:text-3xl font-bold">
@@ -435,19 +424,20 @@ const KBLIPage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
 
                   {/* Label */}
-                  <motion.div
-                    className="mt-3 text-center"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.1 + 0.3, duration: 0.6 }}
+                  <div
+                    className="mt-3 text-center transition-opacity duration-300"
+                    style={{
+                      opacity: isVisible ? 1 : 0,
+                      transitionDelay: `${index * 0.1 + 0.3}s`,
+                    }}
                   >
                     <span className="text-base font-semibold text-cdark leading-tight">
                       {item.label}
                     </span>
-                  </motion.div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -465,7 +455,7 @@ const KBLIPage: React.FC = () => {
                     onClick={() => toggleAccordion(item.id)}
                     className="w-full flex items-center justify-between p-2 text-left bg-cdark text-white hover:bg-opacity-90 transition-colors"
                   >
-                    <span className="text-sm font-medium pb-0">
+                    <span className="text-sm font-semibold pb-0">
                       {item.title}
                     </span>
                     {item.isExpanded ? (
@@ -476,19 +466,19 @@ const KBLIPage: React.FC = () => {
                   </button>
 
                   {item.isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="bg-cdark border-t border-cdark"
+                    <div
+                      className="bg-cdark border-t border-cdark transition-all duration-300"
+                      style={{
+                        height: "auto",
+                        opacity: 1,
+                      }}
                     >
                       <div className="p-2 pt-0">
                         <p className="text-white text-xs md:text-sm leading-relaxed text-justify font-medium">
                           {item.content}
                         </p>
                       </div>
-                    </motion.div>
+                    </div>
                   )}
                 </div>
               ))}
@@ -500,7 +490,7 @@ const KBLIPage: React.FC = () => {
             <h1 className="text-2xl font-bold text-cdark text-center mb-6">
               KBLI 2020
             </h1>
-            <div className="w-full text-cdark text-sm text-justify font-medium leading-relaxed">
+            <div className="w-full text-cdark text-sm leading-relaxed text-justify font-semibold">
               <p className="indent-8">
                 KBLI 2020 merupakan hasil penyempurnaan dari KBLI 2015, disusun
                 dengan mengacu pada International Standard Industrial
@@ -567,9 +557,9 @@ const KBLIPage: React.FC = () => {
                     if (!currentCategory) return null; // Safety check
 
                     return (
-                      <motion.div
+                      <div
                         key={`${currentCategory.id}-${index}`}
-                        className={`flex-shrink-0 rounded-xl shadow-lg overflow-hidden cursor-pointer ${
+                        className={`flex-shrink-0 rounded-xl shadow-lg overflow-hidden cursor-pointer hover:-translate-y-2 hover:scale-105 transition-all duration-300 ${
                           activeCategory === originalIndex
                             ? "bg-cdark"
                             : "bg-cdarkbrown hover:bg-opacity-90"
@@ -584,11 +574,6 @@ const KBLIPage: React.FC = () => {
                             originalIndex + kbliCategories.length
                           );
                         }}
-                        whileHover={{
-                          translateY: -8,
-                          scale: 1.02,
-                        }}
-                        transition={{ duration: 0.3 }}
                       >
                         <div className="p-3 md:p-4 text-white text-center h-full flex flex-col justify-center">
                           {/* Icon */}
@@ -608,11 +593,11 @@ const KBLIPage: React.FC = () => {
                           </div>
 
                           {/* Category Name */}
-                          <div className="text-xs md:text-sm font-medium leading-tight px-1">
+                          <div className="text-xs md:text-sm font-semibold leading-tight px-1">
                             {currentCategory.name}
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
                     );
                   })}
                 </div>
@@ -641,12 +626,13 @@ const KBLIPage: React.FC = () => {
 
             {/* Active Category Details */}
             {kbliCategories[activeCategory] && (
-              <motion.div
+              <div
                 key={activeCategory}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="bg-white rounded-lg shadow-lg p-4 md:p-8"
+                className="bg-white rounded-lg shadow-lg p-4 md:p-8 transition-all duration-300"
+                style={{
+                  transform: isVisible ? "translateY(0)" : "translateY(20px)",
+                  opacity: isVisible ? 1 : 0,
+                }}
               >
                 <div className="flex items-center mb-6">
                   <div className="w-8 h-8 md:w-12 md:h-12 bg-cdarkbrown rounded-full flex items-center justify-center text-white mr-4">
@@ -661,7 +647,7 @@ const KBLIPage: React.FC = () => {
                 <p className="text-cdark text-sm font-semibold leading-relaxed text-justify">
                   {kbliCategories[activeCategory].description}
                 </p>
-              </motion.div>
+              </div>
             )}
           </div>
 
@@ -704,8 +690,6 @@ const KBLIPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 };

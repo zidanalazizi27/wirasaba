@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Query untuk mencari user berdasarkan username
-    const [rows] = await connection.execute(
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT id_akun, username, password FROM akun WHERE username = ?",
       [username]
     );
@@ -37,14 +37,14 @@ export async function POST(request: NextRequest) {
     await connection.end();
 
     // Cek apakah user ditemukan
-    if ((rows as any[]).length === 0) {
+    if ((rows as mysql.RowDataPacket[]).length === 0) {
       return NextResponse.json(
         { success: false, message: "Username atau password tidak valid" },
         { status: 401 }
       );
     }
 
-    const user = (rows as any[])[0];
+    const user = (rows as mysql.RowDataPacket[])[0];
 
     // Verifikasi password dengan dukungan bcrypt dan backward compatibility
     let isPasswordValid = false;

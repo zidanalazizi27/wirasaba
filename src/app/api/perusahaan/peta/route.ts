@@ -51,8 +51,9 @@ export async function GET() {
     `);
 
     // Log untuk debugging
-    console.log("Data perusahaan pertama:", rows.length > 0 ? rows[0] : "Tidak ada data");
-    console.log(`Total data retrieved: ${rows.length}`);
+    const perusahaanRows = rows as mysql.RowDataPacket[];
+    console.log("Data perusahaan pertama:", perusahaanRows.length > 0 ? perusahaanRows[0] : "Tidak ada data");
+    console.log(`Total data retrieved: ${perusahaanRows.length}`);
 
     // Tutup koneksi database
     await dbConnection.end();
@@ -60,13 +61,15 @@ export async function GET() {
     // Kembalikan data dalam format JSON
     return NextResponse.json({ 
       success: true, 
-      count: rows.length,
-      data: rows 
+      count: perusahaanRows.length,
+      data: perusahaanRows 
     });
   } catch (error) {
-    console.error('Database error:', error.message);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error('Database error:', errorMessage);
+    
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: errorMessage },
       { status: 500 }
     );
   }

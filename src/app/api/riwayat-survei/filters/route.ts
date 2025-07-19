@@ -15,18 +15,18 @@ export async function GET(request: NextRequest) {
     });
 
     // Objek untuk menyimpan hasil filter
-    const filters: { [key: string]: any[] } = {};
+    const filters: { [key: string]: { name: string; uid: string }[] } = {};
 
     // Query untuk survei
     if (type === "survei" || type === "all") {
-      const [surveiRows] = await dbConnection.execute(`
+      const [surveiRows] = await dbConnection.execute<mysql.RowDataPacket[]>(`
         SELECT DISTINCT s.id_survei, s.nama_survei
         FROM survei s
         JOIN riwayat_survei r ON s.id_survei = r.id_survei
         ORDER BY s.nama_survei
       `);
       
-      filters.survei = (surveiRows as any[]).map(row => ({
+      filters.survei = surveiRows.map(row => ({
         name: row.nama_survei,
         uid: row.id_survei.toString()
       }));
@@ -34,14 +34,14 @@ export async function GET(request: NextRequest) {
 
     // Query untuk pcl
     if (type === "pcl" || type === "all") {
-      const [pclRows] = await dbConnection.execute(`
+      const [pclRows] = await dbConnection.execute<mysql.RowDataPacket[]>(`
         SELECT DISTINCT p.id_pcl, p.nama_pcl
         FROM pcl p
         JOIN riwayat_survei r ON p.id_pcl = r.id_pcl
         ORDER BY p.nama_pcl
       `);
       
-      filters.pcl = (pclRows as any[]).map(row => ({
+      filters.pcl = pclRows.map(row => ({
         name: row.nama_pcl,
         uid: row.id_pcl.toString()
       }));
@@ -49,14 +49,14 @@ export async function GET(request: NextRequest) {
 
     // Query untuk tahun
     if (type === "tahun" || type === "all") {
-      const [tahunRows] = await dbConnection.execute(`
+      const [tahunRows] = await dbConnection.execute<mysql.RowDataPacket[]>(`
         SELECT DISTINCT s.tahun
         FROM survei s
         JOIN riwayat_survei r ON s.id_survei = r.id_survei
         ORDER BY s.tahun DESC
       `);
       
-      filters.tahun = (tahunRows as any[]).map(row => ({
+      filters.tahun = tahunRows.map(row => ({
         name: row.tahun.toString(),
         uid: row.tahun.toString()
       }));

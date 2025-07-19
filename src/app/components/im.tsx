@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useAnimation } from "framer-motion";
 
 export default function IM() {
-  const controls = useAnimation();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -26,30 +24,19 @@ export default function IM() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []); // Tidak ada dependencies disini
 
-  // Efek terpisah untuk mengontrol animasi berdasarkan state isVisible
-  useEffect(() => {
-    if (isVisible) {
-      controls.start({ opacity: 1, y: 0 });
-    } else {
-      controls.start({ opacity: 0, y: 50 });
-    }
-  }, [isVisible, controls]); // Bergantung pada isVisible dan controls
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      animate={controls}
-      transition={{ duration: 0.8, ease: "easeOut" }}
-      className="mx-[5%] font-roboto pb-10"
+    <div
+      className={`mx-[5%] font-roboto pb-10 transition-all duration-800 ease-out ${
+        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+      }`}
     >
       <h1 className="text-2xl font-bold text-cdark text-center mt-10 mb-6">
         Industri Manufaktur
       </h1>
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        animate={controls}
-        transition={{ duration: 1, delay: 0.4 }}
-        className="w-full text-cdark text-sm text-justify font-medium"
+      <div
+        className={`w-full text-cdark text-sm leading-relaxed text-justify font-semibold transition-all duration-1000 delay-400 ${
+          isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+        }`}
       >
         <p className="indent-8">
           Merupakan suatu kegiatan ekonomi yang melakukan mengubah suatu barang
@@ -66,7 +53,7 @@ export default function IM() {
           Industri manufaktur memiliki sebutan lain yaitu industri pengolahan
           (KBLI Kategori C).
         </p>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

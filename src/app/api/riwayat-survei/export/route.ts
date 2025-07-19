@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 
 // Import XLSX dengan cara yang kompatibel
-const XLSX = require('xlsx');
+import * as XLSX from 'xlsx';
+
+export const dynamic = "force-dynamic";
 
 // Database connection configuration
 const dbConfig = {
@@ -26,7 +28,6 @@ export async function GET(request: NextRequest) {
     
     // Parse query parameters
     const searchParams = request.nextUrl.searchParams;
-    const format = searchParams.get('format') || 'excel';
     const search = searchParams.get('search');
     const surveiFilter = searchParams.get('survei');
     const pclFilter = searchParams.get('pcl');
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
       WHERE 1=1
     `;
 
-    const queryParams: any[] = [];
+    const queryParams: (string | number)[] = [];
 
     // Apply filters
     if (search) {
@@ -134,8 +135,8 @@ export async function GET(request: NextRequest) {
     console.log('📋 Query params:', queryParams);
 
     // Execute query
-    const [rows] = await connection.execute(query, queryParams);
-    const data = rows as any[];
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(query, queryParams);
+    const data = rows;
 
     console.log(`📊 Found ${data.length} records`);
 

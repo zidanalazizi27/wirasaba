@@ -8,7 +8,7 @@ import React, {
   useEffect,
 } from "react";
 import type { SVGProps } from "react";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import PCLForm from "./pcl_form";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
@@ -318,11 +318,10 @@ interface UploadModalProps {
   onSuccess: () => void;
 }
 
-interface ValidationError {
-  row: number;
-  field: string;
-  message: string;
-  value?: any;
+interface ProcessedData {
+  nama_pcl: string;
+  status_pcl: string;
+  telp_pcl: string | null;
 }
 
 interface DuplicateData {
@@ -330,6 +329,12 @@ interface DuplicateData {
   nama_pcl: string;
   status_pcl: string;
   existing_id?: number;
+}
+
+interface ValidationError {
+  field: string;
+  row: number;
+  message: string;
 }
 
 // Upload Modal Component
@@ -414,13 +419,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
       } else {
         throw new Error("Gagal mengunduh template");
       }
-    } catch (error) {
-      SweetAlertUtils.closeLoading();
-      SweetAlertUtils.error(
-        "Gagal Mengunduh Template",
-        "Terjadi kesalahan saat mengunduh template"
-      );
-    }
+    } catch {}
   };
 
   const handleUpload = async () => {
@@ -472,8 +471,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
           // Show duplicate confirmation dialog
           await handleDuplicateConfirmation(
             result.duplicates,
-            result.processedData,
-            result.summary
+            result.processedData
           );
         } else {
           // No duplicates, show success
@@ -506,8 +504,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
 
   const handleDuplicateConfirmation = async (
     duplicates: DuplicateData[],
-    processedData: any,
-    summary: any
+    processedData: ProcessedData[]
   ) => {
     const duplicateList = duplicates
       .map((dup) => `• Baris ${dup.row}: ${dup.nama_pcl} (${dup.status_pcl})`)
@@ -520,22 +517,23 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
       "Lewati Data Duplikat"
     );
 
+    if (!confirmed) return;
+
     try {
       SweetAlertUtils.loading("Memproses Data", "Menyimpan perubahan...");
 
-      const formData = new FormData();
-      formData.append("duplicateAction", confirmed ? "replace" : "skip");
-      formData.append(
-        "duplicateData",
-        JSON.stringify({
-          processedData,
-          duplicates,
-        })
-      );
-
       const response = await fetch("/api/pcl/import", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: confirmed ? "replace" : "skip",
+          data: {
+            processedData,
+            duplicates,
+          },
+        }),
       });
 
       const result = await response.json();
@@ -551,10 +549,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
       } else {
         throw new Error(result.message);
       }
-    } catch (error) {
-      SweetAlertUtils.closeLoading();
-      SweetAlertUtils.error("Error", "Gagal memproses data duplikat");
-    }
+    } catch {}
   };
 
   const showValidationErrors = async (errors: ValidationError[]) => {
@@ -672,7 +667,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onSuccess }) => {
                 • <strong>Nama PCL:</strong> Wajib diisi, tidak boleh kosong
               </li>
               <li>
-                • <strong>Status:</strong> Harus "Mitra" atau "Staff"
+                • <strong>Status:</strong> Harus &quot;Mitra&quot; atau
+                &quot;Staff&quot;
               </li>
               <li>
                 • <strong>Telepon:</strong> Opsional, hanya angka jika diisi
@@ -728,7 +724,7 @@ type PCL = {
   telp_pcl: string;
 };
 
-type SortDirection = "ascending" | "descending" | null;
+// type SortDirection = "ascending" | "descending" | null;
 
 interface SortDescriptor {
   column: string;
@@ -736,7 +732,7 @@ interface SortDescriptor {
 }
 
 const TabelPCL = () => {
-  const router = useRouter();
+  // const router = useRouter();
 
   // State declarations
   const [filterValue, setFilterValue] = useState("");
@@ -761,8 +757,6 @@ const TabelPCL = () => {
   const [allPclData, setAllPclData] = useState<PCL[]>([]);
   const [isLoadingAll, setIsLoadingAll] = useState(false);
   const [hasLoadedAll, setHasLoadedAll] = useState(false);
-
-  const hasSearchFilter = Boolean(filterValue);
 
   // State untuk modal upload
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -919,7 +913,7 @@ const TabelPCL = () => {
 
       if (result.success) {
         setPclList(
-          result.data.map((pcl: any, index: number) => ({
+          result.data.map((pcl: PCL, index: number) => ({
             ...pcl,
             no: (currentPage - 1) * rowsPerPage + index + 1,
           }))
@@ -984,34 +978,12 @@ const TabelPCL = () => {
     if (sortDescriptors.length > 0 && !hasLoadedAll) {
       fetchAllData();
     }
-  }, [sortDescriptors, fetchAllData]);
+  }, [sortDescriptors, fetchAllData, hasLoadedAll]);
 
   // Reset hasLoadedAll when filters change
   useEffect(() => {
     setHasLoadedAll(false);
   }, [filterValue, statusFilter]);
-
-  // Filter the data based on search and status
-  const filteredItems = useMemo(() => {
-    let filteredPcl = [...pclList];
-
-    // Text search filter
-    if (hasSearchFilter) {
-      const lowerFilter = filterValue.toLowerCase();
-      filteredPcl = filteredPcl.filter((pcl) =>
-        pcl.nama_pcl.toLowerCase().includes(lowerFilter)
-      );
-    }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filteredPcl = filteredPcl.filter(
-        (pcl) => pcl.status_pcl === statusFilter
-      );
-    }
-
-    return filteredPcl;
-  }, [pclList, filterValue, statusFilter, hasSearchFilter]);
 
   // Client-side sorting implementation
   const sortedItems = useMemo(() => {
@@ -1116,6 +1088,9 @@ const TabelPCL = () => {
         return [...prevSorts, { column: columnKey, direction: "ascending" }];
       }
     });
+
+    // Reset to page 1 when sorting changes
+    setCurrentPage(1);
   }, []);
 
   // Get current sort direction for a column
@@ -1138,11 +1113,9 @@ const TabelPCL = () => {
   // Handle clicking outside dropdowns
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
-
       if (
         statusDropdownRef.current &&
-        !statusDropdownRef.current.contains(target)
+        !statusDropdownRef.current.contains(event.target as Node)
       ) {
         setStatusDropdownOpen(false);
       }
@@ -1179,54 +1152,57 @@ const TabelPCL = () => {
     setCurrentPage(1); // Reset to first page when changing status filter
   }, []);
 
-  // Action handlers
-  const handleEditPCL = (pcl: PCL) => {
+  const handleEditPCL = useCallback((pcl: PCL) => {
     setSelectedPCL(pcl);
     setShowEditModal(true);
-  };
+  }, []);
 
-  const handleDeletePCL = async (pcl: PCL) => {
-    // Gunakan SweetAlert untuk konfirmasi hapus
-    const confirmDelete = await SweetAlertUtils.confirmDelete(
-      "Hapus Data PCL",
-      `Anda akan menghapus PCL "${pcl.nama_pcl}". Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan PCL ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
-      "Ya, Hapus",
-      "Batal"
-    );
-
-    if (!confirmDelete) return;
-
-    try {
-      // Show loading
-      SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
-
-      // Call DELETE API endpoint
-      const response = await fetch(`/api/pcl/${pcl.id_pcl}`, {
-        method: "DELETE",
-      });
-
-      const result = await response.json();
-      SweetAlertUtils.closeLoading();
-
-      if (result.success) {
-        await SweetAlertUtils.success(
-          "Berhasil Dihapus!",
-          `Data PCL "${pcl.nama_pcl}" berhasil dihapus!`
-        );
-        // Refresh data after successful deletion
-        fetchData();
-      } else {
-        throw new Error(result.message || "Gagal menghapus data");
-      }
-    } catch (error) {
-      console.error("Error deleting data:", error);
-      SweetAlertUtils.closeLoading();
-      SweetAlertUtils.error(
-        "Gagal Menghapus",
-        `Terjadi kesalahan saat menghapus data: ${error instanceof Error ? error.message : "Unknown error"}`
+  const handleDeletePCL = useCallback(
+    async (pcl: PCL) => {
+      const confirmDelete = await SweetAlertUtils.confirmDelete(
+        "Hapus Data PCL",
+        `Anda akan menghapus PCL "${pcl.nama_pcl}". Tindakan ini bersifat permanen dan akan menghapus seluruh riwayat survei yang terkait. Pastikan PCL ini tidak sedang digunakan di Tabel Riwayat Survei. Yakin ingin melanjutkan?`,
+        "Ya, Hapus",
+        "Batal"
       );
-    }
-  };
+
+      if (!confirmDelete) return;
+
+      try {
+        // Show loading
+        SweetAlertUtils.loading("Menghapus Data", "Mohon tunggu sebentar...");
+
+        // Call DELETE API endpoint
+        const response = await fetch(`/api/pcl/${pcl.id_pcl}`, {
+          method: "DELETE",
+        });
+
+        const result = await response.json();
+        SweetAlertUtils.closeLoading();
+
+        if (result.success) {
+          await SweetAlertUtils.success(
+            "Berhasil Dihapus!",
+            `Data PCL "${pcl.nama_pcl}" berhasil dihapus!`
+          );
+          // Refresh data after successful deletion
+          fetchData();
+        } else {
+          throw new Error(result.message || "Gagal menghapus data");
+        }
+      } catch (error) {
+        console.error("Error deleting data:", error);
+        SweetAlertUtils.closeLoading();
+        await SweetAlertUtils.error(
+          "Gagal Menghapus",
+          `Terjadi kesalahan saat menghapus data: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
+    },
+    [fetchData]
+  );
 
   const handleAddSuccess = () => {
     setShowAddModal(false);
@@ -1263,7 +1239,7 @@ const TabelPCL = () => {
 
   // Render cell content
   const renderCell = useCallback(
-    (pcl: PCL, columnKey: keyof PCL | "actions") => {
+    (pcl: PCL, columnKey: React.Key) => {
       const cellValue = pcl[columnKey as keyof PCL];
 
       switch (columnKey) {
@@ -1312,7 +1288,7 @@ const TabelPCL = () => {
           return <span className="text-sm font-normal">{cellValue}</span>;
       }
     },
-    []
+    [handleDeletePCL, handleEditPCL]
   );
 
   return (

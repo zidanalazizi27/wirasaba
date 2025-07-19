@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { motion, useAnimation } from "framer-motion";
 import CountUp from "react-countup";
+import Image from "next/image";
 
 function BerandaCard() {
   const [showCard, setShowCard] = useState(false);
-  const controls = useAnimation();
   const cardRef = useRef(null);
   const [stats, setStats] = useState({
     perusahaan: 0,
@@ -14,7 +13,6 @@ function BerandaCard() {
     survei: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   // Fetch stats data from API
   useEffect(() => {
@@ -33,7 +31,6 @@ function BerandaCard() {
         }
       } catch (err) {
         console.error("Error fetching stats:", err);
-        setError(err.message);
       } finally {
         setIsLoading(false);
       }
@@ -57,34 +54,25 @@ function BerandaCard() {
     };
   }, []);
 
-  useEffect(() => {
-    if (showCard) {
-      controls.start({ opacity: 1, y: 0 });
-    } else {
-      controls.start({ opacity: 0, y: 100 });
-    }
-  }, [showCard, controls]);
-
   return (
     <div
       className="absolute hidden md:block w-full z-20 mt-8 md:-mt-24"
       ref={cardRef}
     >
-      <motion.div
-        className="bg-white w-6/12 max-w-5xl p-3 flex flex-col md:flex-row items-center justify-around mx-auto rounded-xl shadow-md space-y-3 md:space-y-0"
-        initial={{ opacity: 0, y: -100 }}
-        animate={controls}
-        transition={{ duration: 0.5 }}
+      <div
+        className={`bg-white w-6/12 max-w-5xl p-3 flex flex-col md:flex-row items-center justify-around mx-auto rounded-xl shadow-md space-y-3 md:space-y-0 transition-all duration-500 ${
+          showCard ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-24'
+        }`}
       >
         <div className="flex flex-col items-center justify-center space-y-3">
-          <motion.img
-            className="hover:cursor-pointer"
-            src="/image/factory.png"
-            alt="Perusahaan"
-            whileHover={{ translateY: -5 }}
-            srcSet=""
-            width={60}
-          />
+          <div className="hover:-translate-y-1 transition-transform duration-200">
+            <Image
+              src="/image/factory.png"
+              alt="Perusahaan"
+              width={60}
+              height={60}
+            />
+          </div>
           {showCard && !isLoading && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
               <CountUp end={stats.perusahaan} duration={5} />
@@ -96,14 +84,9 @@ function BerandaCard() {
         </div>
 
         <div className="flex flex-col items-center justify-center space-y-3">
-          <motion.img
-            className="hover:cursor-pointer"
-            src="/image/pcl.png"
-            alt="PCL"
-            whileHover={{ translateY: -5 }}
-            srcSet=""
-            width={60}
-          />
+          <div className="hover:-translate-y-1 transition-transform duration-200">
+            <Image src="/image/pcl.png" alt="PCL" width={60} height={60} />
+          </div>
           {showCard && !isLoading && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
               <CountUp end={stats.pcl} duration={2} />
@@ -115,14 +98,14 @@ function BerandaCard() {
         </div>
 
         <div className="flex flex-col items-center justify-center space-y-3">
-          <motion.img
-            className="hover:cursor-pointer"
-            src="/image/survey.png"
-            alt="Survei"
-            whileHover={{ translateY: -5 }}
-            srcSet=""
-            width={60}
-          />
+          <div className="hover:-translate-y-1 transition-transform duration-200">
+            <Image
+              src="/image/survey.png"
+              alt="Survei"
+              width={60}
+              height={60}
+            />
+          </div>
           {showCard && !isLoading && (
             <h5 className="text-center text-3xl text-cdark font-bold font-roboto">
               <CountUp end={stats.survei} duration={1} />
@@ -132,7 +115,7 @@ function BerandaCard() {
             Survei
           </p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

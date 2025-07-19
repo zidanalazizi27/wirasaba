@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   // ChevronLeft,
   // ChevronRight,
@@ -11,7 +12,27 @@ import {
 } from "@mui/icons-material";
 import { FaCircleChevronLeft, FaCircleChevronRight } from "react-icons/fa6";
 
-const Sidebar = ({ children }) => {
+interface SidebarProps {
+  children: React.ReactNode;
+}
+
+interface SidebarItemProps {
+  icon: React.ReactElement;
+  text: string;
+  alert?: boolean;
+  to?: string;
+  action?: () => void;
+  submenu?: Array<{
+    icon: React.ReactElement;
+    text: string;
+    to: string;
+  }>;
+  isSidebarOpen?: boolean;
+  pathname?: string | null;
+  setIsSidebarOpen?: (open: boolean) => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const pathname = usePathname();
   const [isScreenWide, setIsScreenWide] = useState(false);
@@ -46,8 +67,10 @@ const Sidebar = ({ children }) => {
         <nav className="flex flex-col bg-clightbrown border-r rounded-2xl shadow-sm transition-all duration-300 h-full">
           <div className="p-4 flex justify-center">
             <Link href="/">
-              <img
+              <Image
                 src="/image/logo_only.png"
+                width={96}
+                height={96}
                 className={`overflow-hidden transition-all duration-300 ${
                   isSidebarOpen ? "w-24" : "w-0"
                 }`}
@@ -70,11 +93,13 @@ const Sidebar = ({ children }) => {
 
           <ul className="flex-1 px-2">
             {React.Children.map(children, (child) =>
-              React.cloneElement(child, {
-                isSidebarOpen,
-                pathname,
-                setIsSidebarOpen,
-              })
+              React.isValidElement<SidebarItemProps>(child)
+                ? React.cloneElement(child, {
+                    isSidebarOpen,
+                    pathname,
+                    setIsSidebarOpen,
+                  } as Partial<SidebarItemProps>)
+                : child
             )}
           </ul>
         </nav>
@@ -93,17 +118,24 @@ export function SidebarItem({
   isSidebarOpen,
   pathname,
   setIsSidebarOpen,
-}) {
+}: SidebarItemProps) {
   const router = useRouter();
-  const isActive =
-    pathname === to ||
-    (pathname?.startsWith(to) && to !== "/") ||
-    (submenu &&
-      submenu.some(
-        (subItem) =>
-          subItem.to === pathname ||
-          (subItem.to !== "/" && pathname?.startsWith(subItem.to))
-      ));
+  const getBasePath = (path: string) => path.split("?")[0].split("#")[0];
+
+  const isActive = (() => {
+    if (!to) return false;
+    const baseTo = getBasePath(to);
+    const basePath = getBasePath(pathname ?? "");
+    if (basePath === baseTo) return true;
+    if (basePath.startsWith(baseTo + "/")) return true;
+    if (submenu) {
+      return submenu.some((subItem) => {
+        const baseSub = getBasePath(subItem.to);
+        return basePath === baseSub || basePath.startsWith(baseSub + "/");
+      });
+    }
+    return false;
+  })();
   const hasSubmenu = submenu && submenu.length > 0;
   const [submenuOpen, setSubmenuOpen] = useState(false);
 
@@ -113,23 +145,23 @@ export function SidebarItem({
     }
   }, [isActive, hasSubmenu]);
 
-  const handleSubmenuToggle = (e) => {
+  const handleSubmenuToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     setSubmenuOpen(!submenuOpen);
-    if (!isSidebarOpen) {
+    if (!isSidebarOpen && setIsSidebarOpen) {
       setIsSidebarOpen(true);
     }
   };
 
-  const handleNavigation = (e) => {
+  const handleNavigation = (e: React.MouseEvent) => {
     if (hasSubmenu) {
       e.preventDefault();
       handleSubmenuToggle(e);
     } else if (action) {
       // If there's an action prop (like logout), execute it
       e.preventDefault();
-      action();
-    } else if (to) {
+      action?.();
+    } else if (to && to !== "" && typeof to === "string") {
       router.push(to);
     }
   };
@@ -140,15 +172,17 @@ export function SidebarItem({
         <li
           className={`
             relative flex items-center py-2 px-3 my-2
-            font-medium rounded-md cursor-pointer
+            font-semibold rounded-md cursor-pointer
             transition-colors group
             ${isActive ? "bg-white text-cdark" : "text-cdark"}
             ${isSidebarOpen ? "ml-3" : "ml-0"}
           `}
         >
-          {React.cloneElement(icon, {
-            className: isActive ? "text-cdark" : "text-cdark",
-          })}
+          {React.isValidElement<{ className?: string }>(icon)
+            ? React.cloneElement(icon, {
+                className: isActive ? "text-cdark" : "text-cdark",
+              } as { className?: string })
+            : icon}
           <span
             className={`overflow-hidden transition-all duration-300 ${
               isSidebarOpen ? "ml-3" : "w-0 opacity-0"
@@ -183,12 +217,12 @@ export function SidebarItem({
 
         {hasSubmenu && submenuOpen && isSidebarOpen && (
           <ul className="ml-5">
-            {submenu.map((subItem, index) => (
+            {submenu.map((subItem, index: number) => (
               <Link key={index} href={subItem.to}>
                 <li
                   className={`
                     relative flex items-center py-2 px-3 my-1
-                    font-medium rounded-md cursor-pointer
+                    font-semibold rounded-md cursor-pointer
                     transition-colors group
                     ${
                       pathname === subItem.to
@@ -198,10 +232,14 @@ export function SidebarItem({
                   `}
                 >
                   <span className="ml-6">
-                    {React.cloneElement(subItem.icon, {
-                      className:
-                        pathname === subItem.to ? "text-cdark" : "text-cdark",
-                    })}
+                    {React.isValidElement<{ className?: string }>(subItem.icon)
+                      ? React.cloneElement(subItem.icon, {
+                          className:
+                            pathname === subItem.to
+                              ? "text-cdark"
+                              : "text-cdark",
+                        } as { className?: string })
+                      : subItem.icon}
                   </span>
                   <span className="ml-3">{subItem.text}</span>
                 </li>

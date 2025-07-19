@@ -7,6 +7,46 @@ import Breadcrumb from "@/app/components/admin/breadcrumb";
 import DetailDirektori from "@/app/components/admin/detail_direktori";
 import { SweetAlertUtils } from "@/app/utils/sweetAlert";
 
+// Import interface PerusahaanData dari detail_direktori
+interface PerusahaanData {
+  id_perusahaan: number;
+  kip: string | number;
+  nama_perusahaan: string;
+  badan_usaha: number;
+  badan_usaha_nama: string;
+  alamat: string;
+  kec: number;
+  kec_nama: string;
+  des: number;
+  des_nama: string;
+  kode_pos: string;
+  skala: string;
+  lok_perusahaan: number;
+  lok_perusahaan_nama: string;
+  nama_kawasan: string | null;
+  lat: number | null;
+  lon: number | null;
+  jarak: number | null;
+  produk: string;
+  KBLI: number;
+  telp_perusahaan: string | null;
+  email_perusahaan: string | null;
+  web_perusahaan: string | null;
+  tkerja: number;
+  tkerja_nama: string;
+  investasi: number;
+  investasi_nama: string;
+  omset: number;
+  omset_nama: string;
+  nama_narasumber: string;
+  jbtn_narasumber: string;
+  email_narasumber: string | null;
+  telp_narasumber: string | null;
+  catatan: string | null;
+  tahun_direktori: number[];
+  pcl_utama: string;
+}
+
 export default function EditDirektoriDetail() {
   const params = useParams();
   const router = useRouter();
@@ -41,7 +81,7 @@ export default function EditDirektoriDetail() {
     }
   }, [id_perusahaan]);
 
-  const handleSave = async (data) => {
+  const handleSave = async (data: PerusahaanData) => {
     if (isSaving) return; // Prevent double submission
 
     try {
@@ -82,7 +122,9 @@ export default function EditDirektoriDetail() {
       }
     } catch (error) {
       console.error("Error saving data:", error);
-      SweetAlertUtils.error("Error", `Gagal menyimpan data: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      SweetAlertUtils.error("Error", `Gagal menyimpan data: ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }

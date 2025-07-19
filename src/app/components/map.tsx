@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import dynamic from "next/dynamic";
 import "leaflet/dist/leaflet.css";
-import L from "leaflet";
+import L, { LatLngExpression } from "leaflet";
 import {
   MapContainer,
   TileLayer,
@@ -34,8 +34,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Tooltip,
-  Legend,
   BarChart,
   Bar,
   XAxis,
@@ -44,6 +42,30 @@ import {
 } from "recharts";
 import * as XLSX from "xlsx";
 import { useSearchParams } from "next/navigation";
+
+declare module "leaflet" {
+  interface HeatLayerOptions extends L.LayerOptions {
+    minOpacity?: number;
+    maxZoom?: number;
+    max?: number;
+    radius?: number;
+    blur?: number;
+    gradient?: { [key: number]: string };
+  }
+
+  interface HeatLayer extends L.Layer {
+    setLatLngs(latlngs: LatLngExpression[]): this;
+    addLatLng(latlngs: LatLngExpression): this;
+    setOptions(options: HeatLayerOptions): this;
+    redraw(): this;
+    getLatLngs(): L.LatLng[];
+  }
+
+  function heatLayer(
+    latlngs: LatLngExpression[],
+    options?: HeatLayerOptions
+  ): HeatLayer;
+}
 
 const { Search } = Input;
 
@@ -63,7 +85,7 @@ const activeMarkerIcon = new L.Icon({
 });
 
 // Warna poligon berdasarkan kepadatan perusahaan
-const getColor = (density) => {
+const getColor = (density: number): string => {
   return density > 200
     ? "#993404"
     : density > 160
@@ -101,13 +123,13 @@ const HeatLayerInitializer = () => {
           // Dinamis import plugin leaflet.heat
           const leafletHeat = await import("leaflet.heat");
           // Pastikan plugin terintegrasi dengan Leaflet
-          if (!L.heatLayer) {
+          if (!(L as { heatLayer?: unknown }).heatLayer) {
             // Jika perlu, daftarkan plugin secara manual
             if (
               leafletHeat.default &&
               typeof leafletHeat.default === "function"
             ) {
-              leafletHeat.default(L);
+              (leafletHeat.default as (leaflet: unknown) => void)(L);
             }
           }
           setHeatPluginLoaded(true);
@@ -125,9 +147,24 @@ const HeatLayerInitializer = () => {
 };
 
 // Komponen HeatmapLayer untuk menampilkan heatmap
-const HeatmapLayer = ({ points, options, visible }) => {
+const HeatmapLayer = ({
+  points,
+  options,
+  visible,
+}: {
+  points: [number, number, number][];
+  options: {
+    radius?: number;
+    blur?: number;
+    maxZoom?: number;
+    max?: number;
+    minOpacity?: number;
+    gradient?: { [key: number]: string };
+  };
+  visible: boolean;
+}) => {
   const map = useMap();
-  const heatRef = useRef(null);
+  const heatRef = useRef<L.HeatLayer | null>(null);
 
   useEffect(() => {
     if (!map || points.length === 0 || !visible) return;
@@ -148,7 +185,7 @@ const HeatmapLayer = ({ points, options, visible }) => {
       } else {
         heatRef.current.setLatLngs(points);
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Error creating heatmap layer:", e);
     }
 
@@ -164,8 +201,67 @@ const HeatmapLayer = ({ points, options, visible }) => {
   return null;
 };
 
+// Type for a single company
+interface Company {
+  id_perusahaan: number;
+  nama_perusahaan: string;
+  alamat: string;
+  kec: number;
+  nama_kec: string;
+  des: number;
+  nama_des: string;
+  badan_usaha: number;
+  badan_usaha_nama: string;
+  skala?: string;
+  KBLI: number;
+  produk: string;
+  telp_perusahaan?: string;
+  email_perusahaan?: string;
+  web_perusahaan?: string;
+  lat: number;
+  lon: number;
+  lok_perusahaan?: number;
+}
+
+// Type for a directory
+interface Directory {
+  id_perusahaan: number;
+  thn_direktori: number;
+}
+
+// Type for a district
+interface District {
+  kode_kec: number;
+  id_kec: number;
+  nama_kec: string;
+}
+
+// Type untuk GeoJSON yang kompatibel dengan Leaflet
+interface GeoJsonFeature {
+  type: "Feature";
+  properties: {
+    kode_kec?: number;
+    kec?: string;
+    label?: string;
+    luas?: number;
+    desa?: number;
+    kelurahan?: number;
+  };
+  geometry: {
+    type: string;
+    // Point | MultiPoint/LineString | Polygon/MultiLineString | MultiPolygon
+    coordinates: number[] | number[][] | number[][][] | number[][][][];
+  };
+}
+
+// Type untuk GeoJSON yang kompatibel dengan Leaflet
+interface GeoJsonData {
+  type: "FeatureCollection";
+  features: GeoJsonFeature[];
+}
+
 const MapComponent = () => {
-  const [geoJsonData, setGeoJsonData] = useState(null);
+  const [geoJsonData, setGeoJsonData] = useState<GeoJsonData | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isStatisticsOpen, setIsStatisticsOpen] = useState(false);
   const [isVisibilityOpen, setIsVisibilityOpen] = useState(false);
@@ -174,19 +270,14 @@ const MapComponent = () => {
     titik: true, // Set menjadi true untuk menampilkan titik saat halaman dimuat
     heatmap: false, // Tambahkan state untuk heatmap
   });
-  const [companies, setCompanies] = useState([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [statistics, setStatistics] = useState({
-    total: 0,
-    besar: 0,
-    sedang: 0,
-  });
+  const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
 
   // Referensi untuk map Leaflet
-  const mapRef = useRef(null);
+  const mapRef = useRef<L.Map>(null);
 
   // useEffect untuk memindahkan peta ke koordinat tertentu jika ada di URL
   useEffect(() => {
@@ -207,7 +298,7 @@ const MapComponent = () => {
         mapRef.current.setView([latitude, longitude], 15);
       }
     }
-  }, [searchParams, mapRef.current]); // Jalankan ketika searchParams atau mapRef berubah
+  }, [searchParams]); // Jalankan ketika searchParams atau mapRef berubah
 
   // Tambahkan kode berikut di MapComponent untuk memastikan Leaflet.heat dimuat
   useEffect(() => {
@@ -216,7 +307,7 @@ const MapComponent = () => {
       import("leaflet.heat")
         .then((module) => {
           if (module.default && typeof module.default === "function") {
-            module.default(L);
+            (module.default as (l: unknown) => void)(L);
           }
           console.log("Leaflet.heat preloaded");
         })
@@ -227,33 +318,35 @@ const MapComponent = () => {
   }, []);
 
   // State untuk melacak marker yang aktif
-  const [activeMarkerId, setActiveMarkerId] = useState(null);
+  const [activeMarkerId, setActiveMarkerId] = useState<number | null>(null);
 
-  const markersRef = useRef({});
+  const markersRef = useRef<{ [key: number]: L.Marker }>({});
 
   // Tambahkan fungsi handler untuk popup close event
-  const handlePopupOpen = (company: any) => {
+  const handlePopupOpen = (company: { id_perusahaan: number }) => {
     setActiveMarkerId(company.id_perusahaan);
   };
 
-  const handlePopupClose = (company: any) => {
+  const handlePopupClose = (company: { id_perusahaan: number }) => {
     if (activeMarkerId === company.id_perusahaan) {
       setActiveMarkerId(null);
     }
   };
 
   // State untuk data perusahaan yang telah difilter
-  const [filteredCompanies, setFilteredCompanies] = useState([]);
+  const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
 
   // State untuk menyimpan jumlah perusahaan per kecamatan
-  const [kecamatanCompanyCounts, setKecamatanCompanyCounts] = useState({});
+  const [kecamatanCompanyCounts, setKecamatanCompanyCounts] = useState<
+    Record<number, number>
+  >({});
 
   // Reference untuk layer GeoJSON
-  const geoJsonLayerRef = useRef(null);
+  const geoJsonLayerRef = useRef<L.GeoJSON | null>(null);
 
   // State untuk mengontrol tooltip
-  const [pieActiveIndex, setPieActiveIndex] = useState(null);
-  const [barActiveIndex, setBarActiveIndex] = useState(null);
+  const [pieActiveIndex, setPieActiveIndex] = useState<number | null>(null);
+  const [barActiveIndex, setBarActiveIndex] = useState<number | null>(null);
 
   // State untuk filter
   const [filters, setFilters] = useState({
@@ -265,23 +358,24 @@ const MapComponent = () => {
   });
 
   // State untuk menyimpan tahun unik
-  const [uniqueYears, setUniqueYears] = useState([]);
+  const [uniqueYears, setUniqueYears] = useState<string[]>([]);
 
   // State untuk data direktori dan kecamatan
-  const [directories, setDirectories] = useState([]);
-  const [districts, setDistricts] = useState([]);
+  const [directories, setDirectories] = useState<Directory[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
 
   // State untuk pencarian
   const [searchTerm, setSearchTerm] = useState("");
 
   // State untuk menyimpan data points heatmap
-  const [heatmapPoints, setHeatmapPoints] = useState([]);
-
-  // Create a key for GeoJSON to force re-render when selectedLayers changes
-  const [geoJsonKey, setGeoJsonKey] = useState(0);
+  const [heatmapPoints, setHeatmapPoints] = useState<
+    [number, number, number][]
+  >([]);
 
   // Fungsi normalisasi kode kecamatan yang konsisten - dengan debugging yang ditingkatkan
-  const normalizeKecamatanCode = (code) => {
+  const normalizeKecamatanCode = (
+    code: string | number | null | undefined
+  ): number | null => {
     if (code === null || code === undefined) {
       console.log("normalizeKecamatanCode: received null/undefined value");
       return null;
@@ -332,11 +426,11 @@ const MapComponent = () => {
     console.log("Fixing GeoJSON kecamatan codes...");
 
     // Buat daftar pemetaan nama kecamatan ke kode
-    const kecamatanNameToCode = {};
-    districts.forEach((district) => {
+    const kecamatanNameToCode: Record<string, number> = {};
+    districts.forEach((district: District) => {
       // Membuat normalisasi nama kecamatan untuk menangani perbedaan format
       const normalizedName = district.nama_kec.toLowerCase().trim();
-      kecamatanNameToCode[normalizedName] = parseInt(district.kode_kec, 10);
+      kecamatanNameToCode[normalizedName] = district.kode_kec;
       console.log(`Mapped ${normalizedName} -> ${district.kode_kec}`);
     });
 
@@ -372,7 +466,7 @@ const MapComponent = () => {
         // Direct mapping sebagai fallback
         if (!updatedFeature.properties.kode_kec) {
           // Tabel pemetaan langsung nama ke kode berdasarkan database Anda
-          const directMapping = {
+          const directMapping: Record<string, number> = {
             tarik: 10,
             prambon: 20,
             krembung: 30,
@@ -425,15 +519,12 @@ const MapComponent = () => {
 
     setGeoJsonData(fixedGeoJSON);
 
-    // Force rerender GeoJSON
-    setGeoJsonKey((prev) => prev + 1);
-
     console.log("GeoJSON kecamatan codes fixed successfully");
-  }, [districts]); // PENTING: Hapus geoJsonData dari dependensi untuk menghindari loop
+  }, [districts, geoJsonData, setGeoJsonData]);
 
   // Fungsi untuk menghitung jumlah perusahaan per kecamatan (dioptimalkan)
   const countCompaniesByKecamatan = useCallback(
-    (filteredComps) => {
+    (filteredComps: Company[]) => {
       console.log(
         "Counting companies by kecamatan for",
         filteredComps.length,
@@ -441,7 +532,7 @@ const MapComponent = () => {
       );
 
       // Inisialisasi objek untuk menyimpan jumlah per kecamatan
-      const counts = {};
+      const counts: Record<number, number> = {};
 
       // Pastikan semua kecamatan memiliki entri, meskipun kosong
       if (geoJsonData && geoJsonData.features) {
@@ -456,7 +547,7 @@ const MapComponent = () => {
       }
 
       // Hitung jumlah perusahaan per kecamatan
-      filteredComps.forEach((company) => {
+      filteredComps.forEach((company: Company) => {
         if (company.kec !== null && company.kec !== undefined) {
           const kecCode = normalizeKecamatanCode(company.kec);
 
@@ -477,12 +568,12 @@ const MapComponent = () => {
       console.log("Final kecamatan counts:", counts);
       return counts;
     },
-    [geoJsonData]
+    [geoJsonData, normalizeKecamatanCode]
   );
 
   // Styling GeoJSON Polygons dengan warna dinamis (versi yang diperbaiki)
   const getStyle = useCallback(
-    (feature) => {
+    (feature: GeoJsonFeature | undefined) => {
       // Defensive check
       if (!feature || !feature.properties) {
         console.error("Invalid feature or missing properties", feature);
@@ -513,75 +604,23 @@ const MapComponent = () => {
         fillOpacity: selectedLayers.choropleth ? 0.7 : 0,
       };
     },
-    [kecamatanCompanyCounts, selectedLayers.choropleth]
-  );
-
-  // Function to update the GeoJSON popups with dynamic data (improved)
-  const updateGeoJsonPopups = useCallback(() => {
-    if (!geoJsonLayerRef.current) {
-      console.log("No GeoJSON layer ref available for updating popups");
-      return;
-    }
-
-    // Log untuk debugging
-    console.log(
-      "Updating popups with kecamatanCompanyCounts:",
-      kecamatanCompanyCounts
-    );
-
-    // Update setiap popup pada layer GeoJSON
-    geoJsonLayerRef.current.eachLayer((layer) => {
-      const properties = layer.feature.properties;
-      // Pastikan format kode kecamatan konsisten
-      const kecamatanCode = normalizeKecamatanCode(properties.kode_kec);
-
-      // Log untuk debugging
-      console.log(
-        `Updating popup - Kecamatan: ${properties.label}, kode: ${kecamatanCode}, count: ${kecamatanCompanyCounts[kecamatanCode] || 0}`
-      );
-
-      const filteredCount =
-        kecamatanCode !== null ? kecamatanCompanyCounts[kecamatanCode] || 0 : 0;
-
-      // Update popup content dengan jumlah perusahaan terbaru
-      layer.bindPopup(`
-        <div style="font-size: 14px; line-height: 1.5;">
-          <b>${properties.label}</b><br/>
-          <strong>Luas Wilayah:</strong> ${properties.luas} KM²<br/>
-          <strong>Jumlah Desa:</strong> ${properties.desa}<br/>
-          <strong>Jumlah Kelurahan:</strong> ${properties.kelurahan}<br/>
-          <strong>Jumlah Perusahaan:</strong> ${filteredCount}
-        </div>
-      `);
-    });
-  }, [kecamatanCompanyCounts]);
-
-  // Function to handle when GeoJSON is added to the map (improved)
-  const onGeoJsonLoad = useCallback(
-    (layer) => {
-      console.log("GeoJSON layer loaded and added to map");
-      geoJsonLayerRef.current = layer;
-
-      // Setelah layer di-load, update popups
-      if (Object.keys(kecamatanCompanyCounts).length > 0) {
-        updateGeoJsonPopups();
-      }
-    },
-    [updateGeoJsonPopups, kecamatanCompanyCounts]
+    [kecamatanCompanyCounts, selectedLayers.choropleth, normalizeKecamatanCode]
   );
 
   // Handle perubahan checkbox layer
-  const handleLayerChange = (layer) => {
+  const handleLayerChange = (layer: string) => {
     setSelectedLayers((prev) => {
       const newState = { ...prev };
 
       // Jika layer yang diaktifkan adalah heatmap atau choropleth
       if (layer === "heatmap" || layer === "choropleth") {
         // Toggle layer yang diklik
-        newState[layer] = !prev[layer];
+        (newState as Record<string, boolean>)[layer] = !(
+          prev as Record<string, boolean>
+        )[layer];
 
         // Jika layer yang diklik diaktifkan, matikan layer lainnya
-        if (!prev[layer]) {
+        if (!(prev as Record<string, boolean>)[layer]) {
           if (layer === "heatmap") {
             newState.choropleth = false; // Matikan choropleth jika heatmap diaktifkan
           } else if (layer === "choropleth") {
@@ -590,7 +629,9 @@ const MapComponent = () => {
         }
       } else {
         // Untuk layer lain (titik), lakukan toggle biasa
-        newState[layer] = !prev[layer];
+        (newState as Record<string, boolean>)[layer] = !(
+          prev as Record<string, boolean>
+        )[layer];
       }
 
       return newState;
@@ -598,23 +639,30 @@ const MapComponent = () => {
   };
 
   // Fungsi untuk menerapkan filter pencarian
-  const applySearchFilter = useCallback((companies, searchTerm) => {
-    if (!searchTerm.trim()) return companies;
+  const applySearchFilter = useCallback(
+    (companies: Company[], searchTerm: string) => {
+      if (!searchTerm.trim()) return companies;
 
-    return companies.filter((company) => {
-      const nameMatch = company.nama_perusahaan
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      const productMatch = company.produk
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      return nameMatch || productMatch;
-    });
-  }, []);
+      return companies.filter((company) => {
+        const nameMatch = company.nama_perusahaan
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+        const productMatch = company.produk
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+        return nameMatch || productMatch;
+      });
+    },
+    []
+  );
 
   // Fungsi untuk menerapkan semua filter
   const applyAllFilters = useCallback(
-    (companiesData, currentFilters, search) => {
+    (
+      companiesData: Company[],
+      currentFilters: typeof filters,
+      search: string
+    ) => {
       if (!companiesData.length) return [];
 
       let filtered = [...companiesData];
@@ -622,10 +670,13 @@ const MapComponent = () => {
       // 1. Filter berdasarkan tahun direktori
       if (currentFilters.year !== "all") {
         const companiesInYear = directories
-          .filter((dir) => dir.thn_direktori.toString() === currentFilters.year)
-          .map((dir) => dir.id_perusahaan);
+          .filter(
+            (dir: Directory) =>
+              dir.thn_direktori.toString() === currentFilters.year
+          )
+          .map((dir: Directory) => dir.id_perusahaan);
 
-        filtered = filtered.filter((company) =>
+        filtered = filtered.filter((company: Company) =>
           companiesInYear.includes(company.id_perusahaan)
         );
       }
@@ -633,7 +684,7 @@ const MapComponent = () => {
       // 2. Filter berdasarkan kecamatan
       if (currentFilters.district !== "0") {
         filtered = filtered.filter(
-          (company) =>
+          (company: Company) =>
             company.kec && company.kec.toString() === currentFilters.district
         );
       }
@@ -641,7 +692,7 @@ const MapComponent = () => {
       // 3. Filter berdasarkan kategori KBLI
       if (currentFilters.kbliCategory !== "kbli_all") {
         const kbliPrefix = currentFilters.kbliCategory.replace("kbli_", "");
-        filtered = filtered.filter((company) => {
+        filtered = filtered.filter((company: Company) => {
           const kbli = company.KBLI ? company.KBLI.toString() : "";
           const kbliCategory = kbli.substring(0, 2);
           return kbliCategory === kbliPrefix;
@@ -651,7 +702,7 @@ const MapComponent = () => {
       // 4. Filter berdasarkan badan usaha
       if (currentFilters.businessType !== "0") {
         filtered = filtered.filter(
-          (company) =>
+          (company: Company) =>
             company.badan_usaha &&
             company.badan_usaha.toString() === currentFilters.businessType
         );
@@ -660,7 +711,7 @@ const MapComponent = () => {
       // 5. Filter berdasarkan lokasi perusahaan
       if (currentFilters.location !== "0") {
         filtered = filtered.filter(
-          (company) =>
+          (company: Company) =>
             company.lok_perusahaan &&
             company.lok_perusahaan.toString() === currentFilters.location
         );
@@ -676,11 +727,6 @@ const MapComponent = () => {
     [directories, applySearchFilter]
   );
 
-  // Update GeoJsonKey when selectedLayers changes to force re-render
-  useEffect(() => {
-    setGeoJsonKey((prevKey) => prevKey + 1);
-  }, [selectedLayers]);
-
   // Fetch GeoJSON data
   useEffect(() => {
     fetch("/data/polygon_wilayah.geojson")
@@ -690,13 +736,13 @@ const MapComponent = () => {
         // Deteksi format data GeoJSON
         if (result.data && Array.isArray(result.data)) {
           // Flatten features dari berbagai FeatureCollection
-          const allFeatures = [];
-          result.data.forEach((featureCollection) => {
+          const allFeatures: GeoJsonFeature[] = [];
+          result.data.forEach((featureCollection: GeoJsonData) => {
             if (
               featureCollection.features &&
               Array.isArray(featureCollection.features)
             ) {
-              featureCollection.features.forEach((feature) => {
+              featureCollection.features.forEach((feature: GeoJsonFeature) => {
                 // Verifikasi properties dan kode_kec
                 if (
                   feature.properties &&
@@ -709,8 +755,8 @@ const MapComponent = () => {
           });
 
           // Buat satu FeatureCollection dengan semua features
-          const combinedGeoJSON = {
-            type: "FeatureCollection",
+          const combinedGeoJSON: GeoJsonData = {
+            type: "FeatureCollection" as const,
             features: allFeatures,
           };
 
@@ -730,94 +776,84 @@ const MapComponent = () => {
       });
   }, []);
 
-  // Fetch data dari API
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
+  // Fetch data dari API - menggunakan pola yang sama seperti di repositori referensi
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Paralel fetching untuk meningkatkan performa
-        const [companiesResponse, directoriesResponse, districtsResponse] =
-          await Promise.all([
-            fetch("/api/perusahaan/peta"),
-            fetch("/api/direktori"),
-            fetch("/api/kecamatan"),
-          ]);
+      // Paralel fetching untuk meningkatkan performa
+      const [companiesResponse, directoriesResponse, districtsResponse] =
+        await Promise.all([
+          fetch("/api/perusahaan/peta"),
+          fetch("/api/direktori"),
+          fetch("/api/kecamatan"),
+        ]);
 
-        // Validasi semua responses
-        if (
-          !companiesResponse.ok ||
-          !directoriesResponse.ok ||
-          !districtsResponse.ok
-        ) {
-          throw new Error(`HTTP error! Check status codes.`);
-        }
+      // Validasi semua responses
+      if (
+        !companiesResponse.ok ||
+        !directoriesResponse.ok ||
+        !districtsResponse.ok
+      ) {
+        throw new Error(`HTTP error! Check status codes.`);
+      }
 
-        // Parse data
-        const companiesResult = await companiesResponse.json();
-        const directoriesResult = await directoriesResponse.json();
-        const districtsResult = await districtsResponse.json();
+      // Parse data
+      const companiesResult = await companiesResponse.json();
+      const directoriesResult = await directoriesResponse.json();
+      const districtsResult = await districtsResponse.json();
 
-        if (
-          companiesResult.success &&
-          directoriesResult.success &&
-          districtsResult.success
-        ) {
-          // Set data ke state
-          setCompanies(companiesResult.data);
-          setDirectories(directoriesResult.data);
-          setDistricts(districtsResult.data);
-          setFilteredCompanies(companiesResult.data);
+      if (
+        companiesResult.success &&
+        directoriesResult.success &&
+        districtsResult.success
+      ) {
+        // Set data ke state
+        setCompanies(companiesResult.data);
+        setDirectories(directoriesResult.data);
+        setDistricts(districtsResult.data);
+        setFilteredCompanies(companiesResult.data);
 
-          console.log("Loaded companies:", companiesResult.data.length);
-          console.log("Sample company:", companiesResult.data[0]);
+        console.log("Loaded companies:", companiesResult.data.length);
+        console.log("Sample company:", companiesResult.data[0]);
 
-          // Ekstrak tahun-tahun unik dari data direktori
-          const years = directoriesResult.data
-            .map((dir) => dir.thn_direktori.toString())
-            .filter((year, index, self) => self.indexOf(year) === index)
-            .sort((a, b) => b - a);
+        // Ekstrak tahun-tahun unik dari data direktori
+        const years = directoriesResult.data
+          .map((dir: Directory) => dir.thn_direktori.toString())
+          .filter(
+            (year: string, index: number, self: string[]) =>
+              self.indexOf(year) === index
+          )
+          .sort((a: string, b: string) => b.localeCompare(a));
 
-          setUniqueYears(years);
+        setUniqueYears(years);
 
-          // Hitung statistik
-          const total = companiesResult.data.length;
-          const besar = companiesResult.data.filter(
-            (company) => company.skala?.toLowerCase() === "besar"
-          ).length;
-          const sedang = companiesResult.data.filter(
-            (company) => company.skala?.toLowerCase() === "sedang"
-          ).length;
-
-          setStatistics({
-            total,
-            besar,
-            sedang,
+        // Persiapkan data untuk heatmap
+        const points: [number, number, number][] = companiesResult.data
+          .filter((company: Company) => company.lat && company.lon)
+          .map((company: Company): [number, number, number] => {
+            const intensity =
+              company.skala?.toLowerCase() === "besar" ? 1.0 : 0.7;
+            return [company.lat, company.lon, intensity];
           });
 
-          // Persiapkan data untuk heatmap
-          const points = companiesResult.data
-            .filter((company) => company.lat && company.lon)
-            .map((company) => {
-              const intensity =
-                company.skala?.toLowerCase() === "besar" ? 1.0 : 0.7;
-              return [company.lat, company.lon, intensity];
-            });
-
-          setHeatmapPoints(points);
-        } else {
-          throw new Error("Failed to fetch data");
-        }
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+        setHeatmapPoints(points);
+      } else {
+        throw new Error("Failed to fetch data");
       }
-    };
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, []); // Empty dependency array - hanya jalankan sekali saat mount
 
+  // Initial data load
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   // Panggil fungsi fixGeoJsonKecamatanCodes setelah districts dan geoJsonData tersedia
   useEffect(() => {
@@ -831,7 +867,7 @@ const MapComponent = () => {
 
       return () => clearTimeout(timer);
     }
-  }, [districts, fixGeoJsonKecamatanCodes]);
+  }, [districts, geoJsonData, fixGeoJsonKecamatanCodes]);
 
   // Effect untuk menerapkan filter saat filter atau searchTerm berubah
   useEffect(() => {
@@ -850,9 +886,9 @@ const MapComponent = () => {
       setKecamatanCompanyCounts(counts);
 
       // Update heatmap points
-      const points = filtered
-        .filter((company) => company.lat && company.lon)
-        .map((company) => {
+      const points: [number, number, number][] = filtered
+        .filter((company: Company) => company.lat && company.lon)
+        .map((company: Company): [number, number, number] => {
           const intensity =
             company.skala?.toLowerCase() === "besar" ? 1.0 : 0.7;
           return [company.lat, company.lon, intensity];
@@ -862,7 +898,11 @@ const MapComponent = () => {
     }
   }, [
     companies,
-    filters,
+    filters.year,
+    filters.district,
+    filters.kbliCategory,
+    filters.businessType,
+    filters.location,
     searchTerm,
     applyAllFilters,
     countCompaniesByKecamatan,
@@ -874,9 +914,6 @@ const MapComponent = () => {
       console.log("Both companies and GeoJSON available, initializing counts");
       const initialCounts = countCompaniesByKecamatan(companies);
       setKecamatanCompanyCounts(initialCounts);
-
-      // Force refresh GeoJSON layer to ensure correct styling
-      setGeoJsonKey((prev) => prev + 1);
     }
   }, [companies, geoJsonData, countCompaniesByKecamatan]);
 
@@ -887,12 +924,40 @@ const MapComponent = () => {
       geoJsonLayerRef.current
     ) {
       console.log("kecamatanCompanyCounts updated, updating popups");
-      updateGeoJsonPopups();
+
+      // Update setiap popup pada layer GeoJSON dengan data terbaru
+      geoJsonLayerRef.current.eachLayer((layer: L.Layer) => {
+        const feature = (layer as L.GeoJSON).feature as GeoJsonFeature;
+        if (feature.properties) {
+          const { label, luas, desa, kelurahan, kode_kec } = feature.properties;
+          const kecamatanCode = normalizeKecamatanCode(kode_kec);
+          const count =
+            kecamatanCode !== null
+              ? kecamatanCompanyCounts[kecamatanCode] || 0
+              : 0;
+
+          // Update popup content dengan jumlah perusahaan terbaru
+          const updatedContent = `
+            <div style="font-size: 14px; line-height: 1.5;">
+              <b>${label}</b><br/>
+              <strong>Luas Wilayah:</strong> ${luas} KM²<br/>
+              <strong>Jumlah Desa:</strong> ${desa}<br/>
+              <strong>Jumlah Kelurahan:</strong> ${kelurahan}<br/>
+              <strong>Jumlah Perusahaan:</strong> ${count}
+            </div>
+          `;
+
+          // Update popup content jika popup sudah ada
+          if (layer.getPopup()) {
+            layer.setPopupContent(updatedContent);
+          }
+        }
+      });
     }
-  }, [kecamatanCompanyCounts, updateGeoJsonPopups]);
+  }, [kecamatanCompanyCounts, normalizeKecamatanCode]);
 
   // Handler untuk search
-  const handleSearch = (value) => {
+  const handleSearch = (value: string) => {
     setSearchTerm(value);
   };
 
@@ -1052,31 +1117,52 @@ const MapComponent = () => {
           {/* GeoJSON Layer dengan pendekatan yang dioptimalkan */}
           {geoJsonData && (
             <GeoJSON
-              key={`geojson-${geoJsonKey}`}
+              key="geojson-main"
               data={geoJsonData}
-              style={getStyle}
+              style={getStyle as L.StyleFunction}
               ref={geoJsonLayerRef}
               onEachFeature={(feature, layer) => {
                 if (feature.properties) {
                   const { label, luas, desa, kelurahan, kode_kec } =
                     feature.properties;
-                  const kecCode = normalizeKecamatanCode(kode_kec);
-                  const count =
-                    kecCode !== null ? kecamatanCompanyCounts[kecCode] || 0 : 0;
 
-                  // Initial popup binding
-                  layer.bindPopup(`
-                    <div style="font-size: 14px; line-height: 1.5;">
-                      <b>${label}</b><br/>
-                      <strong>Luas Wilayah:</strong> ${luas} KM²<br/>
-                      <strong>Jumlah Desa:</strong> ${desa}<br/>
-                      <strong>Jumlah Kelurahan:</strong> ${kelurahan}<br/>
-                      <strong>Jumlah Perusahaan:</strong> ${count}
-                    </div>
-                  `);
+                  // Initial popup binding dengan data terbaru
+                  const updatePopupContent = () => {
+                    const currentKecCode = normalizeKecamatanCode(kode_kec);
+                    const currentCount =
+                      currentKecCode !== null
+                        ? kecamatanCompanyCounts[currentKecCode] || 0
+                        : 0;
+
+                    return `
+                      <div style="font-size: 14px; line-height: 1.5;">
+                        <b>${label}</b><br/>
+                        <strong>Luas Wilayah:</strong> ${luas} KM²<br/>
+                        <strong>Jumlah Desa:</strong> ${desa}<br/>
+                        <strong>Jumlah Kelurahan:</strong> ${kelurahan}<br/>
+                        <strong>Jumlah Perusahaan:</strong> ${currentCount}
+                      </div>
+                    `;
+                  };
+
+                  // Bind popup dengan fungsi yang selalu mengambil data terbaru
+                  layer.bindPopup(updatePopupContent());
+
+                  // Tambahkan event listener untuk update popup saat dibuka
+                  layer.on("click", () => {
+                    // Update popup content dengan data terbaru saat diklik
+                    const updatedContent = updatePopupContent();
+                    layer.setPopupContent(updatedContent);
+                  });
+
+                  // Tambahkan event listener untuk update popup saat popup dibuka
+                  layer.on("popupopen", () => {
+                    // Update popup content dengan data terbaru saat popup dibuka
+                    const updatedContent = updatePopupContent();
+                    layer.setPopupContent(updatedContent);
+                  });
                 }
               }}
-              onAdd={onGeoJsonLoad}
             />
           )}
 
@@ -1086,7 +1172,9 @@ const MapComponent = () => {
             filteredCompanies.length > 0 &&
             filteredCompanies.map((company) => {
               // Format URL website
-              const formatUrl = (url) => {
+              const formatUrl = (
+                url: string | null | undefined
+              ): string | null => {
                 if (!url || url.trim() === "") return null;
                 return url.startsWith("http") ? url : `http://${url}`;
               };
@@ -1257,309 +1345,323 @@ const MapComponent = () => {
           leave="transition ease-in duration-200"
           leaveFrom="opacity-100 transform scale-100"
           leaveTo="opacity-0 transform scale-95"
-          className="absolute top-full left-0 z-30 w-68 max-h-[77vh] p-3 bg-[#ffffff] rounded-md shadow-md text-cdark mt-2 overflow-y-auto"
         >
-          <div>
-            {/* 1. Bagian lokasi dengan nilai yang berubah sesuai kecamatan */}
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <RoomIcon className="text-xl" />
-              <span className="text-sm font-semibold">
-                {filters.district !== "0"
-                  ? districts.find(
-                      (d) => d.kode_kec.toString() === filters.district
-                    )?.nama_kec
-                  : "Kabupaten Sidoarjo"}
-              </span>
-            </div>
-
-            {/* 2. Bagian Jumlah perusahaan */}
-            <div className="mt-2 block w-full pl-3 pr-3 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark rounded-md">
-              <div className="flex items-center justify-center">
-                <CountUp
-                  start={0}
-                  end={filteredCompanies.length}
-                  duration={2}
-                  className="text-3xl font-bold"
-                />
-                <p className="ml-2 text-xs font-medium">Perusahaan</p>
+          <div className="absolute top-full left-0 z-30 w-68 max-h-[77vh] p-3 bg-[#ffffff] rounded-md shadow-md text-cdark mt-2 overflow-y-auto">
+            <div>
+              {/* 1. Bagian lokasi dengan nilai yang berubah sesuai kecamatan */}
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <RoomIcon className="text-xl" />
+                <span className="text-sm font-semibold">
+                  {filters.district !== "0"
+                    ? districts.find(
+                        (d) => d.kode_kec.toString() === filters.district
+                      )?.nama_kec
+                    : "Kabupaten Sidoarjo"}
+                </span>
               </div>
 
-              {/* Persentase dari total di tahun tersebut */}
-              {(() => {
-                // Filter perusahaan hanya berdasarkan tahun yang dipilih
-                const companiesInSelectedYear =
-                  filters.year !== "all"
-                    ? companies.filter((company) => {
-                        const companyInYear = directories
-                          .filter(
-                            (dir) =>
-                              dir.thn_direktori.toString() === filters.year
-                          )
-                          .map((dir) => dir.id_perusahaan)
-                          .includes(company.id_perusahaan);
-                        return companyInYear;
-                      })
-                    : companies;
+              {/* 2. Bagian Jumlah perusahaan */}
+              <div className="mt-2 block w-full pl-3 pr-3 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark rounded-md">
+                <div className="flex items-center justify-center">
+                  <CountUp
+                    start={0}
+                    end={filteredCompanies.length}
+                    duration={2}
+                    className="text-3xl font-bold"
+                  />
+                  <p className="ml-2 text-xs font-medium">Perusahaan</p>
+                </div>
 
-                const totalInYear = companiesInSelectedYear.length;
-
-                if (filteredCompanies.length < totalInYear) {
-                  const percentage = (
-                    (filteredCompanies.length / totalInYear) *
-                    100
-                  ).toFixed(1);
-                  return (
-                    <div className="text-center text-xs mt-1 text-gray-600">
-                      {percentage}% dari total {totalInYear} perusahaan
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-
-            {/* 3. Bagian kategori skala - Pie Chart */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-cdark text-center mb-1">
-                Kategori Skala Industri
-              </label>
-
-              <div className="flex flex-col items-center font-roboto font-medium text-xs">
-                {filteredCompanies.length > 0 ? (
-                  <>
-                    <div className="relative mb-2">
-                      <PieChart width={200} height={120}>
-                        <Pie
-                          data={pieChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={30}
-                          outerRadius={50}
-                          dataKey="value"
-                          labelLine={false}
-                          label={false} // Hilangkan label di chart
-                          activeIndex={pieActiveIndex}
-                          onMouseEnter={(data, index) =>
-                            setPieActiveIndex(index)
-                          }
-                          onMouseLeave={() => setPieActiveIndex(null)}
-                        >
-                          {pieChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-
-                      {/* Custom tooltip for pie chart */}
-                      {pieActiveIndex !== null && (
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
-                          {pieChartData[pieActiveIndex].value} perusahaan
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Labels di bawah pie chart */}
-                    <div className="flex justify-center gap-4">
-                      {pieChartData.map((entry, index) => (
-                        <div
-                          key={`label-${index}`}
-                          className="flex items-center"
-                        >
-                          <div
-                            className="w-3 h-3 mr-1 rounded-sm"
-                            style={{ backgroundColor: COLORS[index] }}
-                          />
-                          <span>
-                            {entry.name}{" "}
-                            {(
-                              (entry.value / filteredCompanies.length) *
-                              100
-                            ).toFixed(2)}
-                            %
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    Tidak ada data untuk ditampilkan
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 4. Bagian kategori KBLI dengan logika khusus */}
-            {filteredCompanies.length > 0 && (
-              <div className="mt-3">
-                <label className="block text-sm font-medium text-cdark text-center mb-2">
-                  Kategori KBLI
-                </label>
-
+                {/* Persentase dari total di tahun tersebut */}
                 {(() => {
-                  // Tentukan jenis tampilan berdasarkan filter
-                  const isDistrictFiltered = filters.district !== "0";
-                  const isKbliFiltered = filters.kbliCategory !== "kbli_all";
+                  // Filter perusahaan hanya berdasarkan tahun yang dipilih
+                  const companiesInSelectedYear =
+                    filters.year !== "all"
+                      ? companies.filter((company) => {
+                          const companyInYear = directories
+                            .filter(
+                              (dir) =>
+                                dir.thn_direktori.toString() === filters.year
+                            )
+                            .map((dir) => dir.id_perusahaan)
+                            .includes(company.id_perusahaan);
+                          return companyInYear;
+                        })
+                      : companies;
 
-                  // Tentukan berapa digit KBLI yang akan digunakan
-                  let kbliDigits = 2; // Default 2 digit
+                  const totalInYear = companiesInSelectedYear.length;
 
-                  if (isKbliFiltered && !isDistrictFiltered) {
-                    kbliDigits = 3; // KBLI difilter, kecamatan tidak
-                  } else if (isKbliFiltered && isDistrictFiltered) {
-                    kbliDigits = 4; // Keduanya difilter
-                  }
-
-                  // Hitung distribusi KBLI berdasarkan digit yang ditentukan
-                  const kbliDistribution = filteredCompanies.reduce(
-                    (acc, company) => {
-                      if (!company.KBLI) return acc;
-
-                      const kbliCode = company.KBLI.toString();
-                      // Potong sesuai digit yang diinginkan, pastikan tidak lebih dari panjang kode
-                      const kbliCategory = kbliCode.substring(
-                        0,
-                        Math.min(kbliDigits, kbliCode.length)
-                      );
-
-                      acc[kbliCategory] = (acc[kbliCategory] || 0) + 1;
-                      return acc;
-                    },
-                    {}
-                  );
-
-                  // Ambil top categories (maksimal 5)
-                  const topCategories = Object.entries(kbliDistribution).sort(
-                    (a, b) => b[1] - a[1]
-                  );
-
-                  // Jika lebih dari 5 kategori, gabungkan sisanya sebagai "Lainnya"
-                  let displayCategories = [];
-                  let othersCount = 0;
-
-                  if (topCategories.length > 5) {
-                    displayCategories = topCategories.slice(0, 5);
-                    othersCount = topCategories
-                      .slice(5)
-                      .reduce((sum, curr) => sum + curr[1], 0);
-                  } else {
-                    displayCategories = topCategories;
-                  }
-
-                  // Jika ada "Lainnya", tambahkan ke displayCategories
-                  if (othersCount > 0) {
-                    displayCategories.push(["Lainnya", othersCount]);
-                  }
-
-                  // WARNA untuk charts
-                  const CHART_COLORS = [
-                    "#1f77b4",
-                    "#ff7f0e",
-                    "#2ca02c",
-                    "#d62728",
-                    "#9467bd",
-                    "#8c564b",
-                  ];
-
-                  // Tampilkan sebagai histogram jika tidak ada filter KBLI tapi ada filter kecamatan
-                  if (!isKbliFiltered && (isDistrictFiltered || true)) {
-                    // Histogram untuk skenario A
-                    const chartData = displayCategories.map(
-                      ([category, count], index) => ({
-                        category,
-                        count,
-                        fill: CHART_COLORS[index % CHART_COLORS.length],
-                      })
-                    );
-
+                  if (filteredCompanies.length < totalInYear) {
+                    const percentage = (
+                      (filteredCompanies.length / totalInYear) *
+                      100
+                    ).toFixed(1);
                     return (
-                      <div className="h-28 relative">
-                        <BarChart
-                          width={230}
-                          height={110}
-                          data={chartData}
-                          margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-                          onMouseMove={(data) => {
-                            if (data && data.activeTooltipIndex !== undefined) {
-                              setBarActiveIndex(data.activeTooltipIndex);
-                            }
-                          }}
-                          onMouseLeave={() => setBarActiveIndex(null)}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                          />
-                          <XAxis dataKey="category" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} />
-                          <Bar
-                            dataKey="count"
-                            fill="#8884d8"
-                            radius={[4, 4, 0, 0]}
-                          >
-                            {chartData.map((entry, index) => (
-                              <Cell
-                                key={`cell-${index}`}
-                                fill={CHART_COLORS[index % CHART_COLORS.length]}
-                              />
-                            ))}
-                          </Bar>
-                        </BarChart>
-
-                        {/* Custom tooltip for bar chart */}
-                        {barActiveIndex !== null &&
-                          barActiveIndex < chartData.length && (
-                            <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
-                              {chartData[barActiveIndex].count} perusahaan
-                            </div>
-                          )}
-                      </div>
-                    );
-                  } else {
-                    // Progress Bar untuk skenario B dan C (ketika KBLI difilter)
-                    return (
-                      <div className="space-y-2">
-                        {displayCategories.map(([category, count], index) => {
-                          const percentage =
-                            (count / filteredCompanies.length) * 100;
-                          return (
-                            <div
-                              key={category}
-                              className="flex items-center text-xs"
-                            >
-                              <div className="w-10 font-medium">{category}</div>
-                              <div className="flex-1 mx-1 relative group">
-                                <div className="bg-gray-200 h-3 w-full rounded-full overflow-hidden cursor-pointer">
-                                  <div
-                                    className="h-full rounded-full"
-                                    style={{
-                                      width: `${percentage}%`,
-                                      backgroundColor:
-                                        CHART_COLORS[
-                                          index % CHART_COLORS.length
-                                        ],
-                                    }}
-                                  ></div>
-                                </div>
-
-                                {/* Tooltip yang muncul saat hover */}
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
-                                  {count} perusahaan
-                                  <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-                                </div>
-                              </div>
-                              <div className="w-12 text-right">
-                                {percentage.toFixed(1)}%
-                              </div>
-                            </div>
-                          );
-                        })}
+                      <div className="text-center text-xs mt-1 text-gray-600">
+                        {percentage}% dari total {totalInYear} perusahaan
                       </div>
                     );
                   }
+                  return null;
                 })()}
               </div>
-            )}
+
+              {/* 3. Bagian kategori skala - Pie Chart */}
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-cdark text-center mb-1">
+                  Kategori Skala Industri
+                </label>
+
+                <div className="flex flex-col items-center font-roboto font-medium text-xs">
+                  {filteredCompanies.length > 0 ? (
+                    <>
+                      <div className="relative mb-2">
+                        <PieChart width={200} height={120}>
+                          <Pie
+                            data={pieChartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={30}
+                            outerRadius={50}
+                            dataKey="value"
+                            labelLine={false}
+                            label={false} // Hilangkan label di chart
+                            activeIndex={pieActiveIndex ?? undefined}
+                            onMouseEnter={(data, index) =>
+                              setPieActiveIndex(index)
+                            }
+                            onMouseLeave={() => setPieActiveIndex(null)}
+                          >
+                            {pieChartData.map((entry, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={COLORS[index]}
+                              />
+                            ))}
+                          </Pie>
+                        </PieChart>
+
+                        {/* Custom tooltip for pie chart */}
+                        {pieActiveIndex !== null && (
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
+                            {pieChartData[pieActiveIndex].value} perusahaan
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Labels di bawah pie chart */}
+                      <div className="flex justify-center gap-4">
+                        {pieChartData.map((entry, index) => (
+                          <div
+                            key={`label-${index}`}
+                            className="flex items-center"
+                          >
+                            <div
+                              className="w-3 h-3 mr-1 rounded-sm"
+                              style={{ backgroundColor: COLORS[index] }}
+                            />
+                            <span>
+                              {entry.name}{" "}
+                              {(
+                                (entry.value / filteredCompanies.length) *
+                                100
+                              ).toFixed(2)}
+                              %
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">
+                      Tidak ada data untuk ditampilkan
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 4. Bagian kategori KBLI dengan logika khusus */}
+              {filteredCompanies.length > 0 && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-cdark text-center mb-2">
+                    Kategori KBLI
+                  </label>
+
+                  {(() => {
+                    // Tentukan jenis tampilan berdasarkan filter
+                    const isDistrictFiltered = filters.district !== "0";
+                    const isKbliFiltered = filters.kbliCategory !== "kbli_all";
+
+                    // Tentukan berapa digit KBLI yang akan digunakan
+                    let kbliDigits = 2; // Default 2 digit
+
+                    if (isKbliFiltered && !isDistrictFiltered) {
+                      kbliDigits = 3; // KBLI difilter, kecamatan tidak
+                    } else if (isKbliFiltered && isDistrictFiltered) {
+                      kbliDigits = 4; // Keduanya difilter
+                    }
+
+                    // Hitung distribusi KBLI berdasarkan digit yang ditentukan
+                    const kbliDistribution = filteredCompanies.reduce(
+                      (acc, company) => {
+                        if (!company.KBLI) return acc;
+
+                        const kbliCode = company.KBLI.toString();
+                        // Potong sesuai digit yang diinginkan, pastikan tidak lebih dari panjang kode
+                        const kbliCategory = kbliCode.substring(
+                          0,
+                          Math.min(kbliDigits, kbliCode.length)
+                        );
+
+                        acc[kbliCategory] = (acc[kbliCategory] || 0) + 1;
+                        return acc;
+                      },
+                      {} as Record<string, number>
+                    );
+
+                    // Ambil top categories (maksimal 5)
+                    const topCategories = Object.entries(kbliDistribution).sort(
+                      (a, b) => (b[1] as number) - (a[1] as number)
+                    );
+
+                    // Jika lebih dari 5 kategori, gabungkan sisanya sebagai "Lainnya"
+                    let displayCategories: [string, number][] = [];
+                    let othersCount = 0;
+
+                    if (topCategories.length > 5) {
+                      displayCategories = topCategories.slice(0, 5) as [
+                        string,
+                        number,
+                      ][];
+                      othersCount = topCategories
+                        .slice(5)
+                        .reduce((sum, curr) => sum + (curr[1] as number), 0);
+                    } else {
+                      displayCategories = topCategories as [string, number][];
+                    }
+
+                    // Jika ada "Lainnya", tambahkan ke displayCategories
+                    if (othersCount > 0) {
+                      displayCategories.push(["Lainnya", othersCount]);
+                    }
+
+                    // WARNA untuk charts
+                    const CHART_COLORS = [
+                      "#1f77b4",
+                      "#ff7f0e",
+                      "#2ca02c",
+                      "#d62728",
+                      "#9467bd",
+                      "#8c564b",
+                    ];
+
+                    // Tampilkan sebagai histogram jika tidak ada filter KBLI tapi ada filter kecamatan
+                    if (!isKbliFiltered && (isDistrictFiltered || true)) {
+                      // Histogram untuk skenario A
+                      const chartData = displayCategories.map(
+                        ([category, count], index) => ({
+                          category,
+                          count,
+                          fill: CHART_COLORS[index % CHART_COLORS.length],
+                        })
+                      );
+
+                      return (
+                        <div className="h-28 relative">
+                          <BarChart
+                            width={230}
+                            height={110}
+                            data={chartData}
+                            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+                            onMouseMove={(data) => {
+                              if (
+                                data &&
+                                data.activeTooltipIndex !== undefined
+                              ) {
+                                setBarActiveIndex(data.activeTooltipIndex);
+                              }
+                            }}
+                            onMouseLeave={() => setBarActiveIndex(null)}
+                          >
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              vertical={false}
+                            />
+                            <XAxis dataKey="category" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Bar
+                              dataKey="count"
+                              fill="#8884d8"
+                              radius={[4, 4, 0, 0]}
+                            >
+                              {chartData.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={
+                                    CHART_COLORS[index % CHART_COLORS.length]
+                                  }
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+
+                          {/* Custom tooltip for bar chart */}
+                          {barActiveIndex !== null &&
+                            barActiveIndex < chartData.length && (
+                              <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
+                                {chartData[barActiveIndex].count} perusahaan
+                              </div>
+                            )}
+                        </div>
+                      );
+                    } else {
+                      // Progress Bar untuk skenario B dan C (ketika KBLI difilter)
+                      return (
+                        <div className="space-y-2">
+                          {displayCategories.map(([category, count], index) => {
+                            const percentage =
+                              (count / filteredCompanies.length) * 100;
+                            return (
+                              <div
+                                key={category}
+                                className="flex items-center text-xs"
+                              >
+                                <div className="w-10 font-medium">
+                                  {category}
+                                </div>
+                                <div className="flex-1 mx-1 relative group">
+                                  <div className="bg-gray-200 h-3 w-full rounded-full overflow-hidden cursor-pointer">
+                                    <div
+                                      className="h-full rounded-full"
+                                      style={{
+                                        width: `${percentage}%`,
+                                        backgroundColor:
+                                          CHART_COLORS[
+                                            index % CHART_COLORS.length
+                                          ],
+                                      }}
+                                    ></div>
+                                  </div>
+
+                                  {/* Tooltip yang muncul saat hover */}
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
+                                    {count} perusahaan
+                                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                                  </div>
+                                </div>
+                                <div className="w-12 text-right">
+                                  {percentage.toFixed(1)}%
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+                  })()}
+                </div>
+              )}
+            </div>
           </div>
         </Transition>
 
@@ -1594,173 +1696,183 @@ const MapComponent = () => {
           leave="transition ease-in duration-200"
           leaveFrom="opacity-100 transform scale-100"
           leaveTo="opacity-0 transform scale-95"
-          className="absolute top-full right-0 z-20 w-64 p-4 bg-[#ffffff] rounded-md shadow-md text-cdark mt-2"
         >
-          <div>
-            <div className="grid grid-cols-8 gap-4">
-              <div className="col-span-3">
-                <label className="block text-sm font-medium text-cdark">
-                  Tahun
-                </label>
-                <select
-                  value={filters.year}
-                  onChange={(e) =>
-                    setFilters({ ...filters, year: e.target.value })
-                  }
-                  className="mt-1 block w-full pl-2 pr-2 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                >
-                  {/* <option value="all">Semua Tahun</option> */}
-                  {uniqueYears.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
+          <div className="absolute top-full right-0 z-20 w-64 p-4 bg-[#ffffff] rounded-md shadow-md text-cdark mt-2">
+            <div>
+              <div className="grid grid-cols-8 gap-4">
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-cdark">
+                    Tahun
+                  </label>
+                  <select
+                    value={filters.year}
+                    onChange={(e) =>
+                      setFilters({ ...filters, year: e.target.value })
+                    }
+                    className="mt-1 block w-full pl-2 pr-2 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                  >
+                    {/* <option value="all">Semua Tahun</option> */}
+                    {uniqueYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-5">
+                  <label className="block text-sm font-medium text-cdark">
+                    Kecamatan
+                  </label>
+                  <select
+                    value={filters.district}
+                    onChange={(e) =>
+                      setFilters({ ...filters, district: e.target.value })
+                    }
+                    className="mt-1 block w-full pl-2 pr-2 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                  >
+                    <option value="0">Semua Kec</option>
+                    {districts.map((district) => (
+                      <option key={district.kode_kec} value={district.kode_kec}>
+                        {district.id_kec}. {district.nama_kec}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="col-span-5">
-                <label className="block text-sm font-medium text-cdark">
-                  Kecamatan
-                </label>
-                <select
-                  value={filters.district}
-                  onChange={(e) =>
-                    setFilters({ ...filters, district: e.target.value })
-                  }
-                  className="mt-1 block w-full pl-2 pr-2 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                >
-                  <option value="0">Semua Kec</option>
-                  {districts.map((district) => (
-                    <option key={district.kode_kec} value={district.kode_kec}>
-                      {district.id_kec}. {district.nama_kec}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
 
-            <label className="block mt-4 text-sm font-medium text-cdark">
-              Kategori KBLI
-            </label>
-            <select
-              value={filters.kbliCategory}
-              onChange={(e) =>
-                setFilters({ ...filters, kbliCategory: e.target.value })
-              }
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              <option value="kbli_all">Semua Kategori</option>
-              <option value="kbli_10">10. Industri makanan</option>
-              <option value="kbli_11">11. Industri minuman</option>
-              <option value="kbli_12">12. Industri pengolahan tembakau</option>
-              <option value="kbli_13">13. Industri tekstil</option>
-              <option value="kbli_14">14. Industri pakaian jadi</option>
-              <option value="kbli_15">
-                15. Industri kulit, barang dari kulit dan alas kaki
-              </option>
-              <option value="kbli_16">
-                16. Industri kayu, barang dari kayu, gabus dan barang anyaman
-                dari bambu, rotan dan sejenisnya
-              </option>
-              <option value="kbli_17">
-                17. Industri kertas dan barang dari kertas
-              </option>
-              <option value="kbli_18">
-                18. Industri percetakan dan reproduksi media rekaman
-              </option>
-              <option value="kbli_19">
-                19. Industri produk dari batubara dan pengilangan minyak bumi
-              </option>
-              <option value="kbli_20">
-                20. Industri bahan kimia dan barang dari bahan kimia
-              </option>
-              <option value="kbli_21">
-                21. Industri farmasi, produk obat kimia dan obat tradisional
-              </option>
-              <option value="kbli_22">
-                22. Industri karet, barang dari karet dan plastik
-              </option>
-              <option value="kbli_23">
-                23. Industri barang galian bukan logam
-              </option>
-              <option value="kbli_24">24. Industri logam dasar</option>
-              <option value="kbli_25">
-                25. Industri barang logam, bukan mesin dan peralatannya
-              </option>
-              <option value="kbli_26">
-                26. Industri computer, barang elektronik dan optik
-              </option>
-              <option value="kbli_27">27. Industri peralatan listrik</option>
-              <option value="kbli_28">
-                28. Industri mesin dan perlengkapan ytdl
-              </option>
-              <option value="kbli_29">
-                29. Industri kendaraan bermotor, trailer dan semi trailer
-              </option>
-              <option value="kbli_30">30. Industri alat angkut lainnya</option>
-              <option value="kbli_31">31. Industri furniture</option>
-              <option value="kbli_32">32. Industri pengolahan lainnya</option>
-              <option value="kbli_33">
-                33. Jasa reparasi dan pemasangan mesin dan peralatan
-              </option>
-            </select>
-
-            <label className="block mt-4 text-sm font-medium text-cdark">
-              Badan Usaha
-            </label>
-            <select
-              value={filters.businessType}
-              onChange={(e) =>
-                setFilters({ ...filters, businessType: e.target.value })
-              }
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              <option value="0">Semua Badan Usaha</option>
-              <option value="1">1. PT/PT Persero/Perum</option>
-              <option value="2">2. CV</option>
-              <option value="3">3. Firma</option>
-              <option value="4">4. Koperasi/ Dana Pensiun</option>
-              <option value="5">5. Yayasan</option>
-              <option value="6">6. Izin Khusus</option>
-              <option value="7">7. Perwakilan Perusahaan/Lembaga Asing</option>
-              <option value="8">8. Tidak Berbadan Usaha</option>
-            </select>
-
-            <label className="block mt-4 text-sm font-medium text-cdark">
-              Lokasi Perusahaan
-            </label>
-            <select
-              value={filters.location}
-              onChange={(e) =>
-                setFilters({ ...filters, location: e.target.value })
-              }
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              <option value="0">Semua Lokasi</option>
-              <option value="1">1. Kawasan Berikat</option>
-              <option value="2">2. Kawasan Industri</option>
-              <option value="3">3. Kawasan Peruntukan Industri</option>
-              <option value="4">4. Luar Kawasan</option>
-            </select>
-            {/* Tambahkan tombol Reset dan Apply */}
-            <div className="flex justify-between mt-4">
-              <button
-                onClick={() =>
-                  setFilters({
-                    year: "2024",
-                    district: "0",
-                    kbliCategory: "kbli_all",
-                    businessType: "0",
-                    location: "0",
-                  })
+              <label className="block mt-4 text-sm font-medium text-cdark">
+                Kategori KBLI
+              </label>
+              <select
+                value={filters.kbliCategory}
+                onChange={(e) =>
+                  setFilters({ ...filters, kbliCategory: e.target.value })
                 }
-                className="px-3 py-1 bg-gray-200 rounded text-sm"
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
               >
-                Reset
-              </button>
+                <option value="kbli_all">Semua Kategori</option>
+                <option value="kbli_10">10. Industri makanan</option>
+                <option value="kbli_11">11. Industri minuman</option>
+                <option value="kbli_12">
+                  12. Industri pengolahan tembakau
+                </option>
+                <option value="kbli_13">13. Industri tekstil</option>
+                <option value="kbli_14">14. Industri pakaian jadi</option>
+                <option value="kbli_15">
+                  15. Industri kulit, barang dari kulit dan alas kaki
+                </option>
+                <option value="kbli_16">
+                  16. Industri kayu, barang dari kayu, gabus dan barang anyaman
+                  dari bambu, rotan dan sejenisnya
+                </option>
+                <option value="kbli_17">
+                  17. Industri kertas dan barang dari kertas
+                </option>
+                <option value="kbli_18">
+                  18. Industri percetakan dan reproduksi media rekaman
+                </option>
+                <option value="kbli_19">
+                  19. Industri produk dari batubara dan pengilangan minyak bumi
+                </option>
+                <option value="kbli_20">
+                  20. Industri bahan kimia dan barang dari bahan kimia
+                </option>
+                <option value="kbli_21">
+                  21. Industri farmasi, produk obat kimia dan obat tradisional
+                </option>
+                <option value="kbli_22">
+                  22. Industri karet, barang dari karet dan plastik
+                </option>
+                <option value="kbli_23">
+                  23. Industri barang galian bukan logam
+                </option>
+                <option value="kbli_24">24. Industri logam dasar</option>
+                <option value="kbli_25">
+                  25. Industri barang logam, bukan mesin dan peralatannya
+                </option>
+                <option value="kbli_26">
+                  26. Industri computer, barang elektronik dan optik
+                </option>
+                <option value="kbli_27">27. Industri peralatan listrik</option>
+                <option value="kbli_28">
+                  28. Industri mesin dan perlengkapan ytdl
+                </option>
+                <option value="kbli_29">
+                  29. Industri kendaraan bermotor, trailer dan semi trailer
+                </option>
+                <option value="kbli_30">
+                  30. Industri alat angkut lainnya
+                </option>
+                <option value="kbli_31">31. Industri furniture</option>
+                <option value="kbli_32">32. Industri pengolahan lainnya</option>
+                <option value="kbli_33">
+                  33. Jasa reparasi dan pemasangan mesin dan peralatan
+                </option>
+              </select>
 
-              <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm">
-                Terapkan
-              </button>
+              <label className="block mt-4 text-sm font-medium text-cdark">
+                Badan Usaha
+              </label>
+              <select
+                value={filters.businessType}
+                onChange={(e) =>
+                  setFilters({ ...filters, businessType: e.target.value })
+                }
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              >
+                <option value="0">Semua Badan Usaha</option>
+                <option value="1">1. PT/PT Persero/Perum</option>
+                <option value="2">2. CV</option>
+                <option value="3">3. Firma</option>
+                <option value="4">4. Koperasi/ Dana Pensiun</option>
+                <option value="5">5. Yayasan</option>
+                <option value="6">6. Izin Khusus</option>
+                <option value="7">
+                  7. Perwakilan Perusahaan/Lembaga Asing
+                </option>
+                <option value="8">8. Tidak Berbadan Usaha</option>
+              </select>
+
+              <label className="block mt-4 text-sm font-medium text-cdark">
+                Lokasi Perusahaan
+              </label>
+              <select
+                value={filters.location}
+                onChange={(e) =>
+                  setFilters({ ...filters, location: e.target.value })
+                }
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-[#EEF0F2] text-cdark focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              >
+                <option value="0">Semua Lokasi</option>
+                <option value="1">1. Kawasan Berikat</option>
+                <option value="2">2. Kawasan Industri</option>
+                <option value="3">3. Kawasan Peruntukan Industri</option>
+                <option value="4">4. Luar Kawasan</option>
+              </select>
+              {/* Tambahkan tombol Reset dan Apply */}
+              <div className="flex justify-between mt-4">
+                <button
+                  onClick={() =>
+                    setFilters({
+                      year: "2024",
+                      district: "0",
+                      kbliCategory: "kbli_all",
+                      businessType: "0",
+                      location: "0",
+                    })
+                  }
+                  className="px-3 py-1 bg-gray-200 rounded text-sm"
+                >
+                  Reset
+                </button>
+
+                <button
+                  onClick={() => setIsFilterOpen(false)}
+                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+                >
+                  Terapkan
+                </button>
+              </div>
             </div>
           </div>
         </Transition>
@@ -1855,50 +1967,51 @@ const MapComponent = () => {
             leave="transition ease-in duration-200"
             leaveFrom="opacity-100 transform scale-100"
             leaveTo="opacity-0 transform scale-95"
-            className="absolute bottom-full right-0 z-20 w-48 p-2 bg-white rounded-md shadow-md text-cdark mb-2"
           >
-            <div>
-              <label className="block text-sm font-medium text-cdark mb-2 text-center">
-                Visibilitas Layer
-              </label>
-
-              {/* Checkbox dengan Icon Visibility */}
-              <div className="space-y-2">
-                <label
-                  className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
-                  onClick={() => handleLayerChange("heatmap")}
-                >
-                  <span>Peta Heatmap</span>
-                  {selectedLayers.heatmap ? (
-                    <VisibilityIcon className="text-cdark text-sm" />
-                  ) : (
-                    <VisibilityOffIcon className="text-gray-400 text-sm" />
-                  )}
+            <div className="absolute bottom-full right-0 z-20 w-48 p-2 bg-white rounded-md shadow-md text-cdark mb-2">
+              <div>
+                <label className="block text-sm font-medium text-cdark mb-2 text-center">
+                  Visibilitas Layer
                 </label>
 
-                <label
-                  className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
-                  onClick={() => handleLayerChange("choropleth")}
-                >
-                  <span>Peta Choropleth</span>
-                  {selectedLayers.choropleth ? (
-                    <VisibilityIcon className="text-cdark text-sm" />
-                  ) : (
-                    <VisibilityOffIcon className="text-gray-400 text-sm" />
-                  )}
-                </label>
+                {/* Checkbox dengan Icon Visibility */}
+                <div className="space-y-2">
+                  <label
+                    className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
+                    onClick={() => handleLayerChange("heatmap")}
+                  >
+                    <span>Peta Heatmap</span>
+                    {selectedLayers.heatmap ? (
+                      <VisibilityIcon className="text-cdark text-sm" />
+                    ) : (
+                      <VisibilityOffIcon className="text-gray-400 text-sm" />
+                    )}
+                  </label>
 
-                <label
-                  className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
-                  onClick={() => handleLayerChange("titik")}
-                >
-                  <span>Titik Lokasi</span>
-                  {selectedLayers.titik ? (
-                    <VisibilityIcon className="text-cdark text-sm" />
-                  ) : (
-                    <VisibilityOffIcon className="text-gray-400 text-sm" />
-                  )}
-                </label>
+                  <label
+                    className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
+                    onClick={() => handleLayerChange("choropleth")}
+                  >
+                    <span>Peta Choropleth</span>
+                    {selectedLayers.choropleth ? (
+                      <VisibilityIcon className="text-cdark text-sm" />
+                    ) : (
+                      <VisibilityOffIcon className="text-gray-400 text-sm" />
+                    )}
+                  </label>
+
+                  <label
+                    className="flex items-center justify-between cursor-pointer text-xs font-medium p-1 rounded-md hover:bg-gray-100"
+                    onClick={() => handleLayerChange("titik")}
+                  >
+                    <span>Titik Lokasi</span>
+                    {selectedLayers.titik ? (
+                      <VisibilityIcon className="text-cdark text-sm" />
+                    ) : (
+                      <VisibilityOffIcon className="text-gray-400 text-sm" />
+                    )}
+                  </label>
+                </div>
               </div>
             </div>
           </Transition>

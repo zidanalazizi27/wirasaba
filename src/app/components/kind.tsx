@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, useAnimation } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 
 export default function KawasanIndustri() {
-  const controls = useAnimation();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -27,15 +25,6 @@ export default function KawasanIndustri() {
     // Cleanup event listener saat komponen unmount
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  // Efek terpisah untuk mengontrol animasi berdasarkan state isVisible
-  useEffect(() => {
-    if (isVisible) {
-      controls.start({ opacity: 1, y: 0 });
-    } else {
-      controls.start({ opacity: 0, y: 50 });
-    }
-  }, [isVisible, controls]);
 
   // Data Kawasan Industri
   const kawasanList = [
@@ -77,11 +66,10 @@ export default function KawasanIndustri() {
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      animate={controls}
-      transition={{ duration: 0.8, ease: "easeOut" }}
-      className="mx-[5%] font-roboto pb-10"
+    <div
+      className={`mx-[5%] font-roboto pb-10 transition-all duration-800 ease-out ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+      }`}
     >
       {/* Judul */}
       <h1 className="text-2xl font-bold text-cdark text-center mt-10 mb-6">
@@ -89,11 +77,10 @@ export default function KawasanIndustri() {
       </h1>
 
       {/* Deskripsi */}
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        animate={controls}
-        transition={{ duration: 1, delay: 0.4 }}
-        className="w-full text-cdark text-sm text-justify font-medium"
+      <div
+        className={`w-full text-cdark text-sm leading-relaxed text-justify font-semibold transition-all duration-1000 delay-400 ${
+          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+        }`}
       >
         <p className="indent-8">
           Kawasan industri adalah area khusus yang dirancang untuk memusatkan
@@ -111,11 +98,9 @@ export default function KawasanIndustri() {
         {/* Kartu Kawasan Industri */}
         <div className="flex flex-wrap justify-center gap-8 mt-6">
           {kawasanList.map((kawasan, index) => (
-            <motion.div
+            <div
               key={index}
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.3 }}
-              className="relative w-[180px] h-[250px] shadow-lg rounded-xl overflow-hidden bg-[#74512D] text-sm"
+              className="relative w-[180px] h-[250px] shadow-lg rounded-xl overflow-hidden bg-[#74512D] text-sm hover:scale-105 transition-transform duration-300"
             >
               <Link href={kawasan.link}>
                 {/* Gambar dengan Overlay Gradasi */}
@@ -137,10 +122,10 @@ export default function KawasanIndustri() {
                   <p className="text-xs font-semibold">({kawasan.size})</p>
                 </div>
               </Link>
-            </motion.div>
+            </div>
           ))}
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
